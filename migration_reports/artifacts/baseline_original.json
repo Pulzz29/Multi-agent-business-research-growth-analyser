@@ -1,0 +1,928 @@
+{
+  "databases": {
+    "data/backups/insightiq_20261122T174129571476Z.sqlite3": {
+      "bytes": 118784,
+      "sha256": "2f2057d2f667551a247e0162d5bc2985d3fd8d21c1076747d28bd618cb4c5d79",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 0,
+        "forecast_cache": 0,
+        "news_articles": 0,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 0,
+        "source_refreshes": 0
+      }
+    },
+    "data/backups/insightiq_20261122T174306889155Z.sqlite3": {
+      "bytes": 1187840,
+      "sha256": "b6fccb57417667b9b3e969e8d31d0b187b16a56eb18d44e1084584fb16e05e64",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 1,
+        "forecast_cache": 0,
+        "news_articles": 0,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 2493,
+        "source_refreshes": 1
+      }
+    },
+    "data/backups/insightiq_20261122T174449624825Z.sqlite3": {
+      "bytes": 1232896,
+      "sha256": "423897448dc329b5eddbb27d9009269443cb27e4a5017f9f98515a1a14eca1ff",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 1,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 2493,
+        "source_refreshes": 2
+      }
+    },
+    "data/backups/insightiq_20261122T174536102032Z.sqlite3": {
+      "bytes": 1236992,
+      "sha256": "839bc6d375c87a75d8a00e88e9e7ac6fd0ab2666a40c88eb45c1216a8a00c2db",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 1,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 2493,
+        "source_refreshes": 2
+      }
+    },
+    "data/backups/insightiq_20261122T174537542618Z.sqlite3": {
+      "bytes": 2383872,
+      "sha256": "37035192d719a9cc78507e3d873b20b5bec955fe98c90e69fbe1a95a57d28b95",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 2,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 5163,
+        "source_refreshes": 3
+      }
+    },
+    "data/backups/insightiq_20261122T174538570650Z.sqlite3": {
+      "bytes": 3371008,
+      "sha256": "3b6c128ecaa2b68ebaab24d13187ca77a1e31558b728f62444fe05045099a496",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 3,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 7376,
+        "source_refreshes": 4
+      }
+    },
+    "data/backups/insightiq_20261122T174539656744Z.sqlite3": {
+      "bytes": 3903488,
+      "sha256": "4c09b938ea40e4329bb66667fb910c98104a365b829f090995d3a59b1d3e0566",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 4,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 8628,
+        "source_refreshes": 5
+      }
+    },
+    "data/backups/insightiq_20261122T174540871966Z.sqlite3": {
+      "bytes": 4579328,
+      "sha256": "cf4a5d542a6cdd5f988f5e4aa0cfb6aa61d9ba49de0b8c858b33b1893ac86c51",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 5,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 10197,
+        "source_refreshes": 6
+      }
+    },
+    "data/backups/insightiq_20261122T174544022263Z.sqlite3": {
+      "bytes": 5668864,
+      "sha256": "96868f67f547e68c656c578ebcbd60424db7028e469b8471b04efbc3d663c22d",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 17,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 7
+      }
+    },
+    "data/backups/insightiq_20261122T174547049555Z.sqlite3": {
+      "bytes": 5689344,
+      "sha256": "b3d1bab4a7861ce28c0fd6063219bfecec482057e4527f09806b9b75076d0ae9",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 21,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 8
+      }
+    },
+    "data/backups/insightiq_20261122T174549949321Z.sqlite3": {
+      "bytes": 5726208,
+      "sha256": "14694316b700fc88b05abdb0ac7b7daf2fd219c3197f38a7abb647825a189857",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 24,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 9
+      }
+    },
+    "data/backups/insightiq_20261122T174553071723Z.sqlite3": {
+      "bytes": 5742592,
+      "sha256": "0b38d8bdc9e717bd59d35fff434b9427895cf07acd61f8744a7ef310ee57246a",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 35,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 10
+      }
+    },
+    "data/backups/insightiq_20261122T174556306938Z.sqlite3": {
+      "bytes": 5804032,
+      "sha256": "98dda1df7d73bb9000a262f65ed08fdedb4223d1f0047cbb7d6f97559be4cb39",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 51,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 11
+      }
+    },
+    "data/backups/insightiq_20261122T174557065376Z.sqlite3": {
+      "bytes": 5840896,
+      "sha256": "4723d0ac3e15d15eb009c820d338d74d240e829811d0df226db4b2ed131e02d1",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/backups/insightiq_20261122T194021139306Z.sqlite3": {
+      "bytes": 5840896,
+      "sha256": "4723d0ac3e15d15eb009c820d338d74d240e829811d0df226db4b2ed131e02d1",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/backups/insightiq_20261122T201704939914Z.sqlite3": {
+      "bytes": 5935104,
+      "sha256": "c17af5c71e4ee6329ba722c22d4b8ac94758f8c3b2078319445259f72d5585bb",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 73,
+        "observability_alerts": 0,
+        "observability_schema_migrations": 1,
+        "reliability_monitor_evaluations": 1,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 6,
+        "research_jobs": 0,
+        "research_observability_events": 12,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 13
+      }
+    },
+    "data/insightiq.sqlite3": {
+      "bytes": 5939200,
+      "sha256": "ecfca6fb27bbd6a0d12336f49b02448e40166fc5aa7253019ecb37fd9fa230ea",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 75,
+        "observability_alerts": 0,
+        "observability_schema_migrations": 1,
+        "reliability_monitor_evaluations": 1,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 6,
+        "research_jobs": 0,
+        "research_observability_events": 12,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 14
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T182032814738Z_02d09d735f.sqlite3": {
+      "bytes": 5857280,
+      "sha256": "63c4e9d0201d48e7ab51203622214f9bfed7b4a56f643232b572029eac089d2c",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 3,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T182422278899Z_d7f8793639.sqlite3": {
+      "bytes": 5857280,
+      "sha256": "63c4e9d0201d48e7ab51203622214f9bfed7b4a56f643232b572029eac089d2c",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 3,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T182534825386Z_e23a5a915c.sqlite3": {
+      "bytes": 5857280,
+      "sha256": "63c4e9d0201d48e7ab51203622214f9bfed7b4a56f643232b572029eac089d2c",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 3,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T182629851349Z_791e87391c.sqlite3": {
+      "bytes": 5857280,
+      "sha256": "a597343a23b9632a666c35a6276df2bcaba644b664425f2addeef1238476ff0a",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 4,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T182732302037Z_1c4a6f7cfc.sqlite3": {
+      "bytes": 5857280,
+      "sha256": "a597343a23b9632a666c35a6276df2bcaba644b664425f2addeef1238476ff0a",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 4,
+        "research_jobs": 0,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T183423078303Z_99906afaa3.sqlite3": {
+      "bytes": 5873664,
+      "sha256": "935106739adab787ad5ea3f9e51d6ca18853b6c03be6f14fddeefd4809d673cc",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "observability_schema_migrations": 1,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 5,
+        "research_jobs": 0,
+        "research_observability_events": 8,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    },
+    "data/sqlite_backups/insightiq_20261122T185759723243Z_bb8b664dd2.sqlite3": {
+      "bytes": 5881856,
+      "sha256": "e94084de46f56e16bbc01b98168d3be3578ed6fa26a39c9dee22971d46ffc448",
+      "integrity": "ok",
+      "tables": {
+        "ai_runs": 0,
+        "ai_trace_events": 0,
+        "companies": 6,
+        "forecast_cache": 0,
+        "news_articles": 69,
+        "observability_alerts": 0,
+        "observability_schema_migrations": 1,
+        "reliability_monitor_evaluations": 1,
+        "research_execution_migrations": 1,
+        "research_execution_runs": 6,
+        "research_jobs": 0,
+        "research_observability_events": 12,
+        "research_reports": 0,
+        "schema_migrations": 3,
+        "sec_facts": 12737,
+        "source_refreshes": 12
+      }
+    }
+  },
+  "files": {
+    "reports/automatic_backup_end_to_end_verification.json": {
+      "bytes": 1733,
+      "sha256": "c45ce3268694735ceee4b9f63351c178e69747215d3ce15eedf35bcd159c680e"
+    },
+    "reports/automatic_research_backup_verification.json": {
+      "bytes": 1569,
+      "sha256": "84d1523f7ab01198b8300d0b5ac807255fc6c3e7aa9bc210832cd7b59a40fa4a"
+    },
+    "reports/backup_freshness_verification.json": {
+      "bytes": 2957,
+      "sha256": "93d000f70f00439472826561d5941169599b6cb1450a7a20887f4c37533ed87f"
+    },
+    "reports/dashboard_data_api_verification.json": {
+      "bytes": 5831,
+      "sha256": "2f1a09ee53682c5a6c8a2ac456d297527da25e1fdf819b89eb4627f8ee4049c1"
+    },
+    "reports/database_recovery_test.json": {
+      "bytes": 1084,
+      "sha256": "6b0dc19d29e906c3373b0a33a72541b5b884a093c4dca885c94870b33f777e59"
+    },
+    "reports/fastapi_background_job_verification.json": {
+      "bytes": 1533,
+      "sha256": "d7b3ebb4e4ec909f0b8012136d2c37249405a10361680d86b381dc7eb78e80a8"
+    },
+    "reports/fastapi_security_readonly_verification.json": {
+      "bytes": 901,
+      "sha256": "10314aeb80f901fc638ad0ab5d495b212abff53541cb07a51c0552df2d4b2f7e"
+    },
+    "reports/final_integration_verification.json": {
+      "bytes": 2132,
+      "sha256": "61a68858da738d8b66d8e25b707c15c563fc04c44c44b1359737b3afd3e37bb9"
+    },
+    "reports/final_project_handover.json": {
+      "bytes": 3173,
+      "sha256": "20e9aaad84d7ab2d486a05a4df1e3c06a58fe70baac179e162db2781f051aa95"
+    },
+    "reports/financial_data_accuracy_audit.json": {
+      "bytes": 3939,
+      "sha256": "b301f40518cb18544e4346bfdb07c44342c806ea2ee5e4cf04e3118976de9e5a"
+    },
+    "reports/financial_evidence_reconciliation_final.json": {
+      "bytes": 66317,
+      "sha256": "77c1f5fa709992eb976fbd9dc08f1a2f3dd24753e19fcfa9a4085a91fbcd0c95"
+    },
+    "reports/financial_independent_reconciliation.json": {
+      "bytes": 327863,
+      "sha256": "2d75006e74e382c7cf8e1603b57487d9230e9666fb70646bb75881c5b1cf7a59"
+    },
+    "reports/financial_integrity_audit.json": {
+      "bytes": 81388,
+      "sha256": "ae60d20d1d0a18b8cb93e7ff6fd6af43d8e1fa0774c7a51391392183607dda26"
+    },
+    "reports/financial_logic_review.json": {
+      "bytes": 19917,
+      "sha256": "2f2272e3a6fb02a030489563176ab2f38126eaebf6291d6bb1607df9f9774664"
+    },
+    "reports/financial_normalization_v2_audit.json": {
+      "bytes": 1169894,
+      "sha256": "786e4c86909e795dfb87a404a1736c4114170ad2223f12d83d637f2dd56ed938"
+    },
+    "reports/financial_selection_diagnostics.json": {
+      "bytes": 7007,
+      "sha256": "19d7654cb105f936de747ceabbf1e2af643b9d0078fa89f24f4955f5de6c1637"
+    },
+    "reports/financial_selection_verification.json": {
+      "bytes": 8164,
+      "sha256": "4dd9eb0659941840284a8601558327ee9680129370aed230369abafe2bf20e7e"
+    },
+    "reports/financial_validation.json": {
+      "bytes": 10918,
+      "sha256": "0bcd64c6ece0e1d8f23802cb582b61a37b69b701c0994954ad89f61a88cd05eb"
+    },
+    "reports/forecast_cache_invalidation_tests.json": {
+      "bytes": 751,
+      "sha256": "1a03e814822e77b9e7f0f5d5fc20abdcf8651f58829486bfb163f3752b74ab92"
+    },
+    "reports/forecast_cache_verification.json": {
+      "bytes": 2501,
+      "sha256": "3cbc6bc561c7208a4130d38e1c9997a3cf1c4e4438dac9f08651be90d3cc115e"
+    },
+    "reports/forecast_uncertainty_quality_review.json": {
+      "bytes": 20868,
+      "sha256": "e0f93b1c54a9b12c7263b5e3c5b80347e6a3f1c69042032c66c411e92e4fc511"
+    },
+    "reports/groq_financial_claims_verified.json": {
+      "bytes": 5865,
+      "sha256": "1c6b699f7ade43ddb4642f6d35b7f28e1ea1f18fe38aa3aa2c1f1c6e2673a17b"
+    },
+    "reports/groq_financial_structured_pilot.json": {
+      "bytes": 10599,
+      "sha256": "f55f481530d35c1b5932e8882c59ecaf122737b38fa57f8e0e08cccf8f199bae"
+    },
+    "reports/independent_forecast_holdout_validation.json": {
+      "bytes": 83304,
+      "sha256": "2bd9192ef1b1a3fc973b752436c8e774b7ecaf8f61b4159f13033aef8caf8c1d"
+    },
+    "reports/integrated_three_agent_msft.json": {
+      "bytes": 48305,
+      "sha256": "312bbe9868d25b58284ffe794bed7c36bdda20988d1a2c3e6506c0fa46e8f5ad"
+    },
+    "reports/langgraph_financial_agent_aapl.json": {
+      "bytes": 27474,
+      "sha256": "92d888b72a938525d1e7829063119cf13c4eb6a4f591c40ede4abccf623751b6"
+    },
+    "reports/langgraph_news_agent_msft.json": {
+      "bytes": 37828,
+      "sha256": "b8a81c5a695e68d9df475557273b69ad6b92f3565dd2ce95c3229a39c04bbc49"
+    },
+    "reports/langgraph_strategic_agent_msft.json": {
+      "bytes": 18873,
+      "sha256": "c4daecb5c407a44829a0734f2c2e81bdc9da6ee3f25ae77b50ebfae45c81f45b"
+    },
+    "reports/live_agent_tracing_verification.json": {
+      "bytes": 1371,
+      "sha256": "bedaaa6ecd38bb2bcbbddce8a8a83ae0d12f8ad7b3113fae9b135ec1ea639387"
+    },
+    "reports/live_news_refresh_test.json": {
+      "bytes": 1197,
+      "sha256": "4bb0267fc0a2d4f11ff983ffc530ecb1312da6944646ad37b2494207dee97e5a"
+    },
+    "reports/news_evidence_quality_msft.json": {
+      "bytes": 10198,
+      "sha256": "19cfa6b306b4e306bd0a08d9d3d569f24a1b1f4cfa3a794c53e3398f9c4e18c3"
+    },
+    "reports/news_refresh_frontend_backup/api.js": {
+      "bytes": 2080,
+      "sha256": "b4f2607ba54f461f47a9f2381b319fec01a9e0904e09ae5a7f3a82e973bf7998"
+    },
+    "reports/news_refresh_frontend_backup/App.jsx": {
+      "bytes": 38650,
+      "sha256": "fe8cb29034b0930badea7755517c61da336b5fca89700728362867e16d2b5c4c"
+    },
+    "reports/news_refresh_frontend_backup/dist/assets/index-25KtX5XP.css": {
+      "bytes": 18843,
+      "sha256": "1d4fc7378485b396e63ea34710b5e0a517a24b0c452f9b9b7d4a942633fd7778"
+    },
+    "reports/news_refresh_frontend_backup/dist/assets/index-Ck_cKPMJ.js": {
+      "bytes": 253753,
+      "sha256": "ce1d180199ec01f4ca411d3526fbcfc75b91f57aafde73126c575144a04573af"
+    },
+    "reports/news_refresh_frontend_backup/dist/index.html": {
+      "bytes": 522,
+      "sha256": "470370260e226b81f6f063a6e33946918b0e293b041de8007a7aed049dba3f59"
+    },
+    "reports/news_refresh_frontend_backup/styles.css": {
+      "bytes": 23585,
+      "sha256": "758d07d0b835e3142e1640c4d53f421d44da5db2a31c3afef9be82e1d6e5b479"
+    },
+    "reports/news_refresh_frontend_build.json": {
+      "bytes": 539,
+      "sha256": "70a464990c47a605ed0ad7ac6d8c1a87637e237fb0d7794ef8b9ed672ba73ed8"
+    },
+    "reports/news_refresh_integration_review.json": {
+      "bytes": 12214,
+      "sha256": "fd9d7ffcba54f27ef86d5847393a953e9e3cf0b416ebddee6a52dde676648783"
+    },
+    "reports/news_refresh_integration_test.json": {
+      "bytes": 2502,
+      "sha256": "ba5e4b8cf1e85f17e8176f97fff2acebbadf9d3acd760ccc77db30698200b5e0"
+    },
+    "reports/normalized_quarterly_financials.json": {
+      "bytes": 1099221,
+      "sha256": "b609be74b346d37b7ba6161ee0da7b03a3db54435a5189e0d0e6449dc46ae8f9"
+    },
+    "reports/otel_observability_foundation_verification.json": {
+      "bytes": 3199,
+      "sha256": "9280e984524a5a25096a4325781172e929c779120da9c11a9740827cc25c5d7d"
+    },
+    "reports/react_browser_preview_verification.json": {
+      "bytes": 1247,
+      "sha256": "9573a0b425f6de995ff658aaf1c5aa81abc5a034e503986541881a08f49286f8"
+    },
+    "reports/react_dashboard_foundation_verification.json": {
+      "bytes": 1536,
+      "sha256": "bd10b7ba629642d876a04a1cfa1a10123d35d5d28fa0e52c6cca81553afe20cd"
+    },
+    "reports/react_frontend_integration_verification.json": {
+      "bytes": 1696,
+      "sha256": "3668d071984c7b4e745bdfda2d92ef074ca8634192bbb75210d02b7c78b3e093"
+    },
+    "reports/recent_financial_evidence_review.json": {
+      "bytes": 45544,
+      "sha256": "8512243fec6c3202f7ab4d22c0a75308f84d0f95d9a41435a8fafde952c0025b"
+    },
+    "reports/release_readiness_verification.json": {
+      "bytes": 2122,
+      "sha256": "54c092d224924a5ab1be0119aaef5cf95580ad034cdf504d4fa8ae7b155baf05"
+    },
+    "reports/reliability_monitoring_verification.json": {
+      "bytes": 2148,
+      "sha256": "2b7548005b02892d51683b89553e56bba7028a7e84beac2595eb1bc07b374eec"
+    },
+    "reports/research_backup_reconciliation_verification.json": {
+      "bytes": 2504,
+      "sha256": "dc3a611dde55393194a2f892a7c9c2eed5edd7ca48bc81252572596771293ae4"
+    },
+    "reports/research_runs/0be8200f-4906-498e-8c20-b5b507f0b553.json": {
+      "bytes": 46441,
+      "sha256": "c7a906cee81d0751c3b577df4ac9a1fe660a6a19c3c3bafd4a80149071f2806f"
+    },
+    "reports/research_runs/1c5c8279-fd35-429d-8f5a-f4cd25a50815.json": {
+      "bytes": 47897,
+      "sha256": "d5d346cc362f30fa8941a66abbfb2afd20f367419e2ab5095eb03129fd24c130"
+    },
+    "reports/research_runs/5c401240-2996-43fb-803b-71af2c2a1028.json": {
+      "bytes": 46438,
+      "sha256": "79e1eb97966873522aa28b4a7ef359ce808837c4ae6ee09f58ecddc4eea780aa"
+    },
+    "reports/research_runs/9eca17cb-6d15-446c-a8a9-7f3977c746c0.json": {
+      "bytes": 46469,
+      "sha256": "a56487802e8a182785a339af3e0ec8a96f2589d075060e242ea20ed183291763"
+    },
+    "reports/research_runs/ced58401-2e98-4746-833b-5192e8365f3b.json": {
+      "bytes": 46408,
+      "sha256": "12cb5ad032a8e632d6509e20847bfe883e8c2592a3ba50b3bfef01081152912d"
+    },
+    "reports/restart_recovery_verification.json": {
+      "bytes": 821,
+      "sha256": "b1c0fff10f5e700a249a89c43cf527116d7f7f37cfb62cffca5f869a1011b8b4"
+    },
+    "reports/sarimax_aapl_pilot.json": {
+      "bytes": 13920,
+      "sha256": "250a0235228498d094fc8117844a9e0bec63dab5fd0dbaafc1029398b5e797bf"
+    },
+    "reports/sec_financial_source_audit.json": {
+      "bytes": 41034,
+      "sha256": "326f21d962a11759e3f62afa38cf87b311dc3c186eac90a0254610e15cfbefd6"
+    },
+    "reports/server_startup_integration_verification.json": {
+      "bytes": 1321,
+      "sha256": "bf2783ecc3ef05d19879fe1eade3fb7c0561c5a22c5bad535b08636644d0d5e7"
+    },
+    "reports/six_company_financial_forecasts.json": {
+      "bytes": 97313,
+      "sha256": "07bda2f3a743c38a7555339c030f9c0ecf61e77725e3fc7c02a59b6860181c7a"
+    },
+    "reports/sqlite_backup_recovery_verification.json": {
+      "bytes": 1323,
+      "sha256": "a29838eeb95f60dc66d2f700d950f3d362f738efa5a417e954e04913ee6d9d8e"
+    },
+    "reports/startup_backup_health_verification.json": {
+      "bytes": 1198,
+      "sha256": "e2a7bc01351d733448afc4b3a561c7241ebde4b78dcad7ba2da88b4d952a148a"
+    },
+    "reports/startup_recovery_verification.json": {
+      "bytes": 1671,
+      "sha256": "c40fc759b8abd37c2c6a6561ec11a6dee1a8fb3ce0c9aa91dd0fddd050ca97b7"
+    },
+    "reports/trace_explorer_metrics_verification.json": {
+      "bytes": 2732,
+      "sha256": "e3d8edc0d3f1fa9545f1a0a281c07e2750c6651c027b225445fdb6ddea8acc13"
+    },
+    "data/forecast_cache_v1/AAPL_operating_cash_flow.json": {
+      "bytes": 4335,
+      "sha256": "84fc19c74664442ba96f3a1a5b50bbdc495e0dcbf938ed31401f9862fa32fce4"
+    },
+    "data/forecast_cache_v1/AAPL_revenue.json": {
+      "bytes": 4327,
+      "sha256": "8550a4a306c849180e882cd557baf8e096d631b899ebee40592ccc340968fd43"
+    },
+    "data/forecast_cache_v1/AMZN_operating_cash_flow.json": {
+      "bytes": 4326,
+      "sha256": "5c2bdb745301a2f501046b569dd51530a30c5007b4b21076d93fda5c46f5b344"
+    },
+    "data/forecast_cache_v1/AMZN_revenue.json": {
+      "bytes": 4332,
+      "sha256": "ac74672d8e822a3baa470654787f3bf2cbbd1a3852b4d7746fdc0722a629deb2"
+    },
+    "data/forecast_cache_v1/GOOGL_operating_cash_flow.json": {
+      "bytes": 4494,
+      "sha256": "78aad5fbefb023b0cf6bb3c4f8674525dd702ba378344e92fad77c41fd3f160a"
+    },
+    "data/forecast_cache_v1/GOOGL_revenue.json": {
+      "bytes": 4512,
+      "sha256": "acd8665f9f71c31217a5b7f4f0e97e42569cc473c1adee35b0bf349e110e664b"
+    },
+    "data/forecast_cache_v1/META_operating_cash_flow.json": {
+      "bytes": 5183,
+      "sha256": "196486f2d76dacb17fb1763a8f56599a263b0dc55cdb01a42b93932ade9b3fc1"
+    },
+    "data/forecast_cache_v1/META_revenue.json": {
+      "bytes": 4480,
+      "sha256": "ebb36b235367bc1ad605bde2188c50fdf445dde7ee7140a3669719ab188afeeb"
+    },
+    "data/forecast_cache_v1/MSFT_operating_cash_flow.json": {
+      "bytes": 4525,
+      "sha256": "188728a223461ea8eeb3eeb585adeeecd59b8e95499fd00aa82652645eed8fee"
+    },
+    "data/forecast_cache_v1/MSFT_revenue.json": {
+      "bytes": 4506,
+      "sha256": "e56ca149842c4ad7657ab90d671ed442ed4b52860cc4fa0a2ff871803f439f3a"
+    },
+    "data/forecast_cache_v1/NVDA_operating_cash_flow.json": {
+      "bytes": 4504,
+      "sha256": "2bc03c10b36cd78fdfd00d0f36910b5dd28b250c913891d48671c5c9e3e2a5c5"
+    },
+    "data/forecast_cache_v1/NVDA_revenue.json": {
+      "bytes": 4125,
+      "sha256": "9233edc94fa6148ad8dcc964ed8acb8b97f42bd812f05acc0c9bdaab5ef0c910"
+    },
+    "data/research_job_journal/0be8200f-4906-498e-8c20-b5b507f0b553.json": {
+      "bytes": 646,
+      "sha256": "678a5de97144c0d8d96f834f514ac541abced18fb41ab53997b7e435f5ccf9ca"
+    },
+    "data/research_job_journal/1c5c8279-fd35-429d-8f5a-f4cd25a50815.json": {
+      "bytes": 646,
+      "sha256": "4ac010d804e7e6bcd0452641b3c97b2fcdc5feaf7a3aaa921c74db70d516affd"
+    },
+    "data/research_job_journal/5c401240-2996-43fb-803b-71af2c2a1028.json": {
+      "bytes": 646,
+      "sha256": "ba1be7f52e9369d59f55f19eda59480222fad192fc84ce456d1f996bc225a4de"
+    },
+    "data/research_job_journal/6d8c549e-6bd2-4ecb-b5ce-7e4e0a0539cb.json": {
+      "bytes": 527,
+      "sha256": "3d65ab9467b83fb571523c3eba705d39f88864e3c1533869f92a5466b715d00d"
+    },
+    "data/research_job_journal/9eca17cb-6d15-446c-a8a9-7f3977c746c0.json": {
+      "bytes": 646,
+      "sha256": "b4ba6406e043a2ee344ebd40c224459776f337c89235271465b32ace3d8fe07d"
+    },
+    "data/research_job_journal/ced58401-2e98-4746-833b-5192e8365f3b.json": {
+      "bytes": 646,
+      "sha256": "a06259de0bb7524abe617facec2d4a9b86bf1c417e132aa8ac4b680f77bd5fc6"
+    },
+    "data/research_job_journal/ddc47493-9801-46e3-b51b-418bfac9536e.json": {
+      "bytes": 525,
+      "sha256": "1c917830c6781b75b0240635b77a613659fe2fdf553c919537c9e8d854d2436e"
+    },
+    "data/job_backup_status/0be8200f-4906-498e-8c20-b5b507f0b553.json": {
+      "bytes": 662,
+      "sha256": "4bdc1ab0b00e93807606db7fb7c535599890bd279a9e775d8da07de22e57f4cd"
+    },
+    "data/job_backup_status/1c5c8279-fd35-429d-8f5a-f4cd25a50815.json": {
+      "bytes": 662,
+      "sha256": "61c27533081548508901e99191eefde0cd20d18fafe25ff4fb40ccf2fff7f051"
+    },
+    "data/job_backup_status/5c401240-2996-43fb-803b-71af2c2a1028.json": {
+      "bytes": 662,
+      "sha256": "831e5200770261cf2d5db2f121b50116d7b09763dd3e92028bb129375137c51f"
+    },
+    "data/job_backup_status/9eca17cb-6d15-446c-a8a9-7f3977c746c0.json": {
+      "bytes": 662,
+      "sha256": "a03643f7fdf01e00b95c210c8500f67fc20cc1df91ff718d7a30dbea3fc1b914"
+    },
+    "data/job_backup_status/ced58401-2e98-4746-833b-5192e8365f3b.json": {
+      "bytes": 662,
+      "sha256": "a2c2847920cb538587b22d07e745c28024872ef62b8f9acd58c8a0a3ac2224e1"
+    }
+  },
+  "primary_detail": {
+    "research_execution_runs_columns": [
+      "run_id",
+      "ticker",
+      "status",
+      "created_at_utc",
+      "updated_at_utc",
+      "started_at_utc",
+      "finished_at_utc",
+      "agent_statuses_json",
+      "report_path",
+      "error_type",
+      "error_code"
+    ],
+    "research_runs_by_status": {
+      "completed": 5,
+      "failed": 1
+    },
+    "research_runs": [
+      {
+        "run_id": "6d8c549e-6bd2-4ecb-b5ce-7e4e0a0539cb",
+        "ticker": "MSFT",
+        "status": "failed",
+        "created_at_utc": "2026-11-22T18:16:09.099505+00:00",
+        "report_path": null
+      },
+      {
+        "run_id": "1c5c8279-fd35-429d-8f5a-f4cd25a50815",
+        "ticker": "MSFT",
+        "status": "completed",
+        "created_at_utc": "2026-11-22T18:16:09.194658+00:00",
+        "report_path": "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z/reports/research_runs/1c5c8279-fd35-429d-8f5a-f4cd25a50815.json"
+      },
+      {
+        "run_id": "9eca17cb-6d15-446c-a8a9-7f3977c746c0",
+        "ticker": "MSFT",
+        "status": "completed",
+        "created_at_utc": "2026-11-22T18:19:25.640354+00:00",
+        "report_path": "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z/reports/research_runs/9eca17cb-6d15-446c-a8a9-7f3977c746c0.json"
+      },
+      {
+        "run_id": "0be8200f-4906-498e-8c20-b5b507f0b553",
+        "ticker": "MSFT",
+        "status": "completed",
+        "created_at_utc": "2026-11-22T18:26:20.110394+00:00",
+        "report_path": "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z/reports/research_runs/0be8200f-4906-498e-8c20-b5b507f0b553.json"
+      },
+      {
+        "run_id": "ced58401-2e98-4746-833b-5192e8365f3b",
+        "ticker": "MSFT",
+        "status": "completed",
+        "created_at_utc": "2026-11-22T18:34:18.368930+00:00",
+        "report_path": "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z/reports/research_runs/ced58401-2e98-4746-833b-5192e8365f3b.json"
+      },
+      {
+        "run_id": "5c401240-2996-43fb-803b-71af2c2a1028",
+        "ticker": "MSFT",
+        "status": "completed",
+        "created_at_utc": "2026-11-22T18:57:52.110276+00:00",
+        "report_path": "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z/reports/research_runs/5c401240-2996-43fb-803b-71af2c2a1028.json"
+      }
+    ],
+    "news_articles_columns": [
+      "id",
+      "company_ticker",
+      "provider",
+      "provider_article_id",
+      "title",
+      "description",
+      "article_url",
+      "source_name",
+      "published_at",
+      "retrieved_at",
+      "relevance_score",
+      "relevance_reason",
+      "raw_metadata_json"
+    ],
+    "news_by_ticker": {
+      "AAPL": 4,
+      "AMZN": 3,
+      "GOOGL": 11,
+      "META": 16,
+      "MSFT": 23,
+      "NVDA": 18
+    },
+    "sec_facts_columns": [
+      "id",
+      "company_ticker",
+      "source_key",
+      "taxonomy",
+      "concept",
+      "unit",
+      "value_text",
+      "period_start",
+      "period_end",
+      "fiscal_year",
+      "fiscal_period",
+      "form",
+      "accession",
+      "filed_at",
+      "sec_frame",
+      "source_url",
+      "retrieved_at"
+    ],
+    "sec_facts_by_ticker": {
+      "AAPL": 2670,
+      "AMZN": 2213,
+      "GOOGL": 1252,
+      "META": 1569,
+      "MSFT": 2493,
+      "NVDA": 2540
+    }
+  }
+}

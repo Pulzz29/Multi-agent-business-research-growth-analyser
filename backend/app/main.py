@@ -1,0 +1,996 @@
+import hmac
+import json
+import os
+import uuid
+from pathlib import Path
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    status,
+)
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+
+from app.core.config import get_settings
+from app.core.portability import localize_stored_path
+from app.database.sqlite_manager import connect
+from app.services.research_jobs import (
+    ResearchJobError,
+    read_job,
+)
+
+
+SUPPORTED_COMPANIES = (
+    "AAPL",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "MSFT",
+    "NVDA",
+)
+
+security_scheme = HTTPBearer(
+    auto_error=False,
+)
+
+app = FastAPI(
+    title="InsightIQ Research API",
+    version="0.1.0",
+    description=(
+        "Authenticated research-job and report API."
+    ),
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+
+def project_root():
+    return Path(
+        get_settings().project_root
+    ).resolve()
+
+
+def require_api_key(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        security_scheme
+    ),
+):
+    expected = os.getenv("API_ACCESS_KEY")
+
+    if (
+        not expected
+        or credentials is None
+        or credentials.scheme.lower() != "bearer"
+        or not hmac.compare_digest(
+            credentials.credentials,
+            expected,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    return True
+
+
+def validate_job_id(run_id):
+    try:
+        canonical = str(
+            uuid.UUID(run_id)
+        )
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid research run ID.",
+        )
+
+    if run_id != canonical:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid research run ID.",
+        )
+
+    return canonical
+
+
+def get_persisted_job(run_id):
+    run_id = validate_job_id(run_id)
+
+    try:
+        return read_job(run_id)
+    except ResearchJobError:
+        raise HTTPException(
+            status_code=404,
+            detail="Research job not found.",
+        )
+    except Exception:
+        # Avoid exposing SQLite paths or configuration.
+        raise HTTPException(
+            status_code=503,
+            detail="Research storage unavailable.",
+        )
+
+
+def public_job_record(job):
+    return {
+        "run_id": job["run_id"],
+        "ticker": job["ticker"],
+        "status": job["status"],
+        "created_at_utc": job["created_at_utc"],
+        "updated_at_utc": job["updated_at_utc"],
+        "started_at_utc": job["started_at_utc"],
+        "finished_at_utc": job["finished_at_utc"],
+        "agent_statuses": job["agent_statuses"],
+        "report_available": (
+            job["status"] == "completed"
+            and bool(job["report_path"])
+        ),
+        "error_code": job["error_code"],
+    }
+
+
+@app.get("/health/live")
+def health_live():
+    return {
+        "status": "alive",
+        "service": "insightiq-api",
+    }
+
+
+@app.get("/health/ready")
+def health_ready():
+    try:
+        with connect() as conn:
+            conn.execute(
+                "SELECT 1"
+            ).fetchone()
+
+            tables = {
+                row["name"]
+                for row in conn.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                    """
+                ).fetchall()
+            }
+
+        required_tables = {
+            "sec_facts",
+            "news_articles",
+            "research_execution_runs",
+        }
+
+        if not required_tables.issubset(tables):
+            raise RuntimeError(
+                "Required database tables unavailable."
+            )
+
+        root = project_root()
+
+        if not root.is_dir():
+            raise RuntimeError(
+                "Project storage unavailable."
+            )
+
+        if not (
+            root / "data" / "research_job_journal"
+        ).is_dir():
+            raise RuntimeError(
+                "Drive journal unavailable."
+            )
+
+        if not os.getenv("API_ACCESS_KEY"):
+            raise RuntimeError(
+                "API credential unavailable."
+            )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Research service not ready.",
+        )
+
+    return {
+        "status": "ready",
+        "service": "insightiq-api",
+        "database": "available",
+        "research_job_journal": "available",
+    }
+
+
+@app.get(
+    "/api/v1/companies",
+    dependencies=[Depends(require_api_key)],
+)
+def list_companies():
+    return {
+        "supported_tickers": list(
+            SUPPORTED_COMPANIES
+        ),
+        "count": len(SUPPORTED_COMPANIES),
+    }
+
+
+@app.get(
+    "/api/v1/jobs/{run_id}",
+    dependencies=[Depends(require_api_key)],
+)
+def get_job(run_id: str):
+    job = get_persisted_job(run_id)
+
+    return public_job_record(job)
+
+
+@app.get(
+    "/api/v1/reports/{run_id}",
+    dependencies=[Depends(require_api_key)],
+)
+def get_report(run_id: str):
+    job = get_persisted_job(run_id)
+
+    if job["status"] != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Research report is not completed.",
+        )
+
+    reports_root = (
+        project_root()
+        / "reports"
+        / "research_runs"
+    ).resolve()
+
+    # Never trust an arbitrary absolute report path
+    # stored in a database row.
+    expected_report = (
+        reports_root / (run_id + ".json")
+    ).resolve()
+
+    stored_path = job.get("report_path")
+
+    if (
+        not stored_path
+        or not expected_report.is_relative_to(
+            reports_root
+        )
+        or localize_stored_path(stored_path, project_root())
+        != expected_report
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="Research report unavailable.",
+        )
+
+    try:
+        document = json.loads(
+            expected_report.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        if (
+            document.get("run_id") != run_id
+            or document.get("ticker") != job["ticker"]
+            or document.get("status") != "completed"
+        ):
+            raise ValueError(
+                "Stored report identity mismatch."
+            )
+
+    except (OSError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=503,
+            detail="Research report unavailable.",
+        )
+
+    return document
+
+# ==========================================================
+# Background research submission — Colab worker
+# ==========================================================
+
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+from app.services.research_jobs import (
+    create_job,
+    transition_job,
+    execute_queued_research_job,
+)
+
+from app.agents.research_workflow import (
+    run_research_workflow,
+)
+
+
+class ResearchSubmission(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ticker: Literal[
+        "AAPL",
+        "AMZN",
+        "GOOGL",
+        "META",
+        "MSFT",
+        "NVDA",
+    ]
+
+
+# Colab development executor:
+# one running task, up to three accepted tasks.
+_WORKER_CAPACITY = 3
+
+_worker_executor = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="insightiq-research",
+)
+
+_worker_slots = threading.BoundedSemaphore(
+    _WORKER_CAPACITY
+)
+
+
+def _execute_submitted_job(run_id):
+    try:
+        execute_queued_research_job(
+            project_root(),
+            run_id,
+            run_research_workflow,
+        )
+
+    except Exception:
+        # The job service records a sanitized failure.
+        # Provider exceptions are never returned
+        # directly through the API.
+        pass
+
+    finally:
+        _worker_slots.release()
+
+
+@app.post(
+    "/api/v1/jobs",
+    status_code=202,
+    dependencies=[Depends(require_api_key)],
+)
+def submit_research_job(
+    request: ResearchSubmission,
+):
+    if not _worker_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail="Research queue is full.",
+            headers={
+                "Retry-After": "10"
+            },
+        )
+
+    created = None
+
+    try:
+        created = create_job(
+            project_root(),
+            request.ticker,
+        )
+
+        _worker_executor.submit(
+            _execute_submitted_job,
+            created["run_id"],
+        )
+
+    except Exception:
+        if created is not None:
+            try:
+                transition_job(
+                    project_root(),
+                    created["run_id"],
+                    "failed",
+                    error_type="SubmissionFailure",
+                    error_code="job_submission_failed",
+                )
+            except Exception:
+                pass
+
+        _worker_slots.release()
+
+        raise HTTPException(
+            status_code=503,
+            detail="Research submission unavailable.",
+        )
+
+    return {
+        "run_id": created["run_id"],
+        "ticker": created["ticker"],
+        "status": "queued",
+        "accepted": True,
+        "job_url": (
+            "/api/v1/jobs/"
+            + created["run_id"]
+        ),
+        "report_url": (
+            "/api/v1/reports/"
+            + created["run_id"]
+        ),
+    }
+
+# ==========================================================
+# Completed research backup health — read-only
+# ==========================================================
+
+from app.services.runtime_startup import (
+    read_backup_health,
+)
+
+
+@app.get(
+    "/api/v1/system/backup-health",
+    dependencies=[Depends(require_api_key)],
+)
+def backup_health():
+    try:
+        health = read_backup_health(
+            project_root()
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Backup health is unavailable.",
+        )
+
+    if not health["recovery_points_complete"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Research backups require attention.",
+        )
+
+    return health
+
+# ==========================================================
+# Research observability endpoints
+# ==========================================================
+
+from fastapi import Query
+
+from app.services.trace_explorer import (
+    TraceExplorerError,
+    trace_explorer_for_run,
+    performance_metrics,
+)
+
+
+@app.get(
+    "/api/v1/observability/runs/{run_id}/traces",
+    dependencies=[Depends(require_api_key)],
+)
+def get_research_traces(
+    run_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+):
+    try:
+        return trace_explorer_for_run(
+            run_id,
+            limit=limit,
+        )
+
+    except TraceExplorerError:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid research trace request.",
+        )
+
+    except LookupError:
+        raise HTTPException(
+            status_code=404,
+            detail="Research run not found.",
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Research trace service unavailable.",
+        )
+
+
+@app.get(
+    "/api/v1/observability/metrics",
+    dependencies=[Depends(require_api_key)],
+)
+def get_research_metrics(
+    sample_limit: int = Query(
+        default=1000,
+        ge=1,
+        le=5000,
+    ),
+):
+    try:
+        return performance_metrics(
+            sample_limit=sample_limit,
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Research metrics unavailable.",
+        )
+
+# ==========================================================
+# Research reliability monitoring endpoint
+# ==========================================================
+
+from fastapi import Query as ReliabilityQuery
+
+from app.services.reliability_monitoring import (
+    current_reliability,
+)
+
+
+@app.get(
+    "/api/v1/observability/reliability",
+    dependencies=[Depends(require_api_key)],
+)
+def get_reliability_monitoring(
+    sample_limit: int = ReliabilityQuery(
+        default=1000,
+        ge=1,
+        le=5000,
+    ),
+):
+    try:
+        return current_reliability(
+            sample_limit=sample_limit,
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Reliability monitoring unavailable.",
+        )
+
+# ==========================================================
+# Dashboard data — authenticated and read-only
+# ==========================================================
+
+from fastapi import Query as DashboardQuery
+
+from app.services.dashboard_data import (
+    dashboard_snapshot,
+)
+
+
+@app.get(
+    "/api/v1/dashboard/overview",
+    dependencies=[Depends(require_api_key)],
+)
+def dashboard_overview(
+    recent_limit: int = DashboardQuery(
+        default=10,
+        ge=1,
+        le=25,
+    ),
+):
+    try:
+        return dashboard_snapshot(
+            project_root(),
+            recent_limit=recent_limit,
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Dashboard data unavailable.",
+        )
+
+# INSIGHTIQ_NEWS_REFRESH_API_START
+
+import asyncio as _insightiq_news_asyncio
+from datetime import datetime as _insightiq_news_datetime
+from datetime import timezone as _insightiq_news_timezone
+
+from app.services.news_ingestion import (
+    refresh_news_company as _insightiq_refresh_news,
+    connect as _insightiq_news_connect,
+    SUPPORTED_TICKERS as _insightiq_news_tickers,
+)
+
+_insightiq_news_refresh_lock = (
+    _insightiq_news_asyncio.Lock()
+)
+
+
+def _insightiq_news_status_snapshot(ticker):
+    """Return stored coverage without contacting NewsData.io."""
+
+    ticker = str(ticker).strip().upper()
+
+    if ticker not in _insightiq_news_tickers:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported company ticker.",
+        )
+
+    with _insightiq_news_connect() as conn:
+
+        article = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS article_count,
+                MAX(published_at) AS latest_published_at,
+                MAX(retrieved_at) AS latest_retrieved_at
+            FROM news_articles
+            WHERE company_ticker = ?
+            """,
+            (ticker,),
+        ).fetchone()
+
+        refresh = conn.execute(
+            """
+            SELECT
+                completed_at,
+                status
+            FROM source_refreshes
+            WHERE company_ticker = ?
+              AND source = 'NEWSDATA'
+              AND status = 'success'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (ticker,),
+        ).fetchone()
+
+    return {
+        "ticker": ticker,
+        "source": "NEWSDATA",
+        "article_count": article["article_count"],
+        "latest_published_at": (
+            article["latest_published_at"]
+        ),
+        "latest_retrieved_at": (
+            article["latest_retrieved_at"]
+        ),
+        "last_successful_refresh_at": (
+            refresh["completed_at"]
+            if refresh else None
+        ),
+    }
+
+
+@app.get(
+    "/api/v1/news/status/{ticker}",
+    dependencies=[Depends(require_api_key)],
+)
+def insightiq_company_news_status(ticker: str):
+    """Read company news coverage without external API calls."""
+
+    try:
+        return _insightiq_news_status_snapshot(ticker)
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="News status is temporarily unavailable.",
+        )
+
+
+@app.post(
+    "/api/v1/news/refresh",
+    dependencies=[Depends(require_api_key)],
+)
+async def insightiq_refresh_company_news(
+    request: dict,
+):
+    """Fetch fresh news using the existing ingestion pipeline."""
+
+    ticker = str(
+        request.get("ticker", "")
+    ).strip().upper()
+
+    if ticker not in _insightiq_news_tickers:
+        raise HTTPException(
+            status_code=422,
+            detail="Select a supported company ticker.",
+        )
+
+    # One refresh at a time within this app process.
+    # Protects the shared API allowance against rapid clicks.
+
+    if _insightiq_news_refresh_lock.locked():
+        raise HTTPException(
+            status_code=429,
+            detail="Another news refresh is running.",
+            headers={"Retry-After": "10"},
+        )
+
+    async with _insightiq_news_refresh_lock:
+
+        try:
+            before = _insightiq_news_status_snapshot(
+                ticker
+            )
+
+            previous = before[
+                "last_successful_refresh_at"
+            ]
+
+            # Manual refreshes can bypass the long-lived
+            # ingestion cache, but not this brief cooldown.
+            if previous:
+                previous_dt = (
+                    _insightiq_news_datetime.fromisoformat(
+                        previous.replace("Z", "+00:00")
+                    )
+                )
+
+                if previous_dt.tzinfo is None:
+                    previous_dt = previous_dt.replace(
+                        tzinfo=_insightiq_news_timezone.utc
+                    )
+
+                seconds_since = (
+                    _insightiq_news_datetime.now(
+                        _insightiq_news_timezone.utc
+                    )
+                    - previous_dt
+                ).total_seconds()
+
+                if 0 <= seconds_since < 600:
+                    return {
+                        **before,
+                        "status": "recently_refreshed",
+                        "records_fetched": 0,
+                        "records_inserted": 0,
+                        "message": (
+                            "News was refreshed recently. "
+                            "Existing coverage was reused."
+                        ),
+                    }
+
+            # Bound the request to protect provider quota.
+            # Existing ingestion handles relevance,
+            # validation, deduplication, and persistence.
+            result = await _insightiq_refresh_news(
+                ticker=ticker,
+                max_articles=30,
+                max_pages=2,
+                force_refresh=True,
+            )
+
+            after = _insightiq_news_status_snapshot(
+                ticker
+            )
+
+            return {
+                **after,
+                "status": result.get(
+                    "status",
+                    "success",
+                ),
+                "records_fetched": result.get(
+                    "records_fetched",
+                    0,
+                ),
+                "records_inserted": result.get(
+                    "records_inserted",
+                    0,
+                ),
+                "message": (
+                    "Company news refresh completed."
+                ),
+            }
+
+        except HTTPException:
+            raise
+
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "News refresh could not complete. "
+                    "Please retry later."
+                ),
+            )
+
+# INSIGHTIQ_NEWS_REFRESH_API_END
+
+# ==========================================================
+# Company intelligence dashboard — authenticated
+# GET routes are read-only: no Groq, NewsData.io or SEC calls,
+# no forecast training and no database writes.
+# ==========================================================
+
+from fastapi import Query as CompanyQuery
+
+from app.services import company_profile as _company_profile
+from app.services import report_history as _report_history
+
+
+def _require_supported_ticker(ticker):
+    ticker = str(ticker or "").strip().upper()
+
+    if ticker not in SUPPORTED_COMPANIES:
+        raise HTTPException(
+            status_code=404,
+            detail="Unsupported company ticker.",
+        )
+
+    return ticker
+
+
+@app.get(
+    "/api/v1/companies/summary",
+    dependencies=[Depends(require_api_key)],
+)
+def companies_summary():
+    try:
+        rows = []
+
+        for ticker in SUPPORTED_COMPANIES:
+            rows.append(
+                _company_profile.company_summary_row(
+                    ticker,
+                    latest_report=_report_history.latest_completed(ticker),
+                )
+            )
+
+        return {
+            "companies": rows,
+            "count": len(rows),
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Company summary unavailable.",
+        )
+
+
+@app.get(
+    "/api/v1/companies/{ticker}/overview",
+    dependencies=[Depends(require_api_key)],
+)
+def company_overview(ticker: str):
+    ticker = _require_supported_ticker(ticker)
+
+    try:
+        return _company_profile.company_overview(
+            ticker,
+            latest_report=_report_history.latest_completed(ticker),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Company data unavailable.",
+        )
+
+
+@app.get(
+    "/api/v1/research/runs",
+    dependencies=[Depends(require_api_key)],
+)
+def research_runs(
+    ticker: str | None = CompanyQuery(default=None),
+    limit: int = CompanyQuery(default=100, ge=1, le=500),
+):
+    if ticker is not None:
+        ticker = _require_supported_ticker(ticker)
+
+    try:
+        return _report_history.list_runs(
+            ticker,
+            limit=limit,
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Research history unavailable.",
+        )
+
+
+@app.get(
+    "/api/v1/companies/{ticker}/reports/{run_id}",
+    dependencies=[Depends(require_api_key)],
+)
+def company_report(ticker: str, run_id: str):
+    ticker = _require_supported_ticker(ticker)
+    run_id = validate_job_id(run_id)
+
+    try:
+        return _report_history.read_report(ticker, run_id)
+
+    except _report_history.ReportHistoryError:
+        raise HTTPException(
+            status_code=404,
+            detail="Research report not found.",
+        )
+
+    except _report_history.ReportUnavailable:
+        raise HTTPException(
+            status_code=409,
+            detail="Research report is not available.",
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Research report unavailable.",
+        )
+
+
+# Explicit, user-initiated AI action (uses Groq quota).
+# Never overwrites an existing completed summary.
+
+from app.services.executive_summary import (
+    ExecutiveSummaryError as _ExecutiveSummaryError,
+    generate_summary as _generate_summary,
+)
+
+_summary_request_lock = threading.Lock()
+
+
+@app.post(
+    "/api/v1/companies/{ticker}/reports/{run_id}/executive-summary",
+    dependencies=[Depends(require_api_key)],
+)
+def create_executive_summary(ticker: str, run_id: str):
+    ticker = _require_supported_ticker(ticker)
+    run_id = validate_job_id(run_id)
+
+    try:
+        _report_history.read_report(ticker, run_id)
+    except _report_history.ReportHistoryError:
+        raise HTTPException(
+            status_code=404,
+            detail="Research report not found.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=409,
+            detail="Research report is not available.",
+        )
+
+    if not _summary_request_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail="Another summary is being generated.",
+            headers={"Retry-After": "10"},
+        )
+
+    try:
+        return _generate_summary(
+            project_root(),
+            run_id,
+            ticker=ticker,
+        )
+
+    except _ExecutiveSummaryError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="The summary service is unavailable.",
+        )
+
+    finally:
+        _summary_request_lock.release()

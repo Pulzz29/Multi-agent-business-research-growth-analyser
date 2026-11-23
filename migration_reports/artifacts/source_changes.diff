@@ -1,0 +1,234 @@
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/main.py	2026-11-23 01:50:34.779856300 +0530
++++ backend/app/main.py	2026-11-23 02:01:12.114942700 +0530
+@@ -16,6 +16,7 @@
+ )
+ 
+ from app.core.config import get_settings
++from app.core.portability import localize_stored_path
+ from app.database.sqlite_manager import connect
+ from app.services.research_jobs import (
+     ResearchJobError,
+@@ -263,7 +264,7 @@
+         or not expected_report.is_relative_to(
+             reports_root
+         )
+-        or Path(stored_path).resolve()
++        or localize_stored_path(stored_path, project_root())
+         != expected_report
+     ):
+         raise HTTPException(
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/database/sqlite_manager.py	2026-11-23 01:50:35.314266700 +0530
++++ backend/app/database/sqlite_manager.py	2026-11-23 02:01:12.114942700 +0530
+@@ -2,6 +2,7 @@
+ import json
+ import shutil
+ import sqlite3
++from app.core.portability import closing_connection
+ import tempfile
+ import threading
+ from pathlib import Path
+@@ -43,7 +44,7 @@
+         return False
+ 
+     try:
+-        with sqlite3.connect(str(path), timeout=15) as conn:
++        with closing_connection(str(path), timeout=15) as conn:
+             result = conn.execute(
+                 "PRAGMA integrity_check"
+             ).fetchone()
+@@ -396,8 +397,8 @@
+         backup_path = None
+ 
+         try:
+-            with sqlite3.connect(str(source)) as source_conn:
+-                with sqlite3.connect(str(temporary)) as target_conn:
++            with closing_connection(str(source)) as source_conn:
++                with closing_connection(str(temporary)) as target_conn:
+                     source_conn.backup(target_conn)
+ 
+             if not verify_sqlite_integrity(temporary):
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/services/backup_reconciliation.py	2026-11-23 01:50:35.354661000 +0530
++++ backend/app/services/backup_reconciliation.py	2026-11-23 02:01:12.115970200 +0530
+@@ -2,6 +2,8 @@
+ import sqlite3
+ from pathlib import Path
+ 
++from app.core.portability import localize_stored_path
++
+ from app.database.sqlite_manager import connect
+ from app.services.research_jobs import read_job
+ from app.services.research_backup import (
+@@ -71,13 +73,13 @@
+                 "repair_needed": True,
+             }
+ 
+-        backup_path = Path(
+-            outcome["backup_path"]
+-        ).resolve()
+-
+-        manifest_path = Path(
+-            outcome["manifest_path"]
+-        ).resolve()
++        backup_path = localize_stored_path(
++            outcome["backup_path"], root
++        )
++
++        manifest_path = localize_stored_path(
++            outcome["manifest_path"], root
++        )
+ 
+         allowed_directory = (
+             root / "data" / "sqlite_backups"
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/services/research_backup.py	2026-11-23 01:50:35.394524400 +0530
++++ backend/app/services/research_backup.py	2026-11-23 02:01:12.115970200 +0530
+@@ -4,6 +4,8 @@
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
++from app.core.portability import localize_stored_path
++
+ from app.services.research_jobs import read_job
+ from app.services.sqlite_recovery import create_verified_backup
+ from app.services.backup_freshness import (
+@@ -89,7 +91,7 @@
+             "Completed research report is unavailable."
+         )
+ 
+-    report_path = Path(job["report_path"]).resolve()
++    report_path = localize_stored_path(job["report_path"], root)
+ 
+     expected_path = (
+         root / "reports" / "research_runs"
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/services/sqlite_recovery.py	2026-11-23 01:50:35.402458100 +0530
++++ backend/app/services/sqlite_recovery.py	2026-11-23 02:01:12.116969400 +0530
+@@ -2,6 +2,7 @@
+ import json
+ import os
+ import sqlite3
++from app.core.portability import closing_connection
+ import uuid
+ from datetime import datetime, timezone
+ from pathlib import Path
+@@ -157,13 +158,13 @@
+     )
+ 
+     try:
+-        with sqlite3.connect(
++        with closing_connection(
+             str(source_path),
+             timeout=30.0,
+         ) as source:
+             source.execute("PRAGMA busy_timeout=30000")
+ 
+-            with sqlite3.connect(
++            with closing_connection(
+                 str(temporary_path),
+                 timeout=30.0,
+             ) as destination:
+@@ -171,7 +172,7 @@
+                 # committed WAL changes consistently.
+                 source.backup(destination)
+ 
+-        with sqlite3.connect(
++        with closing_connection(
+             str(temporary_path),
+             timeout=30.0,
+         ) as verification:
+@@ -288,17 +289,17 @@
+ 
+     # Backup API is used for restoration as well;
+     # the source and destination are distinct files.
+-    with sqlite3.connect(
++    with closing_connection(
+         str(backup_path),
+         timeout=30.0,
+     ) as backup:
+-        with sqlite3.connect(
++        with closing_connection(
+             str(destination_path),
+             timeout=30.0,
+         ) as restored:
+             backup.backup(restored)
+ 
+-    with sqlite3.connect(
++    with closing_connection(
+         str(destination_path),
+         timeout=30.0,
+     ) as verification:
+--- migration_inputs/drive_export_original/20261122T173459146790Z/backend/app/services/startup_recovery.py	2026-11-23 01:50:35.400459700 +0530
++++ backend/app/services/startup_recovery.py	2026-11-23 02:01:12.116969400 +0530
+@@ -1,4 +1,3 @@
+-import fcntl
+ import hashlib
+ import json
+ import os
+@@ -8,6 +7,8 @@
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
++from app.core.portability import closing_connection, exclusive_file_lock
++
+ from app.services.sqlite_recovery import (
+     file_sha256,
+     verify_database,
+@@ -28,12 +29,8 @@
+     path.parent.mkdir(parents=True, exist_ok=True)
+ 
+     with path.open("a+b") as handle:
+-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+-
+-        try:
++        with exclusive_file_lock(handle):
+             yield
+-        finally:
+-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+ 
+ 
+ def verified_backup(backup_path, manifest_path):
+@@ -113,7 +110,7 @@
+     Do not invoke against a database with active
+     research workers.
+     """
+-    with sqlite3.connect(
++    with closing_connection(
+         str(database_path),
+         timeout=30.0,
+     ) as conn:
+@@ -245,16 +242,16 @@
+             )
+ 
+             try:
+-                with sqlite3.connect(
++                with closing_connection(
+                     backup_path.as_uri() + "?mode=ro",
+                     uri=True,
+                 ) as source:
+-                    with sqlite3.connect(
++                    with closing_connection(
+                         str(temporary)
+                     ) as destination:
+                         source.backup(destination)
+ 
+-                with sqlite3.connect(
++                with closing_connection(
+                     str(temporary)
+                 ) as check:
+                     restored_counts = verify_database(
+@@ -293,7 +290,7 @@
+                 "Runtime database unavailable."
+             )
+ 
+-        with sqlite3.connect(
++        with closing_connection(
+             str(database_path)
+         ) as check:
+             counts = verify_database(check)
+@@ -304,7 +301,7 @@
+             else []
+         )
+ 
+-        with sqlite3.connect(
++        with closing_connection(
+             str(database_path)
+         ) as check:
+             final_counts = verify_database(check)

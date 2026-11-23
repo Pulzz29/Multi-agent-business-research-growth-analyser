@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node / build
+frontend/node_modules/
+frontend/dist/
+
+# Runtime artefacts
+logs/
+*.tmp
+*-wal
+*-shm
+*.startup.lock
+
+# Large or private local data (kept on disk, not in Git)
+data/
+reports/
+observability/
+releases/
+migration_inputs/

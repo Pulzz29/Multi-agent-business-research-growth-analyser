@@ -1,0 +1,124 @@
+{
+  "with_fix": [
+    {
+      "step": "setup",
+      "scenario": "with_fix"
+    },
+    {
+      "step": "verify",
+      "scenario": "with_fix",
+      "news_articles": 86,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 0,
+      "integrity": "ok",
+      "persistent_snapshot_news": 86
+    },
+    {
+      "step": "refresh",
+      "scenario": "with_fix",
+      "refresh": {
+        "status": "success",
+        "records_fetched": 2,
+        "records_inserted": 2,
+        "snapshot_verified": true,
+        "recovery_point_verified": true
+      }
+    },
+    {
+      "step": "verify",
+      "scenario": "with_fix",
+      "news_articles": 88,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 2,
+      "integrity": "ok",
+      "persistent_snapshot_news": 88
+    },
+    {
+      "step": "wipe",
+      "scenario": "with_fix",
+      "runtime_exists": false
+    },
+    {
+      "step": "restore",
+      "scenario": "with_fix",
+      "startup": {
+        "status": "ready_for_api_import",
+        "database_restored": true,
+        "verified_recovery_points": 9
+      }
+    },
+    {
+      "step": "verify",
+      "scenario": "with_fix",
+      "news_articles": 88,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 2,
+      "integrity": "ok",
+      "persistent_snapshot_news": 88
+    }
+  ],
+  "without_fix": [
+    {
+      "step": "setup",
+      "scenario": "without_fix"
+    },
+    {
+      "step": "verify",
+      "scenario": "without_fix",
+      "news_articles": 86,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 0,
+      "integrity": "ok",
+      "persistent_snapshot_news": 86
+    },
+    {
+      "step": "refresh",
+      "scenario": "without_fix",
+      "refresh": {
+        "status": "success",
+        "records_fetched": 2,
+        "records_inserted": 2,
+        "snapshot_verified": true,
+        "recovery_point_verified": false
+      }
+    },
+    {
+      "step": "verify",
+      "scenario": "without_fix",
+      "news_articles": 88,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 2,
+      "integrity": "ok",
+      "persistent_snapshot_news": 88
+    },
+    {
+      "step": "wipe",
+      "scenario": "without_fix",
+      "runtime_exists": false
+    },
+    {
+      "step": "restore",
+      "scenario": "without_fix",
+      "startup": {
+        "status": "ready_for_api_import",
+        "database_restored": true,
+        "verified_recovery_points": 9
+      }
+    },
+    {
+      "step": "verify",
+      "scenario": "without_fix",
+      "news_articles": 86,
+      "runs": 10,
+      "sec_facts": 12737,
+      "fixture_articles_present": 0,
+      "integrity": "ok",
+      "persistent_snapshot_news": 88
+    }
+  ]
+}
