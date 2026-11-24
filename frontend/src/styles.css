@@ -2259,3 +2259,363 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Research intelligence v2: AI-written analysis, freshness, refresh
+   ------------------------------------------------------------------ */
+
+.ai-finding {
+  border-left: 3px solid var(--accent);
+}
+
+.ai-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.ai-label svg {
+  margin-top: 2px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.research-options {
+  flex-basis: 100%;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.research-options summary {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.research-options .option-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.research-options select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  max-width: 100%;
+}
+
+.refresh-panel .mini-table td {
+  vertical-align: top;
+}
+
+.refresh-results {
+  margin-top: 10px;
+}
+
+.refresh-results li + li {
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .research-options,
+  .research-options .option-row {
+    text-align: left;
+    justify-content: flex-start;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Markets, company search and sector-wise comparison
+   ------------------------------------------------------------------ */
+
+.segmented button svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.market-grid,
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.chart-grid .chart-wide {
+  grid-column: 1 / -1;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.search-field:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.result-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.result-item:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.result-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.top-grid,
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.top-card,
+.sector-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.top-card:hover,
+.sector-card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.top-rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.top-name,
+.sector-name {
+  font-weight: 700;
+}
+
+.top-cap {
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.top-meta,
+.sector-members {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.chip-row,
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chip-button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.back-link {
+  align-self: flex-start;
+}
+
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rank-card.is-unranked {
+  opacity: 0.85;
+  border-style: dashed;
+}
+
+.rank-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rank-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.rank-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.rank-score strong {
+  font-size: 1.3rem;
+}
+
+.sw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.news-item p {
+  margin: 2px 0 0;
+}
+
+/* Radar chart */
+.radar-canvas {
+  display: flex;
+  justify-content: center;
+}
+
+.radar-area {
+  fill-opacity: 0.16;
+  stroke-width: 2;
+  transition: opacity 0.15s var(--ease);
+}
+
+.radar-area.tone-primary {
+  fill: var(--primary);
+  stroke: var(--primary);
+}
+
+.radar-area.tone-secondary {
+  fill: var(--secondary);
+  stroke: var(--secondary);
+}
+
+.radar-area.tone-forecast {
+  fill: var(--forecast);
+  stroke: var(--forecast);
+}
+
+.radar-area.tone-accent {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.radar-area.is-dim,
+.legend-button.is-dim {
+  opacity: 0.25;
+}
+
+.legend-swatch.tone-accent {
+  background: var(--accent);
+}
+
+.legend-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.radar-label {
+  font-size: 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .market-grid,
+  .chart-grid,
+  .sw-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rank-score {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* Company data freshness */
+.last-updated {
+  margin: 6px 0 0;
+}

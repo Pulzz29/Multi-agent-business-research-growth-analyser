@@ -1,6 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// The dev server forwards API calls to the backend. Default: port 8000, the same
+// default as scripts/run_backend.py. Override with INSIGHTIQ_API_PORT when the
+// backend runs on another port.
+const backend = `http://127.0.0.1:${process.env.INSIGHTIQ_API_PORT || "8000"}`;
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,11 +14,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: backend,
         changeOrigin: true,
       },
       "/health": {
-        target: "http://127.0.0.1:8000",
+        target: backend,
         changeOrigin: true,
       },
     },

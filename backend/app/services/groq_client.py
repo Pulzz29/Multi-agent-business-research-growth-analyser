@@ -8,7 +8,7 @@ from groq import Groq
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
-GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_MODEL = (os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
 
 
 class EvidenceFinding(BaseModel):

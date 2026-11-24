@@ -133,6 +133,55 @@ export function comparisonFor(company, metric, periodEnd) {
   };
 }
 
+export const CLASSIFICATION_LABELS = {
+  monitoring_priority: "Monitoring priority",
+  potential_risk: "Potential risk (AI interpretation)",
+  potential_opportunity: "Potential opportunity (AI interpretation)",
+};
+
+export const EVIDENCE_STATE_LABELS = {
+  refreshed: "Refreshed from provider",
+  latest_available_confirmed: "Checked — no newer filing",
+  cached_within_policy: "Stored data within freshness policy",
+  cached_skipped_by_request: "Stored data (refresh skipped)",
+  refresh_failed_using_cached: "Refresh failed — stored data used",
+  refresh_busy_using_cached: "Refresh busy — stored data used",
+};
+
+export const REFRESH_STATUS_LABELS = {
+  refreshed: "Refreshed",
+  no_new_filings: "No newer filing available",
+  cached_fresh: "Already fresh — no provider call",
+  recently_refreshed: "Refreshed recently — no provider call",
+  busy: "Another refresh is running",
+  failed: "Refresh failed",
+  skipped_by_request: "Skipped",
+};
+
+/** Comparison stored in the report itself (schema v2), keyed by metric + period. */
+function reportComparisons(financial) {
+  const out = {};
+  for (const c of list(financial?.evidence_package?.comparisons)) {
+    const key = `${c.metric}|${c.period_end}`;
+    out[key] = out[key] || {};
+    out[key][c.kind === "year_over_year" ? "yoy" : "qoq"] = c;
+  }
+  return out;
+}
+
+function analysisView(analysis) {
+  if (!analysis || typeof analysis !== "object") return null;
+  return {
+    status: analysis.status || "unavailable",
+    statusReason: analysis.status_reason || null,
+    claimsSelection: analysis.claims_selection || null,
+    findings: list(analysis.findings),
+    items: list(analysis.items),
+    withheld: list(analysis.withheld),
+    validationLabel: analysis.validation_label || null,
+  };
+}
+
 export function buildReportModel(report, company) {
   if (!report || typeof report !== "object") return null;
 
@@ -140,15 +189,25 @@ export function buildReportModel(report, company) {
   const verified = financial.verified_claims || {};
   const news = report.news || {};
   const strategic = report.strategic || {};
+  const stored = reportComparisons(financial);
+  const schemaVersion = Number(report.report_schema_version) || 1;
+  const currency = report.currency || financial.currency || "USD";
+  const researchProfile = report.research_profile || "sec_validated";
+  const dataProvider = financial.data_provider || (researchProfile === "provider" ? null : "SEC_EDGAR");
 
-  const claims = list(verified.verified_claims).map((claim) => ({
-    ...claim,
-    metricLabel: METRIC_LABELS[claim.metric] || claim.metric,
-    period: periodRange(claim.period_start, claim.period_end),
-    statement: statementFor(claim.evidence_id, verified.verified_statements),
-    methodText: METHOD_TEXT[claim.normalization_method] || claim.normalization_method,
-    comparison: comparisonFor(company, claim.metric, claim.period_end),
-  }));
+  const claims = list(verified.verified_claims).map((claim) => {
+    const fromReport = stored[`${claim.metric}|${claim.period_end}`];
+    return {
+      ...claim,
+      metricLabel: METRIC_LABELS[claim.metric] || claim.metric,
+      period: periodRange(claim.period_start, claim.period_end),
+      statement: statementFor(claim.evidence_id, verified.verified_statements),
+      methodText: METHOD_TEXT[claim.normalization_method] || claim.normalization_method,
+      // v2: comparisons saved in the report; v1: computed from current company data.
+      reportComparison: fromReport || null,
+      comparison: comparisonFor(company, claim.metric, claim.period_end),
+    };
+  });
 
   const forecasts = Object.entries(financial.forecasts || {}).map(([metric, item]) => ({
     metric,
@@ -164,23 +223,50 @@ export function buildReportModel(report, company) {
   const priorities = list(strategic.research_priorities).map((p) => {
     const theme = THEMES[p.theme] || { title: p.theme, about: null };
     const source = p.source_metadata || {};
+    const analysis = p.analysis && typeof p.analysis === "object" ? p.analysis : null;
     return {
       ...p,
+      // The theme title is a fixed label; an AI-written title is shown separately.
       title: theme.title,
+      aiTitle: analysis?.title || null,
       about: theme.about,
       isFinancial: source.kind === "verified_sec_financial_fact",
       source,
+      analysis,
+      classificationLabel: analysis
+        ? analysis.classification_label || CLASSIFICATION_LABELS[analysis.classification] || null
+        : null,
     };
   });
+
+  const generation = report.generation || null;
+  const freshness = report.source_freshness || null;
+  const evidencePackage = financial.evidence_package || null;
 
   return {
     runId: report.run_id,
     ticker: report.ticker,
+    schemaVersion,
+    hasExtendedAnalysis: schemaVersion >= 2,
+    currency,
+    researchProfile,
+    isProvider: researchProfile === "provider",
+    dataProvider,
+    market: report.market || "US",
     generatedAt: report.generated_at_utc,
     elapsed: report.total_elapsed_seconds,
     agentStatuses: report.agent_statuses || {},
     agentTimings: report.agent_timings_seconds || {},
     limitations: list(report.limitations),
+    refreshRequest: report.refresh_request || null,
+    freshness,
+    generation: generation
+      ? {
+          model: generation.model || null,
+          aiStatus: generation.ai_analysis_status || {},
+          calls: list(generation.calls),
+        }
+      : null,
     financial: {
       claims,
       forecasts,
@@ -188,6 +274,17 @@ export function buildReportModel(report, company) {
       diagnostics: verified.diagnostics || financial.groq_diagnostics || null,
       limitations: list(verified.limitations),
       disclosures: list(financial.disclosures),
+      analysis: analysisView(financial.analysis),
+      qualityProvenance: financial.forecast_quality_provenance || null,
+      forecastsUnavailable: financial.forecasts_unavailable || {},
+      evidencePackage: evidencePackage
+        ? {
+            records: list(evidencePackage.records),
+            comparisons: list(evidencePackage.comparisons),
+            forecasts: list(evidencePackage.forecasts),
+            limitations: list(evidencePackage.limitations),
+          }
+        : null,
     },
     news: {
       articles,
@@ -195,9 +292,12 @@ export function buildReportModel(report, company) {
       themes: news.repeated_event_themes || {},
       diagnostics: news.groq_diagnostics || null,
       disclosures: list(news.disclosures),
+      analysis: analysisView(news.analysis),
     },
     strategic: {
       status: strategic.status,
+      analysisStatus: strategic.analysis_status || null,
+      withheld: list(strategic.withheld_analysis),
       priorities,
       sourceEvidence: list(strategic.source_evidence),
       diagnostics: strategic.groq_diagnostics || null,

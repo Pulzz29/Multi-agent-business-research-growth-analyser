@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BrainCircuit, FileText, Landmark, Newspaper, Sparkles, Target } from "lucide-react";
+import { BrainCircuit, Database, FileText, Landmark, Newspaper, Sparkles, Target } from "lucide-react";
 import { Badge, Card, ClampText, EmptyState, EvidencePanel, ExternalLink, Notice, StatusBadge } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import {
@@ -16,12 +16,32 @@ import {
 } from "../lib/format.js";
 import {
   CATEGORY_LABELS,
+  EVIDENCE_STATE_LABELS,
+  METRIC_LABELS,
   RELEVANCE_LABELS,
   SUMMARY_SECTION_TITLES,
   TOPIC_LABELS,
   buildReportModel,
   modelLabel,
 } from "../lib/reportModel.js";
+
+const PROVIDER_NAMES = { FMP: "Financial Modeling Prep", YFINANCE: "Yahoo Finance", FINNHUB: "Finnhub", SEC_EDGAR: "SEC EDGAR" };
+
+/** Long amount in the report's currency (USD keeps the existing $ format). */
+function money(value, currency) {
+  if (!currency || currency === "USD") return formatUsdLong(value);
+  const n = Number(value);
+  if (value === null || value === undefined || !Number.isFinite(n)) return "—";
+  return `${currency} ${(n / 1e9).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`;
+}
+
+/** Amount already expressed in billions of the report's currency. */
+function billions(value, currency) {
+  if (!currency || currency === "USD") return formatBillions(value);
+  const n = Number(value);
+  if (value === null || value === undefined || !Number.isFinite(n)) return "—";
+  return `${currency} ${n.toFixed(2)}B`;
+}
 
 const METRIC_CONTEXT = {
   revenue: "Revenue is the total value of sales recognised in the quarter — the most direct measure of the scale of the business.",
@@ -34,6 +54,276 @@ function changeSentence(label, pct, prev) {
   const direction = pct > 0 ? "up" : pct < 0 ? "down" : "unchanged";
   const amount = direction === "unchanged" ? "" : ` ${formatPct(Math.abs(pct)).replace("+", "")}`;
   return `${direction === "unchanged" ? "Unchanged" : direction[0].toUpperCase() + direction.slice(1) + amount} versus ${formatUsdLong(prev.value_usd)} in ${label} (${prev.fiscal_label}, ${periodRange(prev.period_start, prev.period_end)}).`;
+}
+
+/* ------------------------------------------------------ AI-analysis helpers */
+
+const DEFAULT_AI_LABEL = "AI interpretation — automated evidence, number, period and language checks passed; not independently verified.";
+
+function AiLabel({ text }) {
+  return (
+    <p className="ai-label small">
+      <Sparkles size={13} aria-hidden="true" /> {text || DEFAULT_AI_LABEL}
+    </p>
+  );
+}
+
+function EvidenceChips({ ids }) {
+  const list = (ids || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <p className="evidence-chips" aria-label="Cited evidence">
+      {list.map((id) => (
+        <code key={id} className="chip">
+          {id}
+        </code>
+      ))}
+    </p>
+  );
+}
+
+function AnalysisStatusNotice({ analysis, what, legacy }) {
+  if (legacy) {
+    return (
+      <Notice tone="info" title={`Extended AI-written ${what} not available`}>
+        This report was generated before extended AI analysis was added (report schema v1). The validated evidence below is shown exactly as saved.
+      </Notice>
+    );
+  }
+  if (!analysis || analysis.status === "completed") return null;
+  if (analysis.status === "partial") {
+    return (
+      <Notice tone="info">
+        {analysis.withheld.length} AI-written {what} item{analysis.withheld.length === 1 ? " was" : "s were"} withheld because {analysis.withheld.length === 1 ? "it" : "they"} did not pass automated validation. Only checked items are shown.
+      </Notice>
+    );
+  }
+  return (
+    <Notice tone="warning" title={`Extended AI-written ${what} unavailable`}>
+      {analysis.statusReason || "No AI-written item passed automated validation."} The validated evidence below is complete without it.
+    </Notice>
+  );
+}
+
+function WithheldPanel({ withheld, idKey }) {
+  if (!withheld?.length) return null;
+  return (
+    <EvidencePanel label={`Withheld AI output (${withheld.length})`}>
+      <ul className="plain-list small">
+        {withheld.map((w, i) => (
+          <li key={`${w[idKey]}-${i}`}>
+            <code className="code-inline">{w[idKey]}</code> — {w.reason}
+          </li>
+        ))}
+      </ul>
+    </EvidencePanel>
+  );
+}
+
+const STATE_TONES = {
+  refreshed: "positive",
+  latest_available_confirmed: "positive",
+  cached_within_policy: "info",
+  cached_skipped_by_request: "neutral",
+  refresh_failed_using_cached: "warning",
+  refresh_busy_using_cached: "warning",
+};
+
+function StateBadge({ state }) {
+  return <Badge tone={STATE_TONES[state] || "neutral"}>{EVIDENCE_STATE_LABELS[state] || humanize(state)}</Badge>;
+}
+
+/* ---------------------------------------------- research metadata & sources */
+
+function ProviderFreshness({ model }) {
+  const f = model.freshness;
+  const sources = f.provider_sources || {};
+  return (
+    <Card
+      id="freshness"
+      eyebrow="Research metadata"
+      title="Source freshness"
+      subtitle={`Provider data for this run · ${f.market} market · amounts in ${f.currency || model.currency} · refresh mode: ${f.refresh_mode === "skip" ? "stored data only" : "refresh if stale"}`}
+    >
+      {f.refresh_failures?.length > 0 && (
+        <Notice tone="warning" title="A source refresh did not complete">
+          {f.refresh_failures.join(", ")}: stored data was used and is labelled below.
+        </Notice>
+      )}
+      <div className="table-scroll">
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Source</th>
+              <th>Evidence used</th>
+              <th>Last successful refresh</th>
+              <th>Policy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(sources).map(([kind, s]) => (
+              <tr key={kind}>
+                <td>{humanize(kind)}</td>
+                <td className="small">{s.source}</td>
+                <td>
+                  <StateBadge state={s.evidence_state} />
+                </td>
+                <td className="small">{s.last_successful_refresh_at ? formatDateTime(s.last_successful_refresh_at) : "Never"}</td>
+                <td className="small">{s.policy_max_age_hours ? `${s.policy_max_age_hours} h` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">
+        Statements from {PROVIDER_NAMES[f.statements?.provider] || f.statements?.provider || "the provider"} up to {formatDate(f.statements?.data_cutoff_period_end)}
+        {f.statements?.period_types
+          ? ` (${Object.entries(f.statements.period_types)
+              .filter(([, t]) => t)
+              .map(([m, t]) => `${m === "revenue" ? "revenue" : "cash flow"}: ${t}`)
+              .join(", ")})`
+          : ""}
+        . Latest cited news: {f.news?.latest_cited_publication_date ? formatDate(f.news.latest_cited_publication_date) : "none"}.
+        Provider statements are not SEC-validated.
+      </p>
+    </Card>
+  );
+}
+
+function SourceFreshness({ model }) {
+  const f = model.freshness;
+  const g = model.generation;
+  if (f?.research_profile === "provider") return <ProviderFreshness model={model} />;
+  if (!f) {
+    return (
+      <Card id="freshness" eyebrow="Research metadata" title="Source freshness">
+        <Notice tone="info">
+          This report was generated before source-freshness tracking (report schema v{model.schemaVersion}). It used the SEC and news evidence stored at that time; whether those sources were refreshed was not recorded.
+        </Notice>
+      </Card>
+    );
+  }
+  const sec = f.sec || {};
+  const news = f.news || {};
+  const filing = sec.latest_periodic_filing;
+  return (
+    <Card
+      id="freshness"
+      eyebrow="Research metadata"
+      title="Source freshness"
+      subtitle={`Evidence prepared for this run · refresh mode: ${f.refresh_mode === "skip" ? "stored data only" : "refresh if stale"}`}
+    >
+      {f.refresh_failures?.length > 0 && (
+        <Notice tone="warning" title="A source refresh failed">
+          {f.refresh_failures.join(" and ")} could not be refreshed. This report uses the stored evidence shown below, labelled accordingly.
+        </Notice>
+      )}
+      <div className="table-scroll">
+        <table className="mini-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Evidence used</th>
+              <th>Data cutoff</th>
+              <th>Last successful refresh</th>
+              <th>Policy</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SEC EDGAR filings</td>
+              <td>
+                <StateBadge state={sec.evidence_state} />
+              </td>
+              <td className="small">
+                Latest quarter {formatDate(sec.data_cutoff_period_end)}
+                {filing ? ` · latest ${filing.form} filed ${formatDate(filing.filed_at)}` : ""}
+              </td>
+              <td className="small">{sec.last_successful_refresh_at ? formatDateTime(sec.last_successful_refresh_at) : "Never"}</td>
+              <td className="small">{sec.policy_max_age_hours ? `${sec.policy_max_age_hours} h` : "—"}</td>
+            </tr>
+            <tr>
+              <td>NewsData.io articles</td>
+              <td>
+                <StateBadge state={news.evidence_state} />
+              </td>
+              <td className="small">Latest cited article {formatDate(news.latest_cited_publication_date)}</td>
+              <td className="small">{news.last_successful_refresh_at ? formatDateTime(news.last_successful_refresh_at) : "Never"}</td>
+              <td className="small">{news.policy_max_age_hours ? `${news.policy_max_age_hours} h` : "—"}</td>
+            </tr>
+            {Object.entries(f.forecasts || {}).map(([metric, fc]) => (
+              <tr key={metric}>
+                <td>{METRIC_LABELS[metric] || metric} forecast</td>
+                <td>
+                  <Badge tone="neutral">{fc.cache_status === "hit" ? "Reused (inputs unchanged)" : "Recomputed"}</Badge>
+                </td>
+                <td className="small">Trained on data to {formatDate(fc.data_cutoff_period_end)}</td>
+                <td className="small muted">{humanize(fc.cache_reason || "")}</td>
+                <td className="small muted">Invalidated when SEC inputs change</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">{sec.note}</p>
+      <EvidencePanel
+        label="Generation and refresh details"
+        rows={[
+          ["Research generated (UTC)", f.research_generated_at_utc],
+          ["Model", g?.model],
+          ["AI analysis — financial", g?.aiStatus?.financial],
+          ["AI analysis — news", g?.aiStatus?.news],
+          ["AI analysis — strategic", g?.aiStatus?.strategic],
+          ["SEC refresh result", sec.refresh_status],
+          ["SEC provider called", sec.provider_called],
+          ["SEC records added", sec.records_inserted],
+          ["SEC error category", sec.error_category],
+          ["News refresh result", news.refresh_status],
+          ["News provider called", news.provider_called],
+          ["News records added", news.records_inserted],
+          ["News error category", news.error_category],
+          ["Latest stored article", news.latest_stored_publication_date],
+          ["If refresh fails", f.on_refresh_failure],
+        ]}
+      />
+      {g?.calls?.length > 0 && (
+        <EvidencePanel label={`AI requests (${g.calls.length})`}>
+          <div className="table-scroll">
+            <table className="mini-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Call</th>
+                  <th>Outcome</th>
+                  <th>Profile</th>
+                  <th className="num">Tokens in / out</th>
+                  <th className="num">Requests</th>
+                  <th>Fallback</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.calls.map((c) => (
+                  <tr key={c.call}>
+                    <td>{humanize(c.agent)}</td>
+                    <td>{humanize(c.call)}</td>
+                    <td>{humanize(c.status || "")}</td>
+                    <td>{c.profile_used || "—"}</td>
+                    <td className="num">
+                      {c.prompt_tokens ?? "—"} / {c.completion_tokens ?? "—"}
+                    </td>
+                    <td className="num">{c.provider_requests ?? "—"}</td>
+                    <td className="small">{c.failure_reason || c.fallback_reason || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted">Token counts are shown only when the provider reported them.</p>
+        </EvidencePanel>
+      )}
+    </Card>
+  );
 }
 
 /* ------------------------------------------------------- executive summary */
@@ -137,10 +427,69 @@ function ExecutiveSummary({ token, model, summary, onSummary }) {
 
 /* --------------------------------------------------------------- financial */
 
-function ClaimCard({ claim }) {
+function reportComparisonSentence(item, label, currency) {
+  if (!item) return null;
+  const pct = Number(item.change_pct);
+  if (!Number.isFinite(pct)) return null;
+  const head = pct > 0 ? `Up ${Math.abs(pct).toFixed(1)}%` : pct < 0 ? `Down ${Math.abs(pct).toFixed(1)}%` : "Unchanged";
+  return `${head} versus ${billions(item.basis_value_billion_usd, currency)} in ${label} (period ended ${formatDate(item.basis_period_end)}) · ${item.comparison_id}`;
+}
+
+function FinancialFindingCard({ finding }) {
+  return (
+    <article className="finding ai-finding">
+      <header className="finding-head">
+        <div>
+          <p className="finding-kicker">AI-written financial analysis</p>
+          <h3 className="finding-title">{finding.title}</h3>
+        </div>
+      </header>
+      <div className="finding-body">
+        <p>
+          <span className="label-inline">Verified observation (rendered from SEC evidence):</span> {finding.verified_observation}
+        </p>
+        <p>
+          <span className="label-inline">Interpretation:</span> {finding.interpretation}
+        </p>
+        <p>
+          <span className="label-inline">Why it matters:</span> {finding.business_significance}
+        </p>
+        <p className="small muted">
+          <span className="label-inline">What it cannot show:</span> {finding.limitations}
+        </p>
+        <EvidenceChips ids={[...(finding.evidence_ids || []), ...(finding.comparison_ids || [])]} />
+        <AiLabel text={finding.validation?.label} />
+      </div>
+      <EvidencePanel
+        label="Validation details"
+        rows={[
+          ["Finding ID", finding.finding_id],
+          ["Checks passed", finding.validation?.checks],
+          ["Independently verified", finding.validation?.independently_verified],
+          ["AI-written fields", finding.ai_generated_fields],
+          ["Observation source", finding.verified_observation_source],
+        ]}
+      />
+    </article>
+  );
+}
+
+function ClaimCard({ claim, currency, provider }) {
+  const annual = claim.period_type === "annual";
   const c = claim.comparison;
-  const qoq = c ? changeSentence("the preceding quarter", c.qoq, c.qoqPrev) : null;
-  const yoy = c ? changeSentence("the same quarter a year earlier", c.yoy, c.yoyPrev) : null;
+  const rc = claim.reportComparison;
+  // Schema v2 reports carry their own comparisons; older reports fall back to
+  // comparisons computed from the company's stored SEC series.
+  const qoq = rc
+    ? reportComparisonSentence(rc.qoq, "the preceding quarter", currency)
+    : c
+      ? changeSentence("the preceding quarter", c.qoq, c.qoqPrev)
+      : null;
+  const yoy = rc
+    ? reportComparisonSentence(rc.yoy, annual ? "the previous fiscal year" : "the same quarter a year earlier", currency)
+    : c
+      ? changeSentence("the same quarter a year earlier", c.yoy, c.yoyPrev)
+      : null;
   return (
     <article className="finding">
       <header className="finding-head">
@@ -152,16 +501,16 @@ function ClaimCard({ claim }) {
           </h3>
         </div>
         <p className="finding-value" title={exactUsd(claim.value_usd)}>
-          {formatUsdLong(claim.value_usd)}
+          {money(claim.value_usd, currency)}
         </p>
       </header>
       <div className="finding-body">
         <p>
-          <span className="label-inline">Observed (SEC):</span> {claim.statement || `${claim.metricLabel} of ${exactUsd(claim.value_usd)} for ${claim.period_start} to ${claim.period_end}.`}
+          <span className="label-inline">Observed ({provider ? `${PROVIDER_NAMES[provider] || provider}-reported` : "SEC"}):</span> {claim.statement || `${claim.metricLabel} of ${exactUsd(claim.value_usd)} for ${claim.period_start} to ${claim.period_end}.`}
         </p>
         {(qoq || yoy) && (
           <div>
-            <span className="label-inline">Comparison (computed by InsightIQ from stored SEC quarters):</span>
+            <span className="label-inline">Comparison (computed by InsightIQ from stored {provider ? "provider" : "SEC"} periods):</span>
             <ul className="plain-list">
               {qoq && <li>{qoq}</li>}
               {yoy && <li>{yoy}</li>}
@@ -187,16 +536,31 @@ function ClaimCard({ claim }) {
 }
 
 function FinancialSection({ model }) {
-  const { claims, forecasts, diagnostics, limitations, disclosures } = model.financial;
+  const { claims, forecasts, diagnostics, limitations, disclosures, analysis, qualityProvenance } = model.financial;
   const metrics = [...new Set(claims.map((c) => c.metric))];
+  const findings = analysis?.findings || [];
   return (
     <Card
       id="financial"
       eyebrow="B · Financial Agent"
       title="Financial analysis"
-      subtitle={`${claims.length} verified SEC observation${claims.length === 1 ? "" : "s"} selected by the Financial Agent${model.financial.model ? ` (${model.financial.model})` : ""}`}
+      subtitle={`${claims.length} verified ${model.isProvider ? `${PROVIDER_NAMES[model.dataProvider] || "provider"}` : "SEC"} observation${claims.length === 1 ? "" : "s"} selected by the Financial Agent${model.financial.model ? ` (${model.financial.model})` : ""}${model.currency !== "USD" ? ` · amounts in ${model.currency}` : ""}`}
       action={<StatusBadge status={model.agentStatuses.financial} />}
     >
+      <AnalysisStatusNotice analysis={analysis} what="financial analysis" legacy={!model.hasExtendedAnalysis} />
+      {findings.length > 0 && (
+        <div className="finding-group">
+          <h3 className="sub-title">Financial analysis</h3>
+          {findings.map((f) => (
+            <FinancialFindingCard key={f.finding_id} finding={f} />
+          ))}
+          <WithheldPanel withheld={analysis.withheld} idKey="finding_id" />
+        </div>
+      )}
+      {claims.length > 0 && <h3 className="sub-title">Verified SEC observations</h3>}
+      {analysis?.claimsSelection === "deterministic_fallback" && (
+        <p className="small muted">These observations were selected deterministically (latest quarters) because the AI provider was unavailable.</p>
+      )}
       {!claims.length ? (
         <EmptyState title="No financial findings in this report" />
       ) : (
@@ -206,12 +570,24 @@ function FinancialSection({ model }) {
             {claims
               .filter((c) => c.metric === metric)
               .map((claim) => (
-                <ClaimCard key={claim.evidence_id} claim={claim} />
+                <ClaimCard
+                  key={claim.evidence_id}
+                  claim={claim}
+                  currency={model.currency}
+                  provider={model.isProvider ? claim.provider || model.dataProvider : null}
+                />
               ))}
           </div>
         ))
       )}
 
+      {Object.keys(model.financial.forecastsUnavailable).length > 0 && (
+        <Notice tone="info" title="Statistical forecasts not available">
+          {Object.entries(model.financial.forecastsUnavailable)
+            .map(([metric, reason]) => `${metric === "revenue" ? "Revenue" : "Operating cash flow"}: ${reason}`)
+            .join(" ")}
+        </Notice>
+      )}
       {forecasts.length > 0 && (
         <div className="report-forecasts">
           <h3 className="sub-title">Forecasts used in this report (statistical estimates)</h3>
@@ -236,8 +612,12 @@ function FinancialSection({ model }) {
                       <td>{f.metricLabel}</td>
                       <td>{modelLabel(f.model)}</td>
                       <td>{formatDate(f.last_reported_sec_period)}</td>
-                      <td className="num">{first ? formatBillions(first.predicted_billion_usd) : "—"}</td>
-                      <td className="num">{first ? `${formatBillions(first.lower_95_billion_usd)} – ${formatBillions(first.upper_95_billion_usd)}` : "—"}</td>
+                      <td className="num">{first ? billions(first.predicted_billion_usd, model.currency) : "—"}</td>
+                      <td className="num">
+                        {first && first.lower_95_billion_usd !== null
+                          ? `${billions(first.lower_95_billion_usd, model.currency)} – ${billions(first.upper_95_billion_usd, model.currency)}`
+                          : "—"}
+                      </td>
                       <td className="small">
                         {q
                           ? `MAE ${formatBillions(q.selected_mae_billion_usd)} vs baseline ${formatBillions(q.baseline_mae_billion_usd)}; ${q.interval_hits}/${q.holdout_quarters} holdout quarters inside interval`
@@ -250,6 +630,12 @@ function FinancialSection({ model }) {
             </table>
           </div>
           {forecasts[0]?.interval_quality?.warning && <p className="small muted">{forecasts[0].interval_quality.warning}</p>}
+          {qualityProvenance && (
+            <p className="small muted">
+              Holdout error and interval-coverage figures come from a stored review ({qualityProvenance.interval_quality_source}
+              {qualityProvenance.assessed_at_utc ? `, assessed ${formatDate(qualityProvenance.assessed_at_utc)}` : ""}); they were not recomputed during this research run.
+            </p>
+          )}
         </div>
       )}
 
@@ -333,9 +719,64 @@ function ArticleCard({ article }) {
   );
 }
 
+function NewsIntelligenceCard({ item }) {
+  const sources = item.sources || [];
+  const headlineOnly = item.content_basis === "headline_only";
+  return (
+    <article className="finding ai-finding">
+      <div className="news-meta">
+        {sources.map((s, i) => (
+          <span key={s.evidence_id}>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            <span className="news-publisher">{s.publisher || "Unknown publisher"}</span> <time dateTime={s.published_date}>{formatDate(s.published_date)}</time>
+          </span>
+        ))}
+        <Badge tone={headlineOnly ? "warning" : "neutral"}>{headlineOnly ? "Headline only — article body not available" : "Headline and description excerpt"}</Badge>
+      </div>
+      <h3 className="finding-title">
+        {sources.map((s, i) => (
+          <span key={s.evidence_id}>
+            {i > 0 && " · "}
+            <ExternalLink href={s.source_url}>{s.headline}</ExternalLink>
+          </span>
+        ))}
+      </h3>
+      <div className="finding-body">
+        <p>
+          <span className="label-inline">What the publisher reported:</span> {item.reported_development}
+        </p>
+        <p>
+          <span className="label-inline">Relevance to the company (AI interpretation):</span> {item.company_relevance}
+        </p>
+        <p>
+          <span className="label-inline">Potential implications (AI interpretation):</span> {item.potential_implications}
+        </p>
+        <p className="small muted">
+          <span className="label-inline">Uncertainty:</span> {item.uncertainty}
+        </p>
+        <div className="badge-row">
+          <Badge tone="warning">Publisher report — not independently verified</Badge>
+        </div>
+        <AiLabel text={item.validation?.label} />
+      </div>
+      <EvidencePanel
+        label="Source and validation details"
+        rows={[
+          ["Evidence IDs", item.evidence_ids],
+          ["Theme group", item.theme_group],
+          ["Description excerpt truncated", sources.some((s) => s.excerpt_truncated)],
+          ["Checks passed", item.validation?.checks],
+          ["Independently verified", item.provenance?.independently_verified],
+        ]}
+      />
+    </article>
+  );
+}
+
 function NewsSection({ model }) {
-  const { articles, contextual, diagnostics, disclosures } = model.news;
+  const { articles, contextual, diagnostics, disclosures, analysis } = model.news;
   const budget = diagnostics?.request_budget;
+  const items = analysis?.items || [];
   return (
     <Card
       id="news"
@@ -347,6 +788,17 @@ function NewsSection({ model }) {
       <Notice tone="info">
         Each item separates what the publisher reports from how the News Agent classified it. Reported developments are not treated as verified financial facts.
       </Notice>
+      <AnalysisStatusNotice analysis={analysis} what="news intelligence" legacy={!model.hasExtendedAnalysis} />
+      {items.length > 0 && (
+        <div className="finding-group">
+          <h3 className="sub-title">News intelligence</h3>
+          {items.map((item) => (
+            <NewsIntelligenceCard key={item.item_id} item={item} />
+          ))}
+          <WithheldPanel withheld={analysis.withheld} idKey="item_id" />
+        </div>
+      )}
+      {articles.length > 0 && <h3 className="sub-title">Selected source articles</h3>}
       {!articles.length ? <EmptyState title="No news evidence in this report" /> : articles.map((a) => <ArticleCard key={a.evidence_id} article={a} />)}
       {contextual.length > 0 && (
         <EvidencePanel label={`Contextual articles (${contextual.length})`}>
@@ -392,18 +844,24 @@ function NewsSection({ model }) {
 
 function PriorityCard({ item, index }) {
   const s = item.source;
+  const a = item.analysis;
   return (
     <article className="finding priority">
       <header className="finding-head">
         <div>
-          <p className="finding-kicker">Priority {index + 1}</p>
-          <h3 className="finding-title">{item.title}</h3>
+          <p className="finding-kicker">
+            Priority {index + 1}
+            {a ? ` · ${item.title}` : ""}
+          </p>
+          <h3 className="finding-title">{item.aiTitle || item.title}</h3>
         </div>
         <div className="badge-row">
           <Badge tone={item.priority === "high" ? "accent" : item.priority === "medium" ? "info" : "neutral"} title={item.priority_basis}>
             AI-assigned priority: {humanize(item.priority)}
           </Badge>
-          <Badge tone="neutral">Monitoring priority</Badge>
+          <Badge tone={a?.classification === "potential_risk" ? "warning" : a?.classification === "potential_opportunity" ? "positive" : "neutral"}>
+            {item.classificationLabel || "Monitoring priority"}
+          </Badge>
         </div>
       </header>
       <div className="finding-body">
@@ -424,12 +882,46 @@ function PriorityCard({ item, index }) {
             </>
           )}
         </p>
-        {item.about && (
+        {a && (
+          <>
+            <p>
+              <span className="label-inline">Strategic interpretation:</span> {a.interpretation}
+            </p>
+            <p>
+              <span className="label-inline">Why it matters:</span> {a.why_it_matters}
+            </p>
+            {a.indicators_to_monitor?.length > 0 && (
+              <div className="monitor">
+                <Target size={15} aria-hidden="true" />
+                <div>
+                  <span className="label-inline">Indicators to monitor:</span>
+                  <ul className="plain-list">
+                    {a.indicators_to_monitor.map((text) => (
+                      <li key={text}>{text}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            {a.follow_up && (
+              <p>
+                <span className="label-inline">Suggested follow-up research:</span> {a.follow_up}
+              </p>
+            )}
+            <p className="small muted">
+              <span className="label-inline">Uncertainty:</span> {a.uncertainty}
+            </p>
+            {a.classification_adjustment && <p className="small muted">{a.classification_adjustment}</p>}
+            <EvidenceChips ids={a.supporting_evidence_ids} />
+            <AiLabel text={a.validation?.label} />
+          </>
+        )}
+        {!a && item.about && (
           <p>
             <span className="label-inline">About this monitoring area:</span> {item.about}
           </p>
         )}
-        {item.monitoring_question && (
+        {!a && item.monitoring_question && (
           <p className="monitor">
             <Target size={15} aria-hidden="true" />
             <span>
@@ -460,7 +952,7 @@ function PriorityCard({ item, index }) {
 }
 
 function StrategicSection({ model }) {
-  const { priorities, diagnostics, disclosures, sourceEvidence } = model.strategic;
+  const { priorities, diagnostics, disclosures, sourceEvidence, analysisStatus, withheld } = model.strategic;
   return (
     <Card
       id="strategic"
@@ -472,7 +964,17 @@ function StrategicSection({ model }) {
       <Notice tone="info">
         Priorities are research judgments by the Strategic Agent about what to monitor next. They are not independently validated risk ratings, forecasts of impact, or recommendations.
       </Notice>
+      {!model.hasExtendedAnalysis ? (
+        <AnalysisStatusNotice what="strategic analysis" legacy />
+      ) : analysisStatus && analysisStatus !== "completed" ? (
+        <Notice tone="info">
+          {analysisStatus === "partial"
+            ? "Some AI-written strategic interpretations were withheld after automated validation; those priorities show the standard monitoring question instead."
+            : "No AI-written strategic interpretation passed automated validation; priorities show the standard monitoring questions."}
+        </Notice>
+      ) : null}
       {!priorities.length ? <EmptyState title="No strategic priorities in this report" /> : priorities.map((p, i) => <PriorityCard key={`${p.evidence_id}-${i}`} item={p} index={i} />)}
+      <WithheldPanel withheld={withheld} idKey="evidence_id" />
       {disclosures.length > 0 && (
         <div className="limits">
           <h3 className="sub-title">Limitations</h3>
@@ -490,6 +992,8 @@ function StrategicSection({ model }) {
           ["Source records available", diagnostics?.source_records_available],
           ["Source references verified", diagnostics?.source_references_verified],
           ["Theme constraints verified", diagnostics?.theme_constraints_verified],
+          ["Request profile", diagnostics?.profile_used],
+          ["Provider requests", diagnostics?.provider_requests],
           ["Tokens (prompt / completion)", diagnostics ? `${diagnostics.prompt_tokens ?? "—"} / ${diagnostics.completion_tokens ?? "—"}` : null],
         ]}
       />
@@ -504,6 +1008,7 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
   if (!model) return <Notice tone="error">This saved report could not be read.</Notice>;
 
   const sections = [
+    { id: "freshness", label: "Sources", icon: Database },
     { id: "summary", label: "Summary", icon: Sparkles },
     { id: "financial", label: "Financial", icon: Landmark },
     { id: "news", label: "News", icon: Newspaper },
@@ -523,6 +1028,15 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
             <StatusBadge status="completed" label="Completed" />
             {isLatest ? <Badge tone="info">Latest report</Badge> : <Badge tone="neutral">Earlier report</Badge>}
             <Badge tone="neutral">Run {shortId(model.runId)}</Badge>
+            {model.hasExtendedAnalysis ? (
+              <Badge tone="info" title="Includes validated AI-written analysis and source freshness">
+                Extended analysis
+              </Badge>
+            ) : (
+              <Badge tone="neutral" title="Saved before extended AI analysis was added; shown exactly as stored">
+                Earlier report format
+              </Badge>
+            )}
             {model.elapsed !== undefined && <Badge tone="neutral">Ran in {formatSeconds(model.elapsed)}</Badge>}
             {inDatabase === false && (
               <Badge tone="warning" title="The job record is missing from the runtime database; this report was loaded from its original saved file.">
@@ -554,6 +1068,7 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
         </nav>
       </div>
 
+      <SourceFreshness model={model} />
       <ExecutiveSummary token={token} model={model} summary={doc.summary} onSummary={onSummary} />
       <FinancialSection model={model} />
       <NewsSection model={model} />
@@ -571,7 +1086,10 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
             ["Run ID", model.runId],
             ["Company", model.ticker],
             ["Generated (UTC)", model.generatedAt],
+            ["Report schema version", model.schemaVersion],
             ["Financial evidence IDs", model.financial.claims.map((c) => c.evidence_id)],
+            ["Evidence package quarters", model.financial.evidencePackage?.records.map((r) => r.evidence_id)],
+            ["Computed comparisons", model.financial.evidencePackage?.comparisons.map((c) => `${c.comparison_id} (${c.change_pct}%)`)],
             ["News evidence IDs", model.news.articles.map((a) => a.evidence_id)],
             ["Strategic evidence IDs", model.strategic.priorities.map((p) => p.evidence_id)],
             ["Report file", `reports/research_runs/${model.runId}.json`],

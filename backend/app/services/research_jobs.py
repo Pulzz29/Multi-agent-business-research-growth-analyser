@@ -212,11 +212,29 @@ def initialize_job_storage():
     return True
 
 
+def active_job_for_ticker(ticker):
+    """Queued or running job for a company, if any (read-only)."""
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT run_id, status
+            FROM research_execution_runs
+            WHERE ticker = ?
+              AND status IN ('queued', 'running')
+            ORDER BY created_at_utc DESC
+            LIMIT 1
+            """,
+            (ticker,),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
 def create_job(root, ticker, run_id=None):
-    if ticker not in {
-        "AAPL", "AMZN", "GOOGL",
-        "META", "MSFT", "NVDA",
-    }:
+    from app.services.market_registry import is_research_ticker
+
+    # The six SEC-validated companies, or any registered market company.
+    if not is_research_ticker(ticker):
         raise ResearchJobError(
             "Unsupported company ticker."
         )
@@ -669,15 +687,25 @@ def execute_queued_research_job(root, run_id, graph_runner):
             + uuid.uuid4().hex
         )
 
-        temporary_path.write_text(
-            json.dumps(
-                result,
-                indent=2,
-                ensure_ascii=False,
-                allow_nan=False,
-            ),
-            encoding="utf-8",
-        )
+        if report_path.exists():
+            # Reports are immutable: never overwrite a saved report.
+            raise ResearchJobError(
+                "A report already exists for this research run."
+            )
+
+        with temporary_path.open(
+            "x", encoding="utf-8"
+        ) as stream:
+            stream.write(
+                json.dumps(
+                    result,
+                    indent=2,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
 
         os.replace(
             temporary_path,
@@ -753,11 +781,23 @@ def execute_queued_research_job(root, run_id, graph_runner):
                 # (e.g. financial completed, news failed,
                 # strategic never ran). Without trace evidence,
                 # keep the original conservative marking.
-                agent_statuses = observed_agent_statuses(run_id) or {
-                    "financial": "failed",
-                    "news": "failed",
-                    "strategic": "failed",
-                }
+                refresh_failure = (
+                    type(exc).__name__ == "SourceRefreshError"
+                )
+
+                if refresh_failure:
+                    # The run stopped before any agent started.
+                    agent_statuses = {
+                        "financial": "pending",
+                        "news": "pending",
+                        "strategic": "pending",
+                    }
+                else:
+                    agent_statuses = observed_agent_statuses(run_id) or {
+                        "financial": "failed",
+                        "news": "failed",
+                        "strategic": "failed",
+                    }
 
                 transition_job(
                     root,
@@ -765,7 +805,11 @@ def execute_queued_research_job(root, run_id, graph_runner):
                     "failed",
                     agent_statuses=agent_statuses,
                     error_type=type(exc).__name__,
-                    error_code="research_execution_failed",
+                    error_code=(
+                        "source_refresh_failed"
+                        if refresh_failure
+                        else "research_execution_failed"
+                    ),
                 )
         except Exception:
             # A storage failure must not disguise

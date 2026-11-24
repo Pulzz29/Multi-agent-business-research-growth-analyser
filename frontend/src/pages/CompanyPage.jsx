@@ -41,12 +41,202 @@ import {
   shortPeriod,
   trendTone,
 } from "../lib/format.js";
-import { METHOD_SHORT, METHOD_TEXT, RELEVANCE_LABELS, companyByTicker, modelLabel } from "../lib/reportModel.js";
+import {
+  METHOD_SHORT,
+  METHOD_TEXT,
+  REFRESH_STATUS_LABELS,
+  RELEVANCE_LABELS,
+  companyByTicker,
+  modelLabel,
+} from "../lib/reportModel.js";
 import { ReportHistory, ReportViewer } from "./ReportViewer.jsx";
 
 const PENDING = ["queued", "running"];
 const toB = (v) => (v === null || v === undefined ? null : Number(v) / 1e9);
 const fmtAxisB = (v, precise) => (precise ? `$${v.toFixed(2)}B` : `$${Math.round(v)}B`);
+
+/* ------------------------------------------------------------ data refresh */
+
+const SOURCE_LABELS = { sec: "SEC EDGAR financial filings", news: "NewsData.io company news" };
+const STATE_LABELS = { fresh: "Within freshness policy", stale: "Older than freshness policy", never: "Never refreshed" };
+const STATE_TONES = { fresh: "positive", stale: "warning", never: "warning" };
+const RESULT_TONES = {
+  refreshed: "positive",
+  no_new_filings: "positive",
+  cached_fresh: "info",
+  recently_refreshed: "info",
+  busy: "warning",
+  failed: "negative",
+};
+
+function DataRefreshPanel({ token, ticker, onChanged, onAuthError }) {
+  const [state, setState] = useState({ loading: true, error: "", freshness: null });
+  const [busy, setBusy] = useState(null);
+  const [outcome, setOutcome] = useState(null);
+  const inFlight = useRef(false);
+
+  const load = useCallback(
+    (signal) =>
+      api
+        .freshness(token, ticker, signal)
+        .then((freshness) => setState({ loading: false, error: "", freshness }))
+        .catch((err) => {
+          if (err?.name === "AbortError") return;
+          if (err.status === 401) onAuthError?.();
+          setState({ loading: false, error: err.message, freshness: null });
+        }),
+    [token, ticker, onAuthError]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setOutcome(null);
+    setState({ loading: true, error: "", freshness: null });
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  async function refresh(sources, force, label) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(label);
+    setOutcome(null);
+    try {
+      const result = await api.refreshSources(token, ticker, sources, force);
+      setOutcome({ ok: true, result });
+      setState((s) => ({ ...s, freshness: result.freshness }));
+      onChanged?.();
+    } catch (err) {
+      if (err.status === 401) onAuthError?.();
+      setOutcome({ ok: false, message: err.message });
+    } finally {
+      inFlight.current = false;
+      setBusy(null);
+    }
+  }
+
+  const f = state.freshness;
+  return (
+    <Card
+      title="Source data"
+      subtitle="Refreshing data does not run AI research and does not change saved reports."
+      className="refresh-panel"
+      action={
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => refresh(["sec", "news"], false, "stale")}
+          disabled={!!busy}
+          title="Contact providers only for sources older than the freshness policy"
+        >
+          <RefreshCw size={14} className={busy === "stale" ? "spin" : ""} aria-hidden="true" />
+          {busy === "stale" ? "Checking…" : "Refresh stale sources"}
+        </button>
+      }
+    >
+      {state.error && <Notice tone="error">Source status unavailable: {state.error}</Notice>}
+      {state.loading && <Skeleton lines={2} />}
+      {f && (
+        <div className="table-scroll">
+          <table className="mini-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Latest data</th>
+                <th>Last successful refresh</th>
+                <th>
+                  <span className="sr-only">Action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {["sec", "news"].map((key) => {
+                const src = f[key] || {};
+                const latest =
+                  key === "sec"
+                    ? `Quarter to ${formatDate(src.latest_financial_period_end?.revenue)}${src.latest_periodic_filing ? ` · ${src.latest_periodic_filing.form} filed ${formatDate(src.latest_periodic_filing.filed_at)}` : ""}`
+                    : `${formatCount(src.article_count)} articles · newest ${formatDate(src.latest_published_at)}`;
+                return (
+                  <tr key={key}>
+                    <td>{SOURCE_LABELS[key]}</td>
+                    <td>
+                      <Badge tone={STATE_TONES[src.state] || "neutral"}>{STATE_LABELS[src.state] || src.state}</Badge>
+                      {src.refresh_in_progress && <div className="small muted">Refresh in progress</div>}
+                      {src.last_attempt_failed && <div className="small muted">Last attempt failed ({src.last_failure_category || "error"})</div>}
+                    </td>
+                    <td className="small">{latest}</td>
+                    <td className="small">
+                      {src.last_successful_refresh_at ? `${formatDateTime(src.last_successful_refresh_at)} (${relativeTime(src.last_successful_refresh_at)})` : "Never"}
+                      <div className="muted">Policy: {src.policy_max_age_hours} h</div>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => refresh([key], true, key)}
+                        disabled={!!busy}
+                        title={key === "sec" ? "Check SEC EDGAR for newer filings now" : "Fetch new articles now (uses NewsData.io quota)"}
+                      >
+                        <RefreshCw size={14} className={busy === key ? "spin" : ""} aria-hidden="true" />
+                        {busy === key ? "Refreshing…" : "Refresh now"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {outcome && !outcome.ok && <Notice tone="error">Refresh could not run: {outcome.message} Stored data is unchanged.</Notice>}
+      {outcome?.ok && (
+        <ul className="plain-list small refresh-results" aria-live="polite">
+          {Object.entries(outcome.result.results || {}).map(([key, r]) => (
+            <li key={key}>
+              <Badge tone={RESULT_TONES[r.status] || "neutral"}>{REFRESH_STATUS_LABELS[r.status] || r.status}</Badge>{" "}
+              {SOURCE_LABELS[key === "SEC" ? "sec" : key]}: {r.message || ""}
+              {r.status === "refreshed" && ` ${formatCount(r.records_inserted)} new record${r.records_inserted === 1 ? "" : "s"} stored.`}
+            </li>
+          ))}
+          <li className="muted">
+            Forecast inputs:{" "}
+            {outcome.result.forecast_inputs?.sec_facts_changed
+              ? "SEC data changed — forecasts will be recomputed on the next research run."
+              : "unchanged — stored forecasts remain valid."}
+          </li>
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+export function ResearchOptions({ options, onChange }) {
+  return (
+    <details className="research-options">
+      <summary>Research options</summary>
+      <label className="option-row">
+        <input
+          type="checkbox"
+          checked={options.refresh === "if_stale"}
+          onChange={(e) => onChange({ ...options, refresh: e.target.checked ? "if_stale" : "skip" })}
+        />
+        Refresh stale SEC and news data first
+      </label>
+      <label className="option-row">
+        If a refresh fails:
+        <select
+          value={options.on_refresh_failure}
+          onChange={(e) => onChange({ ...options, on_refresh_failure: e.target.value })}
+          disabled={options.refresh !== "if_stale"}
+        >
+          <option value="continue_with_cached">continue with stored data (labelled)</option>
+          <option value="fail">stop the research run</option>
+        </select>
+      </label>
+    </details>
+  );
+}
 
 /* ------------------------------------------------------------------ header */
 
@@ -698,12 +888,12 @@ function NewsTab({ data }) {
 
 /* ---------------------------------------------------------------- research */
 
-function AgentProgress({ job }) {
+export function AgentProgress({ job }) {
   const statuses = job?.agent_statuses || {};
   const agents = [
-    { id: "financial", label: "Financial Agent", desc: "Selects verified SEC observations and forecasts" },
-    { id: "news", label: "News Agent", desc: "Selects company-specific news evidence" },
-    { id: "strategic", label: "Strategic Agent", desc: "Assigns monitoring priorities" },
+    { id: "financial", label: "Financial Agent", desc: "Verifies financial observations and writes the financial analysis" },
+    { id: "news", label: "News Agent", desc: "Selects company news and writes source-attributed intelligence" },
+    { id: "strategic", label: "Strategic Agent", desc: "Writes evidence-grounded strategic priorities" },
   ];
   return (
     <ol className="agent-steps">
@@ -721,7 +911,7 @@ function AgentProgress({ job }) {
   );
 }
 
-function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, jobError, company, onSummaryChange }) {
+export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, jobError, company, onSummaryChange }) {
   const [state, setState] = useState({ loading: false, error: "", doc: null });
   const selectedId = runId || runs?.latest_completed_run_id || null;
   const selectedRun = runs?.runs?.find((r) => r.run_id === selectedId);
@@ -834,7 +1024,9 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [news, setNews] = useState({ busy: false, message: "", tone: "info" });
-  const refreshing = useRef(false);
+  const [showRefresh, setShowRefresh] = useState(false);
+  // Default mirrors the server policy: refresh stale sources, continue with labelled stored data on failure.
+  const [researchOptions, setResearchOptions] = useState({ refresh: "if_stale", on_refresh_failure: "continue_with_cached" });
   const company = companyByTicker(ticker);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -863,6 +1055,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
 
   // Reset per-company UI state when switching companies.
   useEffect(() => {
+    setShowRefresh(false);
     setData(null);
     setRuns(null);
     setNews({ busy: false, message: "", tone: "info" });
@@ -883,27 +1076,6 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
     }
   }, [activeJob, ticker, reload, navigate]);
 
-  async function refreshNews() {
-    if (refreshing.current) return;
-    refreshing.current = true;
-    const requested = ticker;
-    setNews({ busy: true, message: "Refreshing news only — saved research reports are not affected.", tone: "info" });
-    try {
-      const result = await api.refreshNews(token, requested);
-      if (requested !== ticker) return;
-      const message =
-        result.status === "recently_refreshed"
-          ? `News was refreshed in the last 10 minutes; existing coverage (${formatCount(result.article_count)} articles) was kept.`
-          : `News refreshed: ${formatCount(result.records_fetched)} articles fetched, ${formatCount(result.records_inserted)} new stored (${formatCount(result.article_count)} total).`;
-      setNews({ busy: false, message, tone: "success" });
-      reload();
-    } catch (err) {
-      setNews({ busy: false, message: `News refresh failed: ${err.message} Stored articles are unchanged.`, tone: "error" });
-    } finally {
-      refreshing.current = false;
-    }
-  }
-
   if (!company) {
     return (
       <div className="page">
@@ -920,18 +1092,18 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
       <button
         type="button"
         className="btn btn-ghost"
-        onClick={refreshNews}
-        disabled={news.busy}
-        title="Fetch new articles from NewsData.io for this company only (uses NewsData.io quota)"
+        onClick={() => setShowRefresh((v) => !v)}
+        aria-expanded={showRefresh}
+        title="View source freshness and refresh SEC or news data without running research"
       >
-        <RefreshCw size={15} className={news.busy ? "spin" : ""} aria-hidden="true" />
-        {news.busy ? "Refreshing…" : "Refresh news"}
+        <RefreshCw size={15} aria-hidden="true" />
+        {showRefresh ? "Hide source data" : "Refresh data"}
       </button>
       <button
         type="button"
         className="btn btn-primary"
         onClick={() => {
-          onStartResearch(ticker);
+          onStartResearch(ticker, researchOptions);
           navigate({ page: "company", ticker, tab: "research" });
         }}
         disabled={jobPending || startBusy}
@@ -940,6 +1112,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
         <PlayCircle size={16} aria-hidden="true" />
         {jobHere ? "Research running…" : jobPending ? "Another run in progress" : "Start research"}
       </button>
+      <ResearchOptions options={researchOptions} onChange={setResearchOptions} />
     </>
   );
 
@@ -954,6 +1127,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
   return (
     <div className="page">
       <CompanyHeader ticker={ticker} data={data} runs={runs} actions={actions} />
+      {showRefresh && <DataRefreshPanel token={token} ticker={ticker} onChanged={reload} onAuthError={onAuthError} />}
       {news.message && (
         <Notice tone={news.tone === "success" ? "success" : news.tone === "error" ? "error" : "info"}>{news.message}</Notice>
       )}

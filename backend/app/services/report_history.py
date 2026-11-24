@@ -24,6 +24,18 @@ from app.database.sqlite_manager import connect
 
 SUPPORTED_TICKERS = frozenset({"AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"})
 
+
+def is_known_ticker(ticker):
+    """The six SEC-validated companies or any registered market company."""
+    if ticker in SUPPORTED_TICKERS:
+        return True
+    try:
+        from app.services.market_registry import is_research_ticker
+
+        return is_research_ticker(ticker)
+    except Exception:
+        return False
+
 _META_LOCK = threading.Lock()
 _META_CACHE = {}
 
@@ -89,7 +101,7 @@ def report_metadata(path):
     if (
         isinstance(doc, dict)
         and doc.get("run_id") == run_id
-        and doc.get("ticker") in SUPPORTED_TICKERS
+        and is_known_ticker(doc.get("ticker"))
         and doc.get("status") == "completed"
     ):
         financial = doc.get("financial") or {}
@@ -151,7 +163,7 @@ def _journal_rows(root, ticker=None):
         doc = _read_json(path) if run_id else None
         if not isinstance(doc, dict) or doc.get("run_id") != run_id:
             continue
-        if doc.get("ticker") not in SUPPORTED_TICKERS or (ticker and doc["ticker"] != ticker):
+        if not is_known_ticker(doc.get("ticker")) or (ticker and doc["ticker"] != ticker):
             continue
         out[run_id] = doc
     return out
@@ -160,7 +172,7 @@ def _journal_rows(root, ticker=None):
 def list_runs(ticker=None, limit=100):
     if ticker is not None:
         ticker = str(ticker).strip().upper()
-        if ticker not in SUPPORTED_TICKERS:
+        if not is_known_ticker(ticker):
             raise ReportHistoryError("Unsupported company ticker.")
 
     root = project_root()
@@ -252,7 +264,7 @@ def latest_completed(ticker):
 def read_report(ticker, run_id):
     """Return the original saved report, unchanged, plus its summary sidecar."""
     ticker = str(ticker or "").strip().upper()
-    if ticker not in SUPPORTED_TICKERS:
+    if not is_known_ticker(ticker):
         raise ReportHistoryError("Unsupported company ticker.")
     run_id = canonical_run_id(run_id)
     if run_id is None:

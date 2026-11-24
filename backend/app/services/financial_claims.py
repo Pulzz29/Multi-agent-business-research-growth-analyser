@@ -10,7 +10,7 @@ from app.services.groq_rate_limit import guarded_chat_completion
 from pydantic import BaseModel, ConfigDict
 
 
-MODEL = "openai/gpt-oss-120b"
+MODEL = (os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
 
 
 class FinancialClaim(BaseModel):

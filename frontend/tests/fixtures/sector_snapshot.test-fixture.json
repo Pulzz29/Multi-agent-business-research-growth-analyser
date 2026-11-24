@@ -1,0 +1,1332 @@
+{
+ "snapshot_version": 1,
+ "comparison_id": "48dcb12f-1562-4f5c-a740-d5d3af5d4b18",
+ "market": "US",
+ "market_label": "United States",
+ "currency": "USD",
+ "sector_key": "technology",
+ "sector_label": "Technology",
+ "generated_at_utc": "2026-11-23T11:53:11.696009+00:00",
+ "data_sources": {
+  "quotes": "FINNHUB",
+  "statements": "FMP",
+  "profile": "FMP",
+  "news": "FINNHUB"
+ },
+ "companies": [
+  {
+   "symbol": "AAPL",
+   "name": "AAPL Test Corp",
+   "in_universe": true,
+   "provider_sector": "Technology",
+   "provider_industry": "Software\u2014Infrastructure",
+   "data_status": "available",
+   "metrics": {
+    "revenue_growth_pct": 5.2632,
+    "net_margin_pct": 25.0,
+    "operating_margin_pct": 30.0,
+    "roe_pct": 153.8462,
+    "roa_pct": 27.7778,
+    "debt_to_equity": 1.4286,
+    "pe_ratio": 32.0,
+    "pb_ratio": 50.0,
+    "dividend_yield_pct": 0.4,
+    "market_cap": 3500000000000.0,
+    "beta": 1.2
+   },
+   "inputs": {
+    "fiscal_period_end": "2025-12-31",
+    "prior_period_end": "2024-12-31",
+    "statement_provider": "FMP",
+    "statement_currency": "USD",
+    "statements_fetched_at": "2026-11-23T11:53:10.566721+00:00",
+    "values": {
+     "revenue": "400000000000",
+     "net_income": "100000000000",
+     "operating_income": "120000000000",
+     "total_equity": "70000000000",
+     "total_assets": "360000000000",
+     "total_debt": "100000000000",
+     "prior_revenue": "380000000000"
+    },
+    "roe_basis": "average equity",
+    "quote": {
+     "provider": "FINNHUB",
+     "currency": "USD",
+     "fetched_at": "2026-11-23T11:53:10.490847+00:00",
+     "as_of": "2026-11-20T21:00:00+00:00",
+     "source_fields": {
+      "price": "quote.c"
+     }
+    }
+   }
+  },
+  {
+   "symbol": "MSFT",
+   "name": "MSFT Test Corp",
+   "in_universe": true,
+   "provider_sector": "Technology",
+   "provider_industry": "Software\u2014Infrastructure",
+   "data_status": "available",
+   "metrics": {
+    "revenue_growth_pct": 14.2857,
+    "net_margin_pct": 35.7143,
+    "operating_margin_pct": 44.6429,
+    "roe_pct": 35.7143,
+    "roa_pct": 19.2308,
+    "debt_to_equity": 0.2,
+    "pe_ratio": 35.0,
+    "pb_ratio": 11.0,
+    "dividend_yield_pct": 0.7,
+    "market_cap": 3600000000000.0,
+    "beta": 0.9
+   },
+   "inputs": {
+    "fiscal_period_end": "2025-12-31",
+    "prior_period_end": "2024-12-31",
+    "statement_provider": "FMP",
+    "statement_currency": "USD",
+    "statements_fetched_at": "2026-11-23T11:53:10.834123+00:00",
+    "values": {
+     "revenue": "280000000000",
+     "net_income": "100000000000",
+     "operating_income": "125000000000",
+     "total_equity": "300000000000",
+     "total_assets": "520000000000",
+     "total_debt": "60000000000",
+     "prior_revenue": "245000000000"
+    },
+    "roe_basis": "average equity",
+    "quote": {
+     "provider": "FINNHUB",
+     "currency": "USD",
+     "fetched_at": "2026-11-23T11:53:10.759100+00:00",
+     "as_of": "2026-11-20T21:00:00+00:00",
+     "source_fields": {
+      "price": "quote.c"
+     }
+    }
+   }
+  },
+  {
+   "symbol": "NVDA",
+   "name": "NVDA Test Corp",
+   "in_universe": true,
+   "provider_sector": "Technology",
+   "provider_industry": "Software\u2014Infrastructure",
+   "data_status": "available",
+   "metrics": {
+    "revenue_growth_pct": 116.6667,
+    "net_margin_pct": 53.8462,
+    "operating_margin_pct": 61.5385,
+    "roe_pct": 103.7037,
+    "roa_pct": 50.0,
+    "debt_to_equity": 0.1111,
+    "pe_ratio": 50.0,
+    "pb_ratio": 40.0,
+    "dividend_yield_pct": 0.03,
+    "market_cap": 3300000000000.0,
+    "beta": 1.7
+   },
+   "inputs": {
+    "fiscal_period_end": "2025-12-31",
+    "prior_period_end": "2024-12-31",
+    "statement_provider": "FMP",
+    "statement_currency": "USD",
+    "statements_fetched_at": "2026-11-23T11:53:11.181059+00:00",
+    "values": {
+     "revenue": "130000000000",
+     "net_income": "70000000000",
+     "operating_income": "80000000000",
+     "total_equity": "90000000000",
+     "total_assets": "140000000000",
+     "total_debt": "10000000000",
+     "prior_revenue": "60000000000"
+    },
+    "roe_basis": "average equity",
+    "quote": {
+     "provider": "FINNHUB",
+     "currency": "USD",
+     "fetched_at": "2026-11-23T11:53:11.093510+00:00",
+     "as_of": "2026-11-20T21:00:00+00:00",
+     "source_fields": {
+      "price": "quote.c"
+     }
+    }
+   }
+  },
+  {
+   "symbol": "ORCL",
+   "name": "ORCL Test Corp",
+   "in_universe": true,
+   "provider_sector": "Technology",
+   "provider_industry": "Software\u2014Infrastructure",
+   "data_status": "available",
+   "metrics": {
+    "revenue_growth_pct": 7.5472,
+    "net_margin_pct": 21.0526,
+    "operating_margin_pct": 29.8246,
+    "roe_pct": 160.0,
+    "roa_pct": 7.5,
+    "debt_to_equity": 10.5556,
+    "pe_ratio": 40.0,
+    "pb_ratio": 50.0,
+    "dividend_yield_pct": 1.0,
+    "market_cap": 500000000000.0,
+    "beta": 1.0
+   },
+   "inputs": {
+    "fiscal_period_end": "2025-12-31",
+    "prior_period_end": "2024-12-31",
+    "statement_provider": "FMP",
+    "statement_currency": "USD",
+    "statements_fetched_at": "2026-11-23T11:53:11.468926+00:00",
+    "values": {
+     "revenue": "57000000000",
+     "net_income": "12000000000",
+     "operating_income": "17000000000",
+     "total_equity": "9000000000",
+     "total_assets": "160000000000",
+     "total_debt": "95000000000",
+     "prior_revenue": "53000000000"
+    },
+    "roe_basis": "average equity",
+    "quote": {
+     "provider": "FINNHUB",
+     "currency": "USD",
+     "fetched_at": "2026-11-23T11:53:11.393538+00:00",
+     "as_of": "2026-11-20T21:00:00+00:00",
+     "source_fields": {
+      "price": "quote.c"
+     }
+    }
+   }
+  },
+  {
+   "symbol": "ADBE",
+   "name": "Adobe Inc.",
+   "in_universe": true,
+   "provider_sector": null,
+   "provider_industry": null,
+   "data_status": "no_data",
+   "metrics": {},
+   "inputs": {}
+  },
+  {
+   "symbol": "CSCO",
+   "name": "Cisco Systems, Inc.",
+   "in_universe": true,
+   "provider_sector": null,
+   "provider_industry": null,
+   "data_status": "no_data",
+   "metrics": {},
+   "inputs": {}
+  }
+ ],
+ "ranking": {
+  "status": "ranked",
+  "method": {
+   "normalization": "min-max within sector, 0-100; inverted for lower-is-better metrics; 50 when all values are equal",
+   "missing_values": "sector median imputation, flagged as imputed",
+   "min_weight_coverage": 0.6,
+   "tie_rule": "scores rounded to 2 decimals; equal scores share a rank (1, 1, 3)",
+   "weights_requested": {
+    "revenue_growth_pct": 0.18,
+    "net_margin_pct": 0.14,
+    "operating_margin_pct": 0.1,
+    "roe_pct": 0.14,
+    "roa_pct": 0.06,
+    "debt_to_equity": 0.1,
+    "pe_ratio": 0.1,
+    "pb_ratio": 0.0,
+    "dividend_yield_pct": 0.06,
+    "market_cap": 0.06,
+    "beta": 0.06
+   },
+   "weights_applied": {
+    "revenue_growth_pct": 0.18,
+    "net_margin_pct": 0.14,
+    "operating_margin_pct": 0.1,
+    "roe_pct": 0.14,
+    "roa_pct": 0.06,
+    "debt_to_equity": 0.1,
+    "pe_ratio": 0.1,
+    "dividend_yield_pct": 0.06,
+    "market_cap": 0.06,
+    "beta": 0.06
+   },
+   "metrics_used": [
+    "revenue_growth_pct",
+    "net_margin_pct",
+    "operating_margin_pct",
+    "roe_pct",
+    "roa_pct",
+    "debt_to_equity",
+    "pe_ratio",
+    "dividend_yield_pct",
+    "market_cap",
+    "beta"
+   ],
+   "metrics_dropped": [],
+   "sector_key": "technology"
+  },
+  "companies": [
+   {
+    "symbol": "NVDA",
+    "name": "NVDA Test Corp",
+    "rank": 1,
+    "score": 71.08,
+    "score_unranked": null,
+    "ranked": true,
+    "not_ranked_reason": null,
+    "coverage": 1.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 116.6667,
+      "value_used": 116.6667,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.18,
+      "contribution": 18.0
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 53.8462,
+      "value_used": 53.8462,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.14,
+      "contribution": 14.0
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 61.5385,
+      "value_used": 61.5385,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.1,
+      "contribution": 10.0
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 103.7037,
+      "value_used": 103.7037,
+      "imputed": false,
+      "normalized_score": 54.7,
+      "weight": 0.14,
+      "contribution": 7.6586
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 50.0,
+      "value_used": 50.0,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.06,
+      "contribution": 6.0
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 0.1111,
+      "value_used": 0.1111,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.1,
+      "contribution": 10.0
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 50.0,
+      "value_used": 50.0,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.1,
+      "contribution": 0.0
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 0.03,
+      "value_used": 0.03,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.06,
+      "contribution": 0.0
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": 3300000000000.0,
+      "value_used": 3300000000000.0,
+      "imputed": false,
+      "normalized_score": 90.32,
+      "weight": 0.06,
+      "contribution": 5.4194
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 1.7,
+      "value_used": 1.7,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.06,
+      "contribution": 0.0
+     }
+    ],
+    "strengths": [
+     "revenue_growth_pct",
+     "net_margin_pct",
+     "debt_to_equity"
+    ],
+    "weaknesses": [
+     "beta",
+     "dividend_yield_pct",
+     "pe_ratio"
+    ],
+    "imputed_metrics": [],
+    "explanation": "Ranked 1 of 4 with a composite score of 71.08 out of 100. Relative strengths within the sector: Revenue growth (YoY) (116.7%, score 100), Net profit margin (53.8%, score 100), Debt-to-equity (0.11x, score 100). Relative weaknesses: Beta (volatility) (1.70x, score 0), Dividend yield (0.0%, score 0), P/E ratio (50.00x, score 0)."
+   },
+   {
+    "symbol": "AAPL",
+    "name": "AAPL Test Corp",
+    "rank": 2,
+    "score": 48.49,
+    "score_unranked": null,
+    "ranked": true,
+    "not_ranked_reason": null,
+    "coverage": 1.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 5.2632,
+      "value_used": 5.2632,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.18,
+      "contribution": 0.0
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 25.0,
+      "value_used": 25.0,
+      "imputed": false,
+      "normalized_score": 12.04,
+      "weight": 0.14,
+      "contribution": 1.6852
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 30.0,
+      "value_used": 30.0,
+      "imputed": false,
+      "normalized_score": 0.55,
+      "weight": 0.1,
+      "contribution": 0.0553
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 153.8462,
+      "value_used": 153.8462,
+      "imputed": false,
+      "normalized_score": 95.05,
+      "weight": 0.14,
+      "contribution": 13.3068
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 27.7778,
+      "value_used": 27.7778,
+      "imputed": false,
+      "normalized_score": 47.71,
+      "weight": 0.06,
+      "contribution": 2.8627
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 1.4286,
+      "value_used": 1.4286,
+      "imputed": false,
+      "normalized_score": 87.39,
+      "weight": 0.1,
+      "contribution": 8.7386
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 32.0,
+      "value_used": 32.0,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.1,
+      "contribution": 10.0
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 0.4,
+      "value_used": 0.4,
+      "imputed": false,
+      "normalized_score": 38.14,
+      "weight": 0.06,
+      "contribution": 2.2887
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": 3500000000000.0,
+      "value_used": 3500000000000.0,
+      "imputed": false,
+      "normalized_score": 96.77,
+      "weight": 0.06,
+      "contribution": 5.8065
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 1.2,
+      "value_used": 1.2,
+      "imputed": false,
+      "normalized_score": 62.5,
+      "weight": 0.06,
+      "contribution": 3.75
+     }
+    ],
+    "strengths": [
+     "roe_pct",
+     "pe_ratio",
+     "debt_to_equity"
+    ],
+    "weaknesses": [
+     "revenue_growth_pct",
+     "operating_margin_pct",
+     "net_margin_pct"
+    ],
+    "imputed_metrics": [],
+    "explanation": "Ranked 2 of 4 with a composite score of 48.49 out of 100. Relative strengths within the sector: Return on equity (ROE) (153.8%, score 95), P/E ratio (32.00x, score 100), Debt-to-equity (1.43x, score 87). Relative weaknesses: Revenue growth (YoY) (5.3%, score 0), Operating margin (30.0%, score 1), Net profit margin (25.0%, score 12)."
+   },
+   {
+    "symbol": "MSFT",
+    "name": "MSFT Test Corp",
+    "rank": 3,
+    "score": 48.44,
+    "score_unranked": null,
+    "ranked": true,
+    "not_ranked_reason": null,
+    "coverage": 1.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 14.2857,
+      "value_used": 14.2857,
+      "imputed": false,
+      "normalized_score": 8.1,
+      "weight": 0.18,
+      "contribution": 1.4578
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 35.7143,
+      "value_used": 35.7143,
+      "imputed": false,
+      "normalized_score": 44.71,
+      "weight": 0.14,
+      "contribution": 6.2593
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 44.6429,
+      "value_used": 44.6429,
+      "imputed": false,
+      "normalized_score": 46.72,
+      "weight": 0.1,
+      "contribution": 4.6725
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 35.7143,
+      "value_used": 35.7143,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.14,
+      "contribution": 0.0
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 19.2308,
+      "value_used": 19.2308,
+      "imputed": false,
+      "normalized_score": 27.6,
+      "weight": 0.06,
+      "contribution": 1.6561
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 0.2,
+      "value_used": 0.2,
+      "imputed": false,
+      "normalized_score": 99.15,
+      "weight": 0.1,
+      "contribution": 9.9149
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 35.0,
+      "value_used": 35.0,
+      "imputed": false,
+      "normalized_score": 83.33,
+      "weight": 0.1,
+      "contribution": 8.3333
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 0.7,
+      "value_used": 0.7,
+      "imputed": false,
+      "normalized_score": 69.07,
+      "weight": 0.06,
+      "contribution": 4.1443
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": 3600000000000.0,
+      "value_used": 3600000000000.0,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.06,
+      "contribution": 6.0
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 0.9,
+      "value_used": 0.9,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.06,
+      "contribution": 6.0
+     }
+    ],
+    "strengths": [
+     "debt_to_equity",
+     "pe_ratio",
+     "beta"
+    ],
+    "weaknesses": [
+     "roe_pct",
+     "revenue_growth_pct",
+     "roa_pct"
+    ],
+    "imputed_metrics": [],
+    "explanation": "Ranked 3 of 4 with a composite score of 48.44 out of 100. Relative strengths within the sector: Debt-to-equity (0.20x, score 99), P/E ratio (35.00x, score 83), Beta (volatility) (0.90x, score 100). Relative weaknesses: Return on equity (ROE) (35.7%, score 0), Revenue growth (YoY) (14.3%, score 8), Return on assets (ROA) (19.2%, score 28)."
+   },
+   {
+    "symbol": "ORCL",
+    "name": "ORCL Test Corp",
+    "rank": 4,
+    "score": 31.17,
+    "score_unranked": null,
+    "ranked": true,
+    "not_ranked_reason": null,
+    "coverage": 1.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 7.5472,
+      "value_used": 7.5472,
+      "imputed": false,
+      "normalized_score": 2.05,
+      "weight": 0.18,
+      "contribution": 0.369
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 21.0526,
+      "value_used": 21.0526,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.14,
+      "contribution": 0.0
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 29.8246,
+      "value_used": 29.8246,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.1,
+      "contribution": 0.0
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 160.0,
+      "value_used": 160.0,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.14,
+      "contribution": 14.0
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 7.5,
+      "value_used": 7.5,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.06,
+      "contribution": 0.0
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 10.5556,
+      "value_used": 10.5556,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.1,
+      "contribution": 0.0
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 40.0,
+      "value_used": 40.0,
+      "imputed": false,
+      "normalized_score": 55.56,
+      "weight": 0.1,
+      "contribution": 5.5556
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": 1.0,
+      "value_used": 1.0,
+      "imputed": false,
+      "normalized_score": 100.0,
+      "weight": 0.06,
+      "contribution": 6.0
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": 500000000000.0,
+      "value_used": 500000000000.0,
+      "imputed": false,
+      "normalized_score": 0.0,
+      "weight": 0.06,
+      "contribution": 0.0
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": 1.0,
+      "value_used": 1.0,
+      "imputed": false,
+      "normalized_score": 87.5,
+      "weight": 0.06,
+      "contribution": 5.25
+     }
+    ],
+    "strengths": [
+     "roe_pct",
+     "dividend_yield_pct",
+     "beta"
+    ],
+    "weaknesses": [
+     "debt_to_equity",
+     "market_cap",
+     "net_margin_pct"
+    ],
+    "imputed_metrics": [],
+    "explanation": "Ranked 4 of 4 with a composite score of 31.17 out of 100. Relative strengths within the sector: Return on equity (ROE) (160.0%, score 100), Dividend yield (1.0%, score 100), Beta (volatility) (1.00x, score 88). Relative weaknesses: Debt-to-equity (10.56x, score 0), Market capitalisation (500.0 bn, score 0), Net profit margin (21.1%, score 0)."
+   },
+   {
+    "symbol": "ADBE",
+    "name": "Adobe Inc.",
+    "rank": null,
+    "score": null,
+    "score_unranked": 49.59,
+    "ranked": false,
+    "not_ranked_reason": "real data covers 0% of the applied weight (minimum 60%)",
+    "coverage": 0.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 10.916450000000001,
+      "imputed": true,
+      "normalized_score": 5.07,
+      "weight": 0.18,
+      "contribution": 0.9134
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 30.35715,
+      "imputed": true,
+      "normalized_score": 28.37,
+      "weight": 0.14,
+      "contribution": 3.9722
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 37.32145,
+      "imputed": true,
+      "normalized_score": 23.64,
+      "weight": 0.1,
+      "contribution": 2.3639
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 128.77495,
+      "imputed": true,
+      "normalized_score": 74.88,
+      "weight": 0.14,
+      "contribution": 10.4827
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 23.5043,
+      "imputed": true,
+      "normalized_score": 37.66,
+      "weight": 0.06,
+      "contribution": 2.2594
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 0.8143,
+      "imputed": true,
+      "normalized_score": 93.27,
+      "weight": 0.1,
+      "contribution": 9.3267
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 37.5,
+      "imputed": true,
+      "normalized_score": 69.44,
+      "weight": 0.1,
+      "contribution": 6.9444
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 0.55,
+      "imputed": true,
+      "normalized_score": 53.61,
+      "weight": 0.06,
+      "contribution": 3.2165
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 3400000000000.0,
+      "imputed": true,
+      "normalized_score": 93.55,
+      "weight": 0.06,
+      "contribution": 5.6129
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 1.1,
+      "imputed": true,
+      "normalized_score": 75.0,
+      "weight": 0.06,
+      "contribution": 4.5
+     }
+    ],
+    "strengths": [],
+    "weaknesses": [],
+    "imputed_metrics": [
+     "revenue_growth_pct",
+     "net_margin_pct",
+     "operating_margin_pct",
+     "roe_pct",
+     "roa_pct",
+     "debt_to_equity",
+     "pe_ratio",
+     "dividend_yield_pct",
+     "market_cap",
+     "beta"
+    ],
+    "explanation": "Not ranked: real data covers 0% of the applied weight (minimum 60%). Its metrics sit close to the sector middle on every measure. Missing data replaced by the sector median for: Revenue growth (YoY), Net profit margin, Operating margin, Return on equity (ROE), Return on assets (ROA), Debt-to-equity, P/E ratio, Dividend yield, Market capitalisation, Beta (volatility)."
+   },
+   {
+    "symbol": "CSCO",
+    "name": "Cisco Systems, Inc.",
+    "rank": null,
+    "score": null,
+    "score_unranked": 49.59,
+    "ranked": false,
+    "not_ranked_reason": "real data covers 0% of the applied weight (minimum 60%)",
+    "coverage": 0.0,
+    "breakdown": [
+     {
+      "metric": "revenue_growth_pct",
+      "label": "Revenue growth (YoY)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 10.916450000000001,
+      "imputed": true,
+      "normalized_score": 5.07,
+      "weight": 0.18,
+      "contribution": 0.9134
+     },
+     {
+      "metric": "net_margin_pct",
+      "label": "Net profit margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 30.35715,
+      "imputed": true,
+      "normalized_score": 28.37,
+      "weight": 0.14,
+      "contribution": 3.9722
+     },
+     {
+      "metric": "operating_margin_pct",
+      "label": "Operating margin",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 37.32145,
+      "imputed": true,
+      "normalized_score": 23.64,
+      "weight": 0.1,
+      "contribution": 2.3639
+     },
+     {
+      "metric": "roe_pct",
+      "label": "Return on equity (ROE)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 128.77495,
+      "imputed": true,
+      "normalized_score": 74.88,
+      "weight": 0.14,
+      "contribution": 10.4827
+     },
+     {
+      "metric": "roa_pct",
+      "label": "Return on assets (ROA)",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 23.5043,
+      "imputed": true,
+      "normalized_score": 37.66,
+      "weight": 0.06,
+      "contribution": 2.2594
+     },
+     {
+      "metric": "debt_to_equity",
+      "label": "Debt-to-equity",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 0.8143,
+      "imputed": true,
+      "normalized_score": 93.27,
+      "weight": 0.1,
+      "contribution": 9.3267
+     },
+     {
+      "metric": "pe_ratio",
+      "label": "P/E ratio",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 37.5,
+      "imputed": true,
+      "normalized_score": 69.44,
+      "weight": 0.1,
+      "contribution": 6.9444
+     },
+     {
+      "metric": "dividend_yield_pct",
+      "label": "Dividend yield",
+      "unit": "%",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 0.55,
+      "imputed": true,
+      "normalized_score": 53.61,
+      "weight": 0.06,
+      "contribution": 3.2165
+     },
+     {
+      "metric": "market_cap",
+      "label": "Market capitalisation",
+      "unit": "currency",
+      "direction": "higher_is_better",
+      "raw_value": null,
+      "value_used": 3400000000000.0,
+      "imputed": true,
+      "normalized_score": 93.55,
+      "weight": 0.06,
+      "contribution": 5.6129
+     },
+     {
+      "metric": "beta",
+      "label": "Beta (volatility)",
+      "unit": "x",
+      "direction": "lower_is_better",
+      "raw_value": null,
+      "value_used": 1.1,
+      "imputed": true,
+      "normalized_score": 75.0,
+      "weight": 0.06,
+      "contribution": 4.5
+     }
+    ],
+    "strengths": [],
+    "weaknesses": [],
+    "imputed_metrics": [
+     "revenue_growth_pct",
+     "net_margin_pct",
+     "operating_margin_pct",
+     "roe_pct",
+     "roa_pct",
+     "debt_to_equity",
+     "pe_ratio",
+     "dividend_yield_pct",
+     "market_cap",
+     "beta"
+    ],
+    "explanation": "Not ranked: real data covers 0% of the applied weight (minimum 60%). Its metrics sit close to the sector middle on every measure. Missing data replaced by the sector median for: Revenue growth (YoY), Net profit margin, Operating margin, Return on equity (ROE), Return on assets (ROA), Debt-to-equity, P/E ratio, Dividend yield, Market capitalisation, Beta (volatility)."
+   }
+  ],
+  "ties": []
+ },
+ "narrative": {
+  "model": "openai/gpt-oss-120b",
+  "label": "AI-written explanation (Groq). Every number was checked against the comparison data and causal or advisory wording was rejected; the ranking itself is computed deterministically and is not investment advice.",
+  "overview": "The companies in this sector were compared on profitability, growth, returns, leverage, valuation and risk metrics. Scores are relative positions within the sector and the leader combines strong profitability with solid growth on the available data. Some metrics may be imputed where provider data was missing.",
+  "overview_source": "ai",
+  "companies": {
+   "NVDA": {
+    "why_it_ranks": "NVDA Test Corp is ranked 1 with a score of 71.08. Its position reflects relative metric scores within this sector.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   },
+   "AAPL": {
+    "why_it_ranks": "AAPL Test Corp is ranked 2 with a score of 48.49. Its position reflects relative metric scores within this sector.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   },
+   "MSFT": {
+    "why_it_ranks": "MSFT Test Corp is ranked 3 with a score of 48.44. Its position reflects relative metric scores within this sector.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   },
+   "ORCL": {
+    "why_it_ranks": "ORCL Test Corp is ranked 4 with a score of 31.17. Its position reflects relative metric scores within this sector.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   },
+   "ADBE": {
+    "why_it_ranks": "Adobe Inc. was not ranked because data coverage is too low.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   },
+   "CSCO": {
+    "why_it_ranks": "Cisco Systems, Inc. was not ranked because data coverage is too low.",
+    "strengths": [
+     "Relative standing on revenue_growth_pct"
+    ],
+    "weaknesses": [],
+    "source": "ai"
+   }
+  },
+  "withheld": [],
+  "diagnostics": {
+   "agent": "sector",
+   "call": "sector_comparison",
+   "model": "openai/gpt-oss-120b",
+   "status": "completed",
+   "started_at_utc": "2026-11-23T11:53:11.688703+00:00",
+   "request_token_budget": 7000,
+   "reasoning_effort": "low",
+   "profile_used": "full",
+   "attempts": [
+    {
+     "profile": "full",
+     "outcome": "success",
+     "status_code": null,
+     "estimated_input_tokens": 2012,
+     "max_completion_tokens": 2800,
+     "elapsed_seconds": 0.0
+    }
+   ],
+   "provider_requests": 1,
+   "prompt_tokens": 1200,
+   "completion_tokens": 900,
+   "total_tokens": 2100,
+   "token_usage_reported_by_provider": true,
+   "estimated_input_tokens": 2012,
+   "max_completion_tokens": 2800,
+   "response_id": "test-response",
+   "finish_reason": "stop",
+   "elapsed_seconds": 0.003,
+   "rate_limit_retries": 0,
+   "fallback_reason": null,
+   "failure_reason": null
+  },
+  "status": "completed"
+ },
+ "metric_definitions": {
+  "revenue_growth_pct": {
+   "label": "Revenue growth (YoY)",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "statements",
+   "group": "growth"
+  },
+  "net_margin_pct": {
+   "label": "Net profit margin",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "statements",
+   "group": "profitability"
+  },
+  "operating_margin_pct": {
+   "label": "Operating margin",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "statements",
+   "group": "profitability"
+  },
+  "roe_pct": {
+   "label": "Return on equity (ROE)",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "statements",
+   "group": "returns"
+  },
+  "roa_pct": {
+   "label": "Return on assets (ROA)",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "statements",
+   "group": "returns"
+  },
+  "debt_to_equity": {
+   "label": "Debt-to-equity",
+   "unit": "x",
+   "direction": "lower_is_better",
+   "source": "statements",
+   "group": "risk"
+  },
+  "pe_ratio": {
+   "label": "P/E ratio",
+   "unit": "x",
+   "direction": "lower_is_better",
+   "source": "quotes",
+   "group": "valuation"
+  },
+  "pb_ratio": {
+   "label": "Price-to-book",
+   "unit": "x",
+   "direction": "lower_is_better",
+   "source": "quotes",
+   "group": "valuation"
+  },
+  "dividend_yield_pct": {
+   "label": "Dividend yield",
+   "unit": "%",
+   "direction": "higher_is_better",
+   "source": "quotes",
+   "group": "shareholder_return"
+  },
+  "market_cap": {
+   "label": "Market capitalisation",
+   "unit": "currency",
+   "direction": "higher_is_better",
+   "source": "quotes",
+   "group": "scale"
+  },
+  "beta": {
+   "label": "Beta (volatility)",
+   "unit": "x",
+   "direction": "lower_is_better",
+   "source": "quotes",
+   "group": "risk"
+  }
+ },
+ "methodology": [
+  "Each metric is min-max normalised within the sector to a 0-100 score (inverted when lower is better; 50 when all companies are equal).",
+  "Applied weights: Revenue growth (YoY) 18.0% (higher is better); Net profit margin 14.0% (higher is better); Operating margin 10.0% (higher is better); Return on equity (ROE) 14.0% (higher is better); Return on assets (ROA) 6.0% (higher is better); Debt-to-equity 10.0% (lower is better); P/E ratio 10.0% (lower is better); Dividend yield 6.0% (higher is better); Market capitalisation 6.0% (higher is better); Beta (volatility) 6.0% (lower is better).",
+  "Composite score = sum of weight x metric score. Missing values use the sector median (flagged).",
+  "A company is ranked only when real data covers at least 60% of the applied weight.",
+  "Ties: scores are rounded to 2 decimals and equal scores share a rank."
+ ],
+ "refresh": null,
+ "disclaimers": [
+  "Rankings are relative to the companies in this sector only and are not investment advice.",
+  "Financial ratios are computed by InsightIQ from the latest annual statements returned by the data provider; market metrics come from the provider's latest quote.",
+  "Missing values were replaced by the sector median and are flagged as imputed.",
+  "Provider data can be delayed, restated or incomplete; see the as-of dates per company."
+ ],
+ "_comment": "TEST FIXTURE generated by the backend from invented test data (tests/market_fixtures.py) and a fake Groq client. Not real data."
+}

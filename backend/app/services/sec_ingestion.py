@@ -51,6 +51,8 @@ SUPPORTED_TICKERS = frozenset({
     "AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"
 })
 
+PERIODIC_FORMS = frozenset({"10-Q", "10-K", "10-Q/A", "10-K/A"})
+
 TRANSIENT_HTTP_CODES = {429, 500, 502, 503, 504}
 
 
@@ -272,6 +274,57 @@ class SecClient:
 
         return companies
 
+    async def fetch_latest_periodic_filing(self, client, cik):
+        """
+        Latest 10-Q/10-K (or amendment) from the SEC submissions index.
+
+        The submissions document is far smaller than companyfacts, so it is
+        used to decide whether a full companyfacts download is needed.
+        """
+        if not (isinstance(cik, str) and
+                len(cik) == 10 and cik.isdigit()):
+            raise ValueError("CIK must be a 10-digit SEC identifier.")
+
+        url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+        payload = await self.get_json(client, url)
+
+        recent = (
+            (payload or {}).get("filings", {}).get("recent")
+            if isinstance(payload, dict) else None
+        )
+
+        if not isinstance(recent, dict):
+            raise SecIngestionError(
+                "SEC submissions response has no recent filings."
+            )
+
+        forms = recent.get("form") or []
+        accessions = recent.get("accessionNumber") or []
+        filed = recent.get("filingDate") or []
+        report_dates = recent.get("reportDate") or []
+
+        latest = None
+
+        for index, form in enumerate(forms):
+            if form not in PERIODIC_FORMS:
+                continue
+            try:
+                candidate = {
+                    "form": form,
+                    "accession": str(accessions[index]),
+                    "filing_date": str(filed[index]),
+                    "report_date": (
+                        str(report_dates[index])
+                        if index < len(report_dates) else None
+                    ),
+                }
+            except IndexError:
+                continue
+            if latest is None or candidate["filing_date"] > latest["filing_date"]:
+                latest = candidate
+
+        return latest
+
     async def fetch_companyfacts(self, client, cik):
         if not (isinstance(cik, str) and
                 len(cik) == 10 and cik.isdigit()):
@@ -369,6 +422,35 @@ def normalize_sec_facts(ticker, payload, source_url, retrieved_at):
     return rows, rejected
 
 
+def _record_failed_refresh(ticker, started_at, exc):
+    """Best-effort failed-attempt row (only for a registered company)."""
+    try:
+        with transaction() as conn:
+            known = conn.execute(
+                "SELECT 1 FROM companies WHERE ticker = ?", (ticker,)
+            ).fetchone()
+            if known:
+                conn.execute(
+                    """
+                    INSERT INTO source_refreshes(
+                        company_ticker, source, started_at,
+                        completed_at, status, error_category,
+                        error_message
+                    )
+                    VALUES (?, 'SEC', ?, ?, 'failed', ?, ?)
+                    """,
+                    (
+                        ticker,
+                        started_at,
+                        utc_now(),
+                        type(exc).__name__,
+                        str(exc)[:500],
+                    ),
+                )
+    except Exception:
+        logger.warning("Could not record failed SEC refresh for %s", ticker)
+
+
 async def refresh_sec_company(ticker, force_refresh=False):
     ticker = str(ticker).upper().strip()
 
@@ -441,9 +523,38 @@ async def refresh_sec_company(ticker, force_refresh=False):
         follow_redirects=False,
     ) as http_client:
 
-        registry = await client_logic.fetch_registry(http_client)
+        # Reuse the stored, previously verified ticker->CIK mapping
+        # instead of downloading the full SEC registry every time.
+        # companyfacts still verifies that the returned CIK matches.
+        with connect() as conn:
+            stored = conn.execute(
+                "SELECT ticker, name, cik FROM companies WHERE ticker = ?",
+                (ticker,),
+            ).fetchone()
 
-        company = registry.get(ticker)
+        stored_cik = str(stored["cik"] or "") if stored else ""
+
+        if (
+            stored
+            and stored["name"]
+            and len(stored_cik) == 10
+            and stored_cik.isdigit()
+            and not force_refresh
+        ):
+            company = {
+                "ticker": ticker,
+                "cik": stored_cik,
+                "name": stored["name"],
+            }
+        else:
+            try:
+                registry = await client_logic.fetch_registry(http_client)
+            except Exception as exc:
+                # Record the failed attempt so freshness reporting is accurate.
+                _record_failed_refresh(ticker, started_at, exc)
+                raise
+
+            company = registry.get(ticker)
 
         if not company:
             raise SecIngestionError(
@@ -483,6 +594,59 @@ async def refresh_sec_company(ticker, force_refresh=False):
             refresh_id = cursor.lastrowid
 
         try:
+            latest_filing = None
+
+            if not force_refresh:
+                try:
+                    latest_filing = (
+                        await client_logic.fetch_latest_periodic_filing(
+                            http_client,
+                            company["cik"],
+                        )
+                    )
+                except SecIngestionError:
+                    # Fall back to the full companyfacts download.
+                    latest_filing = None
+
+            if latest_filing is not None:
+                with connect() as conn:
+                    already_stored = conn.execute(
+                        """
+                        SELECT 1 FROM sec_facts
+                        WHERE company_ticker = ? AND accession = ?
+                        LIMIT 1
+                        """,
+                        (ticker, latest_filing["accession"]),
+                    ).fetchone()
+
+                if already_stored:
+                    with transaction() as conn:
+                        conn.execute(
+                            """
+                            UPDATE source_refreshes
+                            SET status = 'success',
+                                completed_at = ?,
+                                records_fetched = 0,
+                                records_inserted = 0
+                            WHERE id = ?
+                            """,
+                            (utc_now(), refresh_id),
+                        )
+
+                    sync_snapshot_to_drive()
+
+                    return {
+                        "ticker": ticker,
+                        "company_name": company["name"],
+                        "cik": company["cik"],
+                        "source": "SEC",
+                        "status": "no_new_filings",
+                        "records_fetched": 0,
+                        "records_inserted": 0,
+                        "latest_filing": latest_filing,
+                        "retrieved_at": utc_now(),
+                    }
+
             payload, source_url = (
                 await client_logic.fetch_companyfacts(
                     http_client,
@@ -575,6 +739,7 @@ async def refresh_sec_company(ticker, force_refresh=False):
                 "retrieved_at": retrieved_at,
                 "snapshot_verified": snapshot["integrity_ok"],
                 "recovery_point_verified": recovery_point["verified"],
+                "latest_filing": latest_filing,
             }
 
         except Exception as exc:

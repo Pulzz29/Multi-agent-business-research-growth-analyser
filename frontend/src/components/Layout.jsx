@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { Activity, ChevronRight, Globe2, Layers, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
 import { COMPANIES, companyByTicker } from "../lib/reportModel.js";
 import { CompanyMark, ThemeToggle } from "./ui.jsx";
 
@@ -43,6 +43,33 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
             <Activity size={17} aria-hidden="true" /> Activity
           </button>
 
+          <p className="nav-label">Markets</p>
+          {[
+            ["US", "United States"],
+            ["IN", "India"],
+          ].map(([market, label]) => {
+            const isActive = ["market", "market-company"].includes(route.page) && route.market === market;
+            return (
+              <button
+                key={market}
+                type="button"
+                className={`nav-item ${isActive ? "is-active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => go({ page: "market", market })}
+              >
+                <Globe2 size={17} aria-hidden="true" /> {label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className={`nav-item ${route.page === "sectors" ? "is-active" : ""}`}
+            aria-current={route.page === "sectors" ? "page" : undefined}
+            onClick={() => go({ page: "sectors", market: route.market || "US" })}
+          >
+            <Layers size={17} aria-hidden="true" /> Sector-wise Comparison
+          </button>
+
           <p className="nav-label">Companies</p>
           {COMPANIES.map((company) => {
             const isActive = route.page === "company" && route.ticker === company.ticker;
@@ -68,7 +95,7 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
         </nav>
 
         <div className="sidebar-foot">
-          <p>Data: SEC EDGAR · NewsData.io · Groq</p>
+          <p>Data: SEC EDGAR · FMP · Finnhub · Yahoo Finance · NewsData.io · Groq</p>
           <p>Research support only. Not investment advice.</p>
         </div>
       </aside>
@@ -88,6 +115,19 @@ export function Topbar({ route, navigate, theme, onToggleTheme, onMenu, onDiscon
   const crumbs = [{ label: "InsightIQ", route: { page: "overview" } }];
   if (route.page === "activity") crumbs.push({ label: "Activity" });
   if (route.page === "overview") crumbs.push({ label: "Overview" });
+  const MARKET_NAMES = { US: "United States", IN: "India" };
+  if (route.page === "market") crumbs.push({ label: `${MARKET_NAMES[route.market]} market` });
+  if (route.page === "market-company") {
+    crumbs.push({ label: `${MARKET_NAMES[route.market]} market`, route: { page: "market", market: route.market } });
+    crumbs.push({ label: route.symbol });
+  }
+  if (route.page === "sectors") {
+    crumbs.push({
+      label: `${MARKET_NAMES[route.market]} sectors`,
+      route: route.sector ? { page: "sectors", market: route.market } : null,
+    });
+    if (route.sector) crumbs.push({ label: route.sector.replace(/_/g, " ") });
+  }
   if (route.page === "company") {
     const company = companyByTicker(route.ticker);
     crumbs.push({ label: "Companies", route: { page: "overview" } });

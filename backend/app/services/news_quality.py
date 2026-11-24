@@ -16,13 +16,26 @@ class NewsQualityError(ValueError):
     pass
 
 
+def company_names(ticker):
+    """Fixed names for the six SEC companies; registry names for others."""
+    if ticker in COMPANY_NAMES:
+        return COMPANY_NAMES[ticker]
+    try:
+        from app.services.market_registry import company_display_names, is_research_ticker
+
+        if is_research_ticker(ticker):
+            names = company_display_names(ticker)
+            if names:
+                return names
+    except Exception:
+        pass
+    raise NewsQualityError("Unsupported company ticker.")
+
+
 def explicit_company_mention(text, ticker):
-    if ticker not in COMPANY_NAMES:
-        raise NewsQualityError("Unsupported company ticker.")
+    terms = company_names(ticker)
 
     text = str(text or "")
-
-    terms = COMPANY_NAMES[ticker]
 
     for term in terms:
         pattern = (

@@ -11,7 +11,17 @@ from app.services import forecasting
 
 
 CACHE_VERSION = 1
+# Legacy default kept for readers of older envelopes. The active TTL
+# comes from settings (INSIGHTIQ_FORECAST_CACHE_TTL_HOURS); the input
+# fingerprint is what invalidates a forecast when SEC data changes.
 CACHE_TTL_SECONDS = 24 * 60 * 60
+
+
+def cache_ttl_seconds():
+    try:
+        return int(get_settings().forecast_cache_ttl_hours) * 3600
+    except Exception:
+        return CACHE_TTL_SECONDS
 SUPPORTED_METRICS = frozenset({
     "revenue",
     "operating_cash_flow",
@@ -230,7 +240,7 @@ def read_cached_forecast(ticker, metric, fingerprint):
             - generated.astimezone(timezone.utc)
         ).total_seconds()
 
-        if age < 0 or age > CACHE_TTL_SECONDS:
+        if age < 0 or age > cache_ttl_seconds():
             return None, "cache_expired"
 
         result = envelope["result"]
@@ -276,7 +286,7 @@ def write_cached_forecast(
         "cached_at_utc": datetime.now(
             timezone.utc
         ).isoformat(),
-        "ttl_seconds": CACHE_TTL_SECONDS,
+        "ttl_seconds": cache_ttl_seconds(),
         "result_sha256": sha256_text(
             canonical_json(result)
         ),

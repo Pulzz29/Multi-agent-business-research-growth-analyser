@@ -36,11 +36,23 @@ from app.services.report_history import (
     reports_directory,
     summaries_directory,
     SUPPORTED_TICKERS,
+    is_known_ticker,
 )
 
-MODEL = "openai/gpt-oss-120b"
+MODEL = (os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
 MAX_COMPLETION_TOKENS = 2000
-REQUEST_TOKEN_BUDGET = 8000
+
+
+def _summary_budget():
+    raw = os.getenv("INSIGHTIQ_SUMMARY_REQUEST_TOKEN_BUDGET", "").strip()
+    try:
+        value = int(raw) if raw else 8000
+    except ValueError:
+        value = 8000
+    return max(MAX_COMPLETION_TOKENS + 1000, min(value, 131072))
+
+
+REQUEST_TOKEN_BUDGET = _summary_budget()
 MIN_WORDS = 60
 MAX_WORDS = 400  # hard ceiling; the prompt targets about 250 words via per-section budgets
 
@@ -56,14 +68,8 @@ _GENERATION_LOCK = threading.Lock()
 logger = logging.getLogger("insightiq.executive_summary")
 
 # Phrases that would turn observations into causal, certain or advisory claims.
-BANNED_PATTERNS = [
-    r"\bcaused\b", r"\bcausing\b", r"\bbecause of\b", r"\bdue to\b",
-    r"\bled to\b", r"\bresulted in\b", r"\bdrove\b", r"\bdriven by\b",
-    r"\bwill (?:increase|decrease|grow|decline|rise|fall|improve|deteriorate|reach|exceed)\b",
-    r"\bguarantee", r"\bcertain(?:ly)? to\b",
-    r"\b(?:we )?recommend(?:s|ed)? (?:buying|selling|holding|investing)\b",
-    r"\b(?:buy|sell|hold) rating\b",
-]
+# Shared with the agent narrative validators so behaviour is identical.
+from app.services.narrative_validation import BANNED_PATTERNS  # noqa: E402
 
 
 class ExecutiveSummaryError(RuntimeError):
@@ -133,12 +139,30 @@ def _comparisons(ticker):
     return out
 
 
-def build_context(report, include_descriptions=True):
+def _report_comparisons(financial):
+    """Comparisons saved in a provider report: (metric, period_end) -> entry."""
+    out = {}
+    for c in ((financial.get("evidence_package") or {}).get("comparisons")) or []:
+        key = "previous_period" if c.get("kind") == "quarter_over_quarter" else "same_period_prior_year"
+        out.setdefault((c.get("metric"), c.get("period_end")), {})[key] = {
+            "period_end": c.get("basis_period_end"),
+            "value_billion": c.get("basis_value_billion_usd"),
+            "change_pct": c.get("change_pct"),
+        }
+    return out
+
+
+def build_context(report, include_descriptions=True, include_ai_findings=True):
     ticker = report["ticker"]
     financial = report.get("financial") or {}
     news = report.get("news") or {}
     strategic = report.get("strategic") or {}
-    comparisons = _comparisons(ticker)
+    currency = report.get("currency") or "USD"
+    comparisons = (
+        _report_comparisons(financial)
+        if report.get("research_profile") == "provider"
+        else _comparisons(ticker)
+    )
 
     claims = ((financial.get("verified_claims") or {}).get("verified_claims")) or []
     observations = []
@@ -203,8 +227,14 @@ def build_context(report, include_descriptions=True):
 
     limitations = [str(x) for x in (report.get("limitations") or [])][:6]
 
-    return {
+    context = {
         "ticker": ticker,
+        "currency": currency,
+        "data_source": (
+            "provider-reported financial statements"
+            if report.get("research_profile") == "provider"
+            else "SEC filings"
+        ),
         "report_generated_at_utc": report.get("generated_at_utc"),
         "sec_financial_observations": observations,
         "statistical_forecasts": forecasts,
@@ -213,14 +243,61 @@ def build_context(report, include_descriptions=True):
         "report_limitations": limitations,
     }
 
+    # Schema v2 reports: validated AI findings from THIS report only.
+    if include_ai_findings:
+        findings = ((financial.get("analysis") or {}).get("findings")) or []
+        if findings:
+            context["validated_financial_findings"] = [
+                {
+                    "title": f.get("title"),
+                    "evidence_ids": [
+                        e for e in (f.get("evidence_ids") or [])
+                        if not str(e).startswith("FORECAST_")
+                    ] or list(f.get("evidence_ids") or []),
+                    "verified_observation": f.get("verified_observation"),
+                    "business_significance": str(f.get("business_significance") or "")[:300],
+                }
+                for f in findings[:5]
+            ]
+        news_items = ((news.get("analysis") or {}).get("items")) or []
+        if news_items:
+            context["validated_news_intelligence"] = [
+                {
+                    "evidence_ids": n.get("evidence_ids") or [],
+                    "content_basis": n.get("content_basis"),
+                    "reported_development": str(n.get("reported_development") or "")[:300],
+                }
+                for n in news_items[:4]
+            ]
+        strategic_ai = [
+            {
+                "evidence_id": p.get("evidence_id"),
+                "title": (p.get("analysis") or {}).get("title"),
+                "classification": (p.get("analysis") or {}).get("classification_label"),
+                "why_it_matters": str((p.get("analysis") or {}).get("why_it_matters") or "")[:250],
+            }
+            for p in strategic.get("research_priorities") or []
+            if p.get("analysis")
+        ]
+        if strategic_ai:
+            context["validated_strategic_analysis"] = strategic_ai
+
+    return context
+
 
 def allowed_evidence_ids(context):
     ids = set()
     for key in ("sec_financial_observations", "statistical_forecasts",
-                "news_articles", "strategic_monitoring_priorities"):
+                "news_articles", "strategic_monitoring_priorities",
+                "validated_strategic_analysis"):
         for item in context.get(key) or []:
             if item.get("evidence_id"):
                 ids.add(item["evidence_id"])
+    # v2 findings may cite evidence that the report contains but that is
+    # not among the four selected claims (e.g. earlier quarters).
+    for key in ("validated_financial_findings", "validated_news_intelligence"):
+        for item in context.get(key) or []:
+            ids.update(e for e in item.get("evidence_ids") or [] if e)
     return ids
 
 
@@ -336,8 +413,9 @@ SYSTEM_PROMPT = (
     "them to the publisher and note they are not independently verified). "
     "Do not state causes, financial impacts, predictions or investment recommendations. "
     "Strategic priorities are AI-assigned monitoring priorities, not validated risk ratings. "
-    "Use numbers exactly as supplied; USD amounts may be written in billions with two "
-    "decimals (for example USD 59.89 billion). Only use growth percentages given in "
+    "Use numbers exactly as supplied. Amounts are in the evidence's currency; write them "
+    "in billions with two decimals and that currency code (for example USD 59.89 billion "
+    "or INR 2550.00 billion). Only use growth percentages given in "
     "computed_comparisons. Do not compute new numbers. "
     "Every section except evidence_limitations must cite the evidence_id values it relies on."
 )
@@ -384,9 +462,13 @@ def estimate_tokens(messages):
 
 
 def fit_to_budget(report):
-    """Build messages under the request budget, dropping article descriptions if needed (413 guard)."""
-    for include_descriptions in (True, False):
-        context = build_context(report, include_descriptions=include_descriptions)
+    """Build messages under the request budget, dropping lower-priority context if needed (413 guard)."""
+    for include_descriptions, include_ai in ((True, True), (False, True), (False, False)):
+        context = build_context(
+            report,
+            include_descriptions=include_descriptions,
+            include_ai_findings=include_ai,
+        )
         messages = build_messages(context)
         estimated = estimate_tokens(messages)
         if estimated + MAX_COMPLETION_TOKENS <= REQUEST_TOKEN_BUDGET:
@@ -394,6 +476,7 @@ def fit_to_budget(report):
                 "estimated_input_tokens": estimated,
                 "request_token_budget": REQUEST_TOKEN_BUDGET,
                 "article_descriptions_included": include_descriptions,
+                "validated_ai_findings_included": include_ai,
             }
     raise ExecutiveSummaryError("The report evidence is too large for a summary request.")
 
@@ -409,7 +492,7 @@ def _load_report(root, run_id):
     if (
         report.get("run_id") != run_id
         or report.get("status") != "completed"
-        or report.get("ticker") not in SUPPORTED_TICKERS
+        or not is_known_ticker(report.get("ticker"))
     ):
         raise ExecutiveSummaryError("The saved report failed its identity check.")
     return report, hashlib.sha256(raw).hexdigest()

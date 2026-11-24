@@ -316,10 +316,20 @@ async def refresh_news_company(
     max_articles=30,
     max_pages=10,
     force_refresh=False,
+    search_terms=None,
+    country=None,
 ):
+    """
+    search_terms / country are optional and used for companies outside the
+    original SEC set (for example NSE-listed companies): the query becomes
+    the quoted terms, and relevance accepts a match on any of them.
+    """
     ticker = str(ticker).upper().strip()
+    search_terms = [
+        str(t).strip() for t in (search_terms or []) if str(t or "").strip()
+    ][:3]
 
-    if ticker not in SUPPORTED_TICKERS:
+    if ticker not in SUPPORTED_TICKERS and not search_terms:
         raise ValueError(f"Unsupported ticker: {ticker}")
 
     if not (1 <= max_articles <= 200):
@@ -393,7 +403,10 @@ async def refresh_news_company(
                     }
 
     company_term = company["name"]
-    primary_term = company_search_term(company_term)
+    primary_term = (
+        search_terms[0] if search_terms
+        else company_search_term(company_term)
+    )
 
     refresh_started = utc_now()
 
@@ -423,9 +436,16 @@ async def refresh_news_company(
         provider = NewsDataClient()
 
         params = {
-            "q": f'"{primary_term}" OR "{ticker}"',
+            "q": (
+                " OR ".join(f'"{term}"' for term in search_terms)
+                if search_terms
+                else f'"{primary_term}" OR "{ticker}"'
+            ),
             "language": "en",
         }
+
+        if country:
+            params["country"] = str(country).lower()
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(
@@ -470,10 +490,12 @@ async def refresh_news_company(
                     seen_ids.add(provider_id)
                     seen_urls.add(canonical_url)
 
-                    score, reason = relevance_for_article(
-                        article,
-                        primary_term,
-                        ticker,
+                    score, reason = max(
+                        (
+                            relevance_for_article(article, term, ticker)
+                            for term in (search_terms or [primary_term])
+                        ),
+                        key=lambda result: result[0],
                     )
 
                     if score < 0.60:
@@ -534,6 +556,12 @@ async def refresh_news_company(
                       AND (
                         provider_article_id = ?
                         OR article_url = ?
+                        OR (
+                            CASE WHEN json_valid(raw_metadata_json)
+                            THEN json_extract(
+                                raw_metadata_json, '$.canonical_url'
+                            ) END
+                        ) = ?
                       )
                     LIMIT 1
                     """,
@@ -541,6 +569,7 @@ async def refresh_news_company(
                         ticker,
                         item["provider_article_id"],
                         item["article_url"],
+                        item["canonical_url"],
                     ),
                 ).fetchone()
 

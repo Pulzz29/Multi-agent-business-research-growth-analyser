@@ -107,9 +107,12 @@ def dashboard_snapshot(
 
     for row in job_rows:
         if row["ticker"] not in SUPPORTED_COMPANIES:
-            raise DashboardDataError(
-                "Unexpected company identifier."
-            )
+            from app.services.market_registry import is_research_ticker
+
+            if not is_research_ticker(row["ticker"]):
+                raise DashboardDataError(
+                    "Unexpected company identifier."
+                )
 
         recent_jobs.append({
             "run_id": row["run_id"],

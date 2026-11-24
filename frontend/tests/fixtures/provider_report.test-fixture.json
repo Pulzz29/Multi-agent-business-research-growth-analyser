@@ -1,0 +1,913 @@
+{
+ "run_id": "c29af4f2-3bd8-453f-a2e1-3d59ff086f18",
+ "ticker": "RELIANCE.NS",
+ "status": "completed",
+ "report_schema_version": 2,
+ "research_profile": "provider",
+ "market": "IN",
+ "currency": "INR",
+ "generated_at_utc": "2026-11-23T12:37:43.591897+00:00",
+ "total_elapsed_seconds": 0.13,
+ "agent_statuses": {
+  "financial": "completed",
+  "news": "completed",
+  "strategic": "completed"
+ },
+ "agent_timings_seconds": {
+  "financial": 0.085,
+  "news": 0.015,
+  "strategic": 0.003
+ },
+ "refresh_request": {
+  "refresh": "skip",
+  "on_refresh_failure": "continue_with_cached"
+ },
+ "source_freshness": {
+  "research_profile": "provider",
+  "market": "IN",
+  "currency": "INR",
+  "research_generated_at_utc": "2026-11-23T12:37:43.591897+00:00",
+  "refresh_mode": "skip",
+  "on_refresh_failure": "continue_with_cached",
+  "refresh_failures": [],
+  "provider_sources": {
+   "profile": {
+    "source": "YFINANCE_PROFILE",
+    "refresh_status": "skipped_by_request",
+    "evidence_state": "cached_skipped_by_request",
+    "provider_called": false,
+    "records_inserted": null,
+    "message": null,
+    "last_successful_refresh_at": null,
+    "policy_max_age_hours": 168
+   },
+   "quote": {
+    "source": "YFINANCE_QUOTE",
+    "refresh_status": "skipped_by_request",
+    "evidence_state": "cached_skipped_by_request",
+    "provider_called": false,
+    "records_inserted": null,
+    "message": null,
+    "last_successful_refresh_at": "2026-11-23T12:37:43.357150+00:00",
+    "policy_max_age_hours": 24
+   },
+   "statements": {
+    "source": "YFINANCE_STATEMENTS",
+    "refresh_status": "skipped_by_request",
+    "evidence_state": "cached_skipped_by_request",
+    "provider_called": false,
+    "records_inserted": null,
+    "message": null,
+    "last_successful_refresh_at": "2026-11-23T12:37:43.437451+00:00",
+    "policy_max_age_hours": 168
+   },
+   "news": {
+    "source": "NEWSDATA",
+    "refresh_status": "skipped_by_request",
+    "evidence_state": "cached_skipped_by_request",
+    "provider_called": false,
+    "records_inserted": null,
+    "message": null,
+    "last_successful_refresh_at": null,
+    "policy_max_age_hours": 6
+   }
+  },
+  "statements": {
+   "provider": "YFINANCE",
+   "period_types": {
+    "revenue": "quarterly",
+    "operating_cash_flow": "annual"
+   },
+   "data_cutoff_period_end": "2025-06-30"
+  },
+  "news": {
+   "latest_cited_publication_date": null,
+   "cited_article_count": 0
+  },
+  "forecasts": {
+   "revenue": {
+    "available": false,
+    "reason": "Only 6 consecutive quarters are stored; the forecasting model needs at least 20."
+   },
+   "operating_cash_flow": {
+    "available": false,
+    "reason": "Only annual statements are stored; the forecasting model needs quarterly data."
+   }
+  }
+ },
+ "generation": {
+  "model": "openai/gpt-oss-120b",
+  "ai_analysis_status": {
+   "financial": "completed",
+   "news": "unavailable",
+   "strategic": "completed"
+  },
+  "calls": [
+   {
+    "agent": "financial",
+    "call": "financial_analysis",
+    "model": "openai/gpt-oss-120b",
+    "status": "completed",
+    "profile_used": "full",
+    "provider_requests": 1,
+    "prompt_tokens": 1200,
+    "completion_tokens": 900,
+    "total_tokens": 2100,
+    "token_usage_reported_by_provider": true,
+    "estimated_input_tokens": 2293,
+    "max_completion_tokens": 2800,
+    "request_token_budget": 7000,
+    "elapsed_seconds": 0.002,
+    "rate_limit_retries": 0,
+    "fallback_reason": null,
+    "failure_reason": null,
+    "attempts": [
+     {
+      "profile": "full",
+      "outcome": "success",
+      "status_code": null,
+      "estimated_input_tokens": 2293,
+      "max_completion_tokens": 2800,
+      "elapsed_seconds": 0.0
+     }
+    ],
+    "reasoning_effort": "low"
+   },
+   {
+    "agent": "news",
+    "call": "news_selection",
+    "model": null,
+    "status": "not_run",
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "total_tokens": null,
+    "elapsed_seconds": null,
+    "request_budget": null
+   },
+   {
+    "agent": "news",
+    "call": "news_analysis",
+    "status": "not_run"
+   },
+   {
+    "agent": "strategic",
+    "call": "strategic_analysis",
+    "model": "openai/gpt-oss-120b",
+    "status": "completed",
+    "profile_used": "full",
+    "provider_requests": 1,
+    "prompt_tokens": 1200,
+    "completion_tokens": 900,
+    "total_tokens": 2100,
+    "token_usage_reported_by_provider": true,
+    "estimated_input_tokens": 2058,
+    "max_completion_tokens": 2800,
+    "request_token_budget": 7000,
+    "elapsed_seconds": 0.001,
+    "rate_limit_retries": 0,
+    "fallback_reason": null,
+    "failure_reason": null,
+    "attempts": [
+     {
+      "profile": "full",
+      "outcome": "success",
+      "status_code": null,
+      "estimated_input_tokens": 2058,
+      "max_completion_tokens": 2800,
+      "elapsed_seconds": 0.0
+     }
+    ],
+    "reasoning_effort": "low"
+   }
+  ],
+  "executive_summary": "Generated after the report is saved, as a separate sidecar file; see the report viewer.",
+  "previous_reports_used_as_evidence": false
+ },
+ "financial": {
+  "verified_claims": {
+   "ticker": "RELIANCE.NS",
+   "generated_at_utc": "2026-11-23T12:37:43.571098+00:00",
+   "model": "openai/gpt-oss-120b",
+   "verified_claims": [
+    {
+     "evidence_id": "YF_revenue_Q20250331",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2025-01-01",
+     "period_end": "2025-03-31",
+     "value_usd": "2160000000000",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      5
+     ],
+     "sec_fact_ids": [],
+     "normalization_method": "provider_reported_quarter",
+     "period_start_basis": "day after the previous reported period end"
+    },
+    {
+     "evidence_id": "YF_revenue_Q20250630",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2025-04-01",
+     "period_end": "2025-06-30",
+     "value_usd": "2200000000000",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      6
+     ],
+     "sec_fact_ids": [],
+     "normalization_method": "provider_reported_quarter",
+     "period_start_basis": "day after the previous reported period end"
+    },
+    {
+     "evidence_id": "YF_operating_cash_flow_FY20240331",
+     "metric": "operating_cash_flow",
+     "period_type": "annual",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "value_usd": "1100000000000",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      12
+     ],
+     "sec_fact_ids": [],
+     "normalization_method": "provider_reported_fiscal_year",
+     "period_start_basis": "calendar estimate (no adjacent earlier period stored)"
+    },
+    {
+     "evidence_id": "YF_operating_cash_flow_FY20250331",
+     "metric": "operating_cash_flow",
+     "period_type": "annual",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "value_usd": "1250000000000",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      18
+     ],
+     "sec_fact_ids": [],
+     "normalization_method": "provider_reported_fiscal_year",
+     "period_start_basis": "day after the previous reported period end"
+    }
+   ],
+   "verified_statements": [
+    "Revenue for the quarter 2025-01-01 to 2025-03-31 was INR 2,160,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250331.",
+    "Revenue for the quarter 2025-04-01 to 2025-06-30 was INR 2,200,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250630.",
+    "Operating cash flow for the fiscal year 2023-04-01 to 2024-03-31 was INR 1,100,000,000,000 (reported by Yahoo Finance). Evidence: YF_operating_cash_flow_FY20240331.",
+    "Operating cash flow for the fiscal year 2024-04-01 to 2025-03-31 was INR 1,250,000,000,000 (reported by Yahoo Finance). Evidence: YF_operating_cash_flow_FY20250331."
+   ],
+   "diagnostics": {
+    "response_id": "test-response",
+    "finish_reason": "stop",
+    "elapsed_seconds": 0.002,
+    "prompt_tokens": 1200,
+    "completion_tokens": 900,
+    "total_tokens": 2100,
+    "source_records_available": 8,
+    "claims_verified": 4,
+    "claims_selection": "groq",
+    "strict_schema_validation": true,
+    "exact_amount_validation": true,
+    "exact_reporting_period_validation": true,
+    "provider_evidence_id_validation": true
+   },
+   "limitations": [
+    "Claims are provider-reported statement values (quarterly or fiscal-year).",
+    "Provider statements are not SEC-validated; restatements may not be reflected."
+   ]
+  },
+  "forecasts": {},
+  "forecast_quality": {},
+  "forecast_quality_provenance": null,
+  "forecasts_unavailable": {
+   "revenue": "Only 6 consecutive quarters are stored; the forecasting model needs at least 20.",
+   "operating_cash_flow": "Only annual statements are stored; the forecasting model needs quarterly data."
+  },
+  "currency": "INR",
+  "data_provider": "YFINANCE",
+  "groq_diagnostics": {
+   "response_id": "test-response",
+   "finish_reason": "stop",
+   "elapsed_seconds": 0.002,
+   "prompt_tokens": 1200,
+   "completion_tokens": 900,
+   "total_tokens": 2100,
+   "source_records_available": 8,
+   "claims_verified": 4,
+   "claims_selection": "groq",
+   "strict_schema_validation": true,
+   "exact_amount_validation": true,
+   "exact_reporting_period_validation": true,
+   "provider_evidence_id_validation": true
+  },
+  "analysis": {
+   "schema_version": 1,
+   "status": "completed",
+   "status_reason": null,
+   "claims_selection": "groq",
+   "findings": [
+    {
+     "finding_id": "FIN_1",
+     "title": "Latest reported revenue against the prior year",
+     "verified_observation": "Revenue for the quarter 2025-04-01 to 2025-06-30 (2025 Q2): INR 2200.00 billion, as reported by the data provider [YF_revenue_Q20250630]. Revenue change versus the same quarter one year earlier (quarter ended 2024-06-30): +7.8% [CMP_revenue_20250630_yoy, computed by InsightIQ].",
+     "verified_observation_source": "rendered by InsightIQ from cited evidence",
+     "interpretation": "Revenue for the quarter ending 2025-06-30 was INR 2200.00 billion, as reported by the data provider. Against the period one year earlier the InsightIQ comparison shows a change of 7.8%. Comparing matching periods limits seasonal distortion. The figure describes reported scale and direction only.",
+     "business_significance": "It anchors the company's reported revenue scale for the research period.",
+     "limitations": "A single comparison cannot show what drove the change or whether it will persist.",
+     "evidence_ids": [
+      "YF_revenue_Q20250630"
+     ],
+     "comparison_ids": [
+      "CMP_revenue_20250630_yoy"
+     ],
+     "ai_generated_fields": [
+      "title",
+      "interpretation",
+      "business_significance",
+      "limitations"
+     ],
+     "validation": {
+      "status": "automated_checks_passed",
+      "checks": [
+       "evidence_ids_in_package",
+       "comparison_ids_match_cited_metric",
+       "numbers_from_cited_evidence",
+       "percentages_from_cited_comparisons",
+       "periods_from_cited_evidence",
+       "trend_language_requires_three_contiguous_quarters",
+       "no_causal_or_advisory_language",
+       "no_urls"
+      ],
+      "label": "AI interpretation \u2014 automated evidence, number, period and language checks passed; not independently verified.",
+      "independently_verified": false
+     }
+    }
+   ],
+   "withheld": [],
+   "validation_label": "AI interpretation \u2014 automated evidence, number, period and language checks passed; not independently verified."
+  },
+  "evidence_package": {
+   "package_version": 1,
+   "records": [
+    {
+     "evidence_id": "YF_revenue_Q20240331",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2024-01-01",
+     "period_end": "2024-03-31",
+     "period_start_basis": "calendar estimate (no adjacent earlier period stored)",
+     "fiscal_label": null,
+     "calendar_label": "2024 Q1",
+     "value_usd": "2000000000000",
+     "value_billion_usd": "2000.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      1
+     ]
+    },
+    {
+     "evidence_id": "YF_revenue_Q20240630",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2024-04-01",
+     "period_end": "2024-06-30",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": null,
+     "calendar_label": "2024 Q2",
+     "value_usd": "2040000000000",
+     "value_billion_usd": "2040.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      2
+     ]
+    },
+    {
+     "evidence_id": "YF_revenue_Q20240930",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2024-07-01",
+     "period_end": "2024-09-30",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": null,
+     "calendar_label": "2024 Q3",
+     "value_usd": "2080000000000",
+     "value_billion_usd": "2080.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      3
+     ]
+    },
+    {
+     "evidence_id": "YF_revenue_Q20241231",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2024-10-01",
+     "period_end": "2024-12-31",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": null,
+     "calendar_label": "2024 Q4",
+     "value_usd": "2120000000000",
+     "value_billion_usd": "2120.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      4
+     ]
+    },
+    {
+     "evidence_id": "YF_revenue_Q20250331",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2025-01-01",
+     "period_end": "2025-03-31",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": null,
+     "calendar_label": "2025 Q1",
+     "value_usd": "2160000000000",
+     "value_billion_usd": "2160.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      5
+     ]
+    },
+    {
+     "evidence_id": "YF_revenue_Q20250630",
+     "kind": "provider_period",
+     "metric": "revenue",
+     "period_type": "quarterly",
+     "period_start": "2025-04-01",
+     "period_end": "2025-06-30",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": null,
+     "calendar_label": "2025 Q2",
+     "value_usd": "2200000000000",
+     "value_billion_usd": "2200.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_quarter",
+     "provider_fact_ids": [
+      6
+     ]
+    },
+    {
+     "evidence_id": "YF_operating_cash_flow_FY20240331",
+     "kind": "provider_period",
+     "metric": "operating_cash_flow",
+     "period_type": "annual",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "period_start_basis": "calendar estimate (no adjacent earlier period stored)",
+     "fiscal_label": "FY2024",
+     "calendar_label": null,
+     "value_usd": "1100000000000",
+     "value_billion_usd": "1100.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_fiscal_year",
+     "provider_fact_ids": [
+      12
+     ]
+    },
+    {
+     "evidence_id": "YF_operating_cash_flow_FY20250331",
+     "kind": "provider_period",
+     "metric": "operating_cash_flow",
+     "period_type": "annual",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "period_start_basis": "day after the previous reported period end",
+     "fiscal_label": "FY2025",
+     "calendar_label": null,
+     "value_usd": "1250000000000",
+     "value_billion_usd": "1250.00",
+     "currency": "INR",
+     "provider": "YFINANCE",
+     "derivation": "provider_reported_fiscal_year",
+     "provider_fact_ids": [
+      18
+     ]
+    }
+   ],
+   "comparisons": [
+    {
+     "comparison_id": "CMP_revenue_20240630_qoq",
+     "kind": "quarter_over_quarter",
+     "metric": "revenue",
+     "period_end": "2024-06-30",
+     "basis_period_end": "2024-03-31",
+     "current_evidence_id": "YF_revenue_Q20240630",
+     "basis_evidence_id": "YF_revenue_Q20240331",
+     "current_value_billion_usd": "2040.00",
+     "basis_value_billion_usd": "2000.00",
+     "currency": "INR",
+     "change_pct": "2.0",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20240930_qoq",
+     "kind": "quarter_over_quarter",
+     "metric": "revenue",
+     "period_end": "2024-09-30",
+     "basis_period_end": "2024-06-30",
+     "current_evidence_id": "YF_revenue_Q20240930",
+     "basis_evidence_id": "YF_revenue_Q20240630",
+     "current_value_billion_usd": "2080.00",
+     "basis_value_billion_usd": "2040.00",
+     "currency": "INR",
+     "change_pct": "2.0",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20241231_qoq",
+     "kind": "quarter_over_quarter",
+     "metric": "revenue",
+     "period_end": "2024-12-31",
+     "basis_period_end": "2024-09-30",
+     "current_evidence_id": "YF_revenue_Q20241231",
+     "basis_evidence_id": "YF_revenue_Q20240930",
+     "current_value_billion_usd": "2120.00",
+     "basis_value_billion_usd": "2080.00",
+     "currency": "INR",
+     "change_pct": "1.9",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20250331_qoq",
+     "kind": "quarter_over_quarter",
+     "metric": "revenue",
+     "period_end": "2025-03-31",
+     "basis_period_end": "2024-12-31",
+     "current_evidence_id": "YF_revenue_Q20250331",
+     "basis_evidence_id": "YF_revenue_Q20241231",
+     "current_value_billion_usd": "2160.00",
+     "basis_value_billion_usd": "2120.00",
+     "currency": "INR",
+     "change_pct": "1.9",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20250331_yoy",
+     "kind": "year_over_year",
+     "metric": "revenue",
+     "period_end": "2025-03-31",
+     "basis_period_end": "2024-03-31",
+     "current_evidence_id": "YF_revenue_Q20250331",
+     "basis_evidence_id": "YF_revenue_Q20240331",
+     "current_value_billion_usd": "2160.00",
+     "basis_value_billion_usd": "2000.00",
+     "currency": "INR",
+     "change_pct": "8.0",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20250630_qoq",
+     "kind": "quarter_over_quarter",
+     "metric": "revenue",
+     "period_end": "2025-06-30",
+     "basis_period_end": "2025-03-31",
+     "current_evidence_id": "YF_revenue_Q20250630",
+     "basis_evidence_id": "YF_revenue_Q20250331",
+     "current_value_billion_usd": "2200.00",
+     "basis_value_billion_usd": "2160.00",
+     "currency": "INR",
+     "change_pct": "1.9",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_revenue_20250630_yoy",
+     "kind": "year_over_year",
+     "metric": "revenue",
+     "period_end": "2025-06-30",
+     "basis_period_end": "2024-06-30",
+     "current_evidence_id": "YF_revenue_Q20250630",
+     "basis_evidence_id": "YF_revenue_Q20240630",
+     "current_value_billion_usd": "2200.00",
+     "basis_value_billion_usd": "2040.00",
+     "currency": "INR",
+     "change_pct": "7.8",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    },
+    {
+     "comparison_id": "CMP_operating_cash_flow_20250331_yoy",
+     "kind": "year_over_year",
+     "metric": "operating_cash_flow",
+     "period_end": "2025-03-31",
+     "basis_period_end": "2024-03-31",
+     "current_evidence_id": "YF_operating_cash_flow_FY20250331",
+     "basis_evidence_id": "YF_operating_cash_flow_FY20240331",
+     "current_value_billion_usd": "1250.00",
+     "basis_value_billion_usd": "1100.00",
+     "currency": "INR",
+     "change_pct": "13.6",
+     "direction": "increase",
+     "computed_by": "InsightIQ (Python Decimal), not reported by the provider"
+    }
+   ],
+   "forecasts": [],
+   "limitations": [
+    "Amounts are as reported by the data provider; they are not SEC-validated.",
+    "Period starts are derived from the previous reported period end.",
+    "Comparisons were computed by InsightIQ only between adjacent or one-year-apart periods.",
+    "The evidence contains no segment, margin, guidance or management-commentary data."
+   ]
+  },
+  "disclosures": [
+   "Financial figures are provider-reported statement values from Yahoo Finance, in INR; they are not SEC-validated.",
+   "Selected claims were validated against the exact stored provider values, periods and IDs.",
+   "AI-written interpretations passed automated number, period, citation and language checks; they are not independently verified analysis.",
+   "Comparisons were computed by InsightIQ, not taken from the model.",
+   "Period start dates are derived from the previous reported period end.",
+   "Statistical forecasts unavailable: Revenue: Only 6 consecutive quarters are stored; the forecasting model needs at least 20.; Operating cash flow: Only annual statements are stored; the forecasting model needs quarterly data."
+  ]
+ },
+ "news": {
+  "selected_articles": [],
+  "approved_primary_articles": [],
+  "contextual_articles": [],
+  "repeated_event_themes": {},
+  "groq_diagnostics": null,
+  "analysis": {
+   "schema_version": 1,
+   "status": "unavailable",
+   "status_reason": "No company news was available for analysis.",
+   "items": [],
+   "withheld": []
+  },
+  "disclosures": [
+   "No stored company news with a valid source link was available for this company; the research uses financial evidence only.",
+   "News intelligence text is AI-written from stored headlines and description excerpts; it attributes developments to publishers and does not independently verify them."
+  ]
+ },
+ "strategic": {
+  "status": "completed",
+  "research_priorities": [
+   {
+    "theme": "revenue_performance",
+    "priority": "high",
+    "priority_basis": "Groq research prioritization; not independently validated risk severity",
+    "source_type": "Financial statement evidence (YFINANCE)",
+    "observed_evidence": "Revenue for the quarter 2025-01-01 to 2025-03-31 was INR 2,160,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250331.",
+    "monitoring_question": "How are subsequent reported revenue quarters developing relative to this observed period?",
+    "evidence_id": "YF_revenue_Q20250331",
+    "source_metadata": {
+     "evidence_id": "YF_revenue_Q20250331",
+     "kind": "verified_sec_financial_fact",
+     "allowed_theme": "revenue_performance",
+     "observed_statement": "Revenue for the quarter 2025-01-01 to 2025-03-31 was INR 2,160,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250331.",
+     "metric": "revenue",
+     "period_end": "2025-03-31",
+     "sec_fact_ids": [],
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      5
+     ]
+    },
+    "financial_impact_claimed": false,
+    "causal_relationship_claimed": false,
+    "monitoring_question_source": "template",
+    "title": "Monitor the reported item in subsequent periods",
+    "analysis": {
+     "title": "Monitor the reported item in subsequent periods",
+     "classification": "monitoring_priority",
+     "classification_label": "Monitoring priority",
+     "classification_adjustment": null,
+     "interpretation": "The cited evidence records one observation for the company. On its own it does not establish direction or persistence, and the relationship between reported financial results and news coverage is unverified. The observation is useful as a reference point for the next filings and for corroborating reports from primary sources. Further evidence is needed before any conclusion about risk or opportunity can be drawn from this item.",
+     "why_it_matters": "It provides a reference point for the next reporting period.",
+     "indicators_to_monitor": [
+      "Subsequent quarterly filings",
+      "Company announcements"
+     ],
+     "follow_up": "",
+     "uncertainty": "A single observation cannot show direction or persistence.",
+     "supporting_evidence_ids": [
+      "YF_revenue_Q20250331"
+     ],
+     "ai_generated_fields": [
+      "title",
+      "classification",
+      "interpretation",
+      "why_it_matters",
+      "indicators_to_monitor",
+      "follow_up",
+      "uncertainty"
+     ],
+     "validation": {
+      "status": "automated_checks_passed",
+      "checks": [
+       "selection_ids_and_themes_validated",
+       "supporting_evidence_ids_in_package",
+       "numbers_from_cited_evidence",
+       "periods_from_cited_evidence",
+       "classification_supported_by_evidence",
+       "no_causal_or_advisory_language",
+       "no_urls_or_instruction_text"
+      ],
+      "label": "AI interpretation \u2014 automated evidence, number, period and language checks passed; not independently verified.",
+      "independently_verified": false
+     }
+    },
+    "analysis_status": "automated_checks_passed"
+   },
+   {
+    "theme": "revenue_performance",
+    "priority": "medium",
+    "priority_basis": "Groq research prioritization; not independently validated risk severity",
+    "source_type": "Financial statement evidence (YFINANCE)",
+    "observed_evidence": "Revenue for the quarter 2025-04-01 to 2025-06-30 was INR 2,200,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250630.",
+    "monitoring_question": "How are subsequent reported revenue quarters developing relative to this observed period?",
+    "evidence_id": "YF_revenue_Q20250630",
+    "source_metadata": {
+     "evidence_id": "YF_revenue_Q20250630",
+     "kind": "verified_sec_financial_fact",
+     "allowed_theme": "revenue_performance",
+     "observed_statement": "Revenue for the quarter 2025-04-01 to 2025-06-30 was INR 2,200,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250630.",
+     "metric": "revenue",
+     "period_end": "2025-06-30",
+     "sec_fact_ids": [],
+     "provider": "YFINANCE",
+     "provider_fact_ids": [
+      6
+     ]
+    },
+    "financial_impact_claimed": false,
+    "causal_relationship_claimed": false,
+    "monitoring_question_source": "template",
+    "title": "Monitor the reported item in subsequent periods",
+    "analysis": {
+     "title": "Monitor the reported item in subsequent periods",
+     "classification": "monitoring_priority",
+     "classification_label": "Monitoring priority",
+     "classification_adjustment": null,
+     "interpretation": "The cited evidence records one observation for the company. On its own it does not establish direction or persistence, and the relationship between reported financial results and news coverage is unverified. The observation is useful as a reference point for the next filings and for corroborating reports from primary sources. Further evidence is needed before any conclusion about risk or opportunity can be drawn from this item.",
+     "why_it_matters": "It provides a reference point for the next reporting period.",
+     "indicators_to_monitor": [
+      "Subsequent quarterly filings",
+      "Company announcements"
+     ],
+     "follow_up": "",
+     "uncertainty": "A single observation cannot show direction or persistence.",
+     "supporting_evidence_ids": [
+      "YF_revenue_Q20250630"
+     ],
+     "ai_generated_fields": [
+      "title",
+      "classification",
+      "interpretation",
+      "why_it_matters",
+      "indicators_to_monitor",
+      "follow_up",
+      "uncertainty"
+     ],
+     "validation": {
+      "status": "automated_checks_passed",
+      "checks": [
+       "selection_ids_and_themes_validated",
+       "supporting_evidence_ids_in_package",
+       "numbers_from_cited_evidence",
+       "periods_from_cited_evidence",
+       "classification_supported_by_evidence",
+       "no_causal_or_advisory_language",
+       "no_urls_or_instruction_text"
+      ],
+      "label": "AI interpretation \u2014 automated evidence, number, period and language checks passed; not independently verified.",
+      "independently_verified": false
+     }
+    },
+    "analysis_status": "automated_checks_passed"
+   }
+  ],
+  "source_evidence": [
+   {
+    "evidence_id": "YF_revenue_Q20250331",
+    "kind": "verified_sec_financial_fact",
+    "allowed_theme": "revenue_performance",
+    "observed_statement": "Revenue for the quarter 2025-01-01 to 2025-03-31 was INR 2,160,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250331.",
+    "metric": "revenue",
+    "period_end": "2025-03-31",
+    "sec_fact_ids": [],
+    "provider": "YFINANCE",
+    "provider_fact_ids": [
+     5
+    ]
+   },
+   {
+    "evidence_id": "YF_revenue_Q20250630",
+    "kind": "verified_sec_financial_fact",
+    "allowed_theme": "revenue_performance",
+    "observed_statement": "Revenue for the quarter 2025-04-01 to 2025-06-30 was INR 2,200,000,000,000 (reported by Yahoo Finance). Evidence: YF_revenue_Q20250630.",
+    "metric": "revenue",
+    "period_end": "2025-06-30",
+    "sec_fact_ids": [],
+    "provider": "YFINANCE",
+    "provider_fact_ids": [
+     6
+    ]
+   },
+   {
+    "evidence_id": "YF_operating_cash_flow_FY20240331",
+    "kind": "verified_sec_financial_fact",
+    "allowed_theme": "cash_generation",
+    "observed_statement": "Operating cash flow for the fiscal year 2023-04-01 to 2024-03-31 was INR 1,100,000,000,000 (reported by Yahoo Finance). Evidence: YF_operating_cash_flow_FY20240331.",
+    "metric": "operating_cash_flow",
+    "period_end": "2024-03-31",
+    "sec_fact_ids": [],
+    "provider": "YFINANCE",
+    "provider_fact_ids": [
+     12
+    ]
+   },
+   {
+    "evidence_id": "YF_operating_cash_flow_FY20250331",
+    "kind": "verified_sec_financial_fact",
+    "allowed_theme": "cash_generation",
+    "observed_statement": "Operating cash flow for the fiscal year 2024-04-01 to 2025-03-31 was INR 1,250,000,000,000 (reported by Yahoo Finance). Evidence: YF_operating_cash_flow_FY20250331.",
+    "metric": "operating_cash_flow",
+    "period_end": "2025-03-31",
+    "sec_fact_ids": [],
+    "provider": "YFINANCE",
+    "provider_fact_ids": [
+     18
+    ]
+   }
+  ],
+  "analysis_status": "completed",
+  "withheld_analysis": [],
+  "groq_diagnostics": {
+   "agent": "strategic",
+   "call": "strategic_analysis",
+   "model": "openai/gpt-oss-120b",
+   "status": "completed",
+   "started_at_utc": "2026-11-23T12:37:43.588114+00:00",
+   "request_token_budget": 7000,
+   "reasoning_effort": "low",
+   "profile_used": "full",
+   "attempts": [
+    {
+     "profile": "full",
+     "outcome": "success",
+     "status_code": null,
+     "estimated_input_tokens": 2058,
+     "max_completion_tokens": 2800,
+     "elapsed_seconds": 0.0
+    }
+   ],
+   "provider_requests": 1,
+   "prompt_tokens": 1200,
+   "completion_tokens": 900,
+   "total_tokens": 2100,
+   "token_usage_reported_by_provider": true,
+   "estimated_input_tokens": 2058,
+   "max_completion_tokens": 2800,
+   "response_id": "test-response",
+   "finish_reason": "stop",
+   "elapsed_seconds": 0.001,
+   "rate_limit_retries": 0,
+   "fallback_reason": null,
+   "failure_reason": null
+  },
+  "disclosures": [
+   "Strategic priorities are research judgments, not proven financial risks or investment advice.",
+   "An AI-assigned priority level is not a measured risk rating; potential risks and opportunities are AI interpretations of the cited evidence.",
+   "AI-written strategic interpretations passed automated citation, number, period and language checks; they are not independently verified analysis.",
+   "Financial claims were checked against exact SEC values, dates, metrics and evidence IDs.",
+   "General industry news was excluded from company-specific strategic evidence.",
+   "Related headlines may cover the same event; event independence is unverified.",
+   "No causal link between news developments and financial results is established.",
+   "Forecasts are statistical projections, not company-reported financial results."
+  ]
+ },
+ "limitations": [
+  "Financial figures are provider-reported statement values (YFINANCE, INR) up to the data cutoff shown in Source Freshness; they are not SEC-validated.",
+  "AI-written interpretations passed automated evidence, number, period and language checks; they are not independently verified analysis and can still be incomplete.",
+  "News articles are publisher reports with limited source coverage; article bodies are not independently verified and some records contain only a headline or short description.",
+  "Model-based forecast intervals are not statistically calibrated; interval-quality ratings come from a stored historical review, not recomputed for this run.",
+  "Research jobs are persisted in SQLite with a JSON journal; a job interrupted by a restart is marked failed, not resumed.",
+  "Groq rate-limit coordination applies within one backend process only."
+ ],
+ "_comment": "TEST FIXTURE generated by the backend from invented test data (tests/market_fixtures.py) and a fake Groq client. Not real data."
+}

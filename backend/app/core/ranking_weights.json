@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "description": "Weighted multi-criteria ranking configuration. Each metric is min-max normalised within the sector to 0-100 (inverted when lower is better). Weights are relative: they are re-normalised over the metrics that have data in a sector. Edit weights here; no code change is needed.",
+  "normalization": "min_max",
+  "score_scale": 100,
+  "min_weight_coverage": 0.6,
+  "tie_decimals": 2,
+  "metrics": {
+    "revenue_growth_pct": {"label": "Revenue growth (YoY)", "unit": "%", "direction": "higher_is_better", "source": "statements", "group": "growth"},
+    "net_margin_pct": {"label": "Net profit margin", "unit": "%", "direction": "higher_is_better", "source": "statements", "group": "profitability"},
+    "operating_margin_pct": {"label": "Operating margin", "unit": "%", "direction": "higher_is_better", "source": "statements", "group": "profitability"},
+    "roe_pct": {"label": "Return on equity (ROE)", "unit": "%", "direction": "higher_is_better", "source": "statements", "group": "returns"},
+    "roa_pct": {"label": "Return on assets (ROA)", "unit": "%", "direction": "higher_is_better", "source": "statements", "group": "returns"},
+    "debt_to_equity": {"label": "Debt-to-equity", "unit": "x", "direction": "lower_is_better", "source": "statements", "group": "risk"},
+    "pe_ratio": {"label": "P/E ratio", "unit": "x", "direction": "lower_is_better", "source": "quotes", "group": "valuation"},
+    "pb_ratio": {"label": "Price-to-book", "unit": "x", "direction": "lower_is_better", "source": "quotes", "group": "valuation"},
+    "dividend_yield_pct": {"label": "Dividend yield", "unit": "%", "direction": "higher_is_better", "source": "quotes", "group": "shareholder_return"},
+    "market_cap": {"label": "Market capitalisation", "unit": "currency", "direction": "higher_is_better", "source": "quotes", "group": "scale"},
+    "beta": {"label": "Beta (volatility)", "unit": "x", "direction": "lower_is_better", "source": "quotes", "group": "risk"}
+  },
+  "weights": {
+    "default": {
+      "revenue_growth_pct": 0.18,
+      "net_margin_pct": 0.14,
+      "operating_margin_pct": 0.10,
+      "roe_pct": 0.14,
+      "roa_pct": 0.06,
+      "debt_to_equity": 0.10,
+      "pe_ratio": 0.10,
+      "pb_ratio": 0.0,
+      "dividend_yield_pct": 0.06,
+      "market_cap": 0.06,
+      "beta": 0.06
+    },
+    "sector_overrides": {
+      "banking": {
+        "revenue_growth_pct": 0.16,
+        "net_margin_pct": 0.12,
+        "operating_margin_pct": 0.0,
+        "roe_pct": 0.20,
+        "roa_pct": 0.14,
+        "debt_to_equity": 0.0,
+        "pe_ratio": 0.10,
+        "pb_ratio": 0.10,
+        "dividend_yield_pct": 0.06,
+        "market_cap": 0.06,
+        "beta": 0.06
+      }
+    }
+  },
+  "notes": {
+    "banking": "Banks fund themselves with deposits and debt, so debt-to-equity and operating margin are not comparable with other sectors; price-to-book and ROA are weighted instead.",
+    "pe_ratio": "A P/E of zero or below (loss-making) is not meaningful and is treated as missing.",
+    "debt_to_equity": "Not meaningful when equity is zero or negative; treated as missing."
+  }
+}

@@ -354,3 +354,82 @@ export function Sparkline({ values, tone = "primary", width = 96, height = 28, l
     </svg>
   );
 }
+
+/**
+ * Radar chart for normalised 0-100 scores.
+ * axes: [{key, label}], series: [{id, label, tone, values: number[]}]
+ */
+export function RadarChart({ axes, series, size = 320, ariaLabel }) {
+  const [wrapRef, width] = useWidth(size);
+  const [active, setActive] = useState(null);
+  if (!axes?.length || axes.length < 3 || !series?.length) return null;
+  const dim = Math.max(220, Math.min(width, 420));
+  const cx = dim / 2;
+  const cy = dim / 2;
+  const radius = dim / 2 - 64;
+  const angle = (i) => (Math.PI * 2 * i) / axes.length - Math.PI / 2;
+  const point = (i, value) => {
+    const r = (Math.max(0, Math.min(100, value)) / 100) * radius;
+    return [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
+  };
+  const rings = [25, 50, 75, 100];
+
+  return (
+    <figure className="chart radar" ref={wrapRef}>
+      <div className="chart-legend">
+        {series.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`legend-item legend-button ${active && active !== s.id ? "is-dim" : ""}`}
+            onMouseEnter={() => setActive(s.id)}
+            onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive(s.id)}
+            onBlur={() => setActive(null)}
+          >
+            <span className={`legend-swatch tone-${s.tone}`} />
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <div className="chart-canvas radar-canvas">
+        <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} role="img" aria-label={ariaLabel}>
+          {rings.map((ring) => (
+            <polygon
+              key={ring}
+              className="grid"
+              fill="none"
+              points={axes.map((_, i) => point(i, ring).join(",")).join(" ")}
+            />
+          ))}
+          {axes.map((axis, i) => {
+            const [x, y] = point(i, 100);
+            const [lx, ly] = point(i, 118);
+            const anchor = Math.abs(lx - cx) < 8 ? "middle" : lx > cx ? "start" : "end";
+            return (
+              <g key={axis.key}>
+                <line className="grid" x1={cx} y1={cy} x2={x} y2={y} />
+                <text className="axis-label radar-label" x={lx} y={ly} dy="0.32em" textAnchor={anchor}>
+                  {axis.label.length > 18 ? `${axis.label.slice(0, 17)}…` : axis.label}
+                  <title>{axis.label}</title>
+                </text>
+              </g>
+            );
+          })}
+          {series.map((s) => (
+            <polygon
+              key={s.id}
+              className={`radar-area tone-${s.tone} ${active && active !== s.id ? "is-dim" : ""}`}
+              points={s.values.map((v, i) => point(i, v).join(",")).join(" ")}
+            >
+              <title>
+                {s.label}: {axes.map((a, i) => `${a.label} ${Math.round(s.values[i])}`).join(", ")}
+              </title>
+            </polygon>
+          ))}
+        </svg>
+      </div>
+      <figcaption className="chart-note">Relative scores within the sector (0 = weakest, 100 = strongest).</figcaption>
+    </figure>
+  );
+}

@@ -304,9 +304,12 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from functools import partial
 
 from app.services.research_jobs import (
+    active_job_for_ticker,
     create_job,
     transition_job,
     execute_queued_research_job,
@@ -320,14 +323,37 @@ from app.agents.research_workflow import (
 class ResearchSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    ticker: Literal[
-        "AAPL",
-        "AMZN",
-        "GOOGL",
-        "META",
-        "MSFT",
-        "NVDA",
-    ]
+    # One of the six SEC-validated companies, or any market company whose
+    # data has been loaded (validated against the registry on submission).
+    ticker: str = Field(
+        min_length=1,
+        max_length=20,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9&.\-]{0,19}$",
+    )
+
+    # Optional. None = server policy (INSIGHTIQ_AUTO_REFRESH_ON_RESEARCH).
+    refresh: Literal["if_stale", "skip"] | None = None
+
+    on_refresh_failure: Literal[
+        "continue_with_cached",
+        "fail",
+    ] = "continue_with_cached"
+
+
+def resolve_research_options(request):
+    refresh = request.refresh
+
+    if refresh is None:
+        refresh = (
+            "if_stale"
+            if get_settings().auto_refresh_on_research
+            else "skip"
+        )
+
+    return {
+        "refresh": refresh,
+        "on_refresh_failure": request.on_refresh_failure,
+    }
 
 
 # Colab development executor:
@@ -344,12 +370,16 @@ _worker_slots = threading.BoundedSemaphore(
 )
 
 
-def _execute_submitted_job(run_id):
+# Serialises the duplicate-job check with job creation.
+_submission_lock = threading.Lock()
+
+
+def _execute_submitted_job(run_id, options=None):
     try:
         execute_queued_research_job(
             project_root(),
             run_id,
-            run_research_workflow,
+            partial(run_research_workflow, options=options),
         )
 
     except Exception:
@@ -370,26 +400,67 @@ def _execute_submitted_job(run_id):
 def submit_research_job(
     request: ResearchSubmission,
 ):
-    if not _worker_slots.acquire(blocking=False):
-        raise HTTPException(
-            status_code=429,
-            detail="Research queue is full.",
-            headers={
-                "Retry-After": "10"
-            },
-        )
+    options = resolve_research_options(request)
 
-    created = None
+    from app.services.market_registry import research_profile as _research_profile
+
+    ticker = request.ticker.strip().upper()
+    if _research_profile(ticker) is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Unsupported company. Load the company's data on its market page "
+                "before starting research."
+            ),
+        )
+    request = request.model_copy(update={"ticker": ticker})
+
+    with _submission_lock:
+        try:
+            active = active_job_for_ticker(request.ticker)
+        except Exception:
+            raise HTTPException(
+                status_code=503,
+                detail="Research submission unavailable.",
+            )
+
+        if active is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Research for this company is already "
+                    + active["status"] + "."
+                ),
+            )
+
+        if not _worker_slots.acquire(blocking=False):
+            raise HTTPException(
+                status_code=429,
+                detail="Research queue is full.",
+                headers={
+                    "Retry-After": "10"
+                },
+            )
+
+        created = None
+
+        try:
+            created = create_job(
+                project_root(),
+                request.ticker,
+            )
+        except Exception:
+            _worker_slots.release()
+            raise HTTPException(
+                status_code=503,
+                detail="Research submission unavailable.",
+            )
 
     try:
-        created = create_job(
-            project_root(),
-            request.ticker,
-        )
-
         _worker_executor.submit(
             _execute_submitted_job,
             created["run_id"],
+            options,
         )
 
     except Exception:
@@ -416,6 +487,7 @@ def submit_research_job(
         "run_id": created["run_id"],
         "ticker": created["ticker"],
         "status": "queued",
+        "options": options,
         "accepted": True,
         "job_url": (
             "/api/v1/jobs/"
@@ -601,10 +673,10 @@ from datetime import datetime as _insightiq_news_datetime
 from datetime import timezone as _insightiq_news_timezone
 
 from app.services.news_ingestion import (
-    refresh_news_company as _insightiq_refresh_news,
     connect as _insightiq_news_connect,
     SUPPORTED_TICKERS as _insightiq_news_tickers,
 )
+from app.services import source_refresh as _source_refresh
 
 _insightiq_news_refresh_lock = (
     _insightiq_news_asyncio.Lock()
@@ -764,12 +836,24 @@ async def insightiq_refresh_company_news(
             # Bound the request to protect provider quota.
             # Existing ingestion handles relevance,
             # validation, deduplication, and persistence.
-            result = await _insightiq_refresh_news(
-                ticker=ticker,
-                max_articles=30,
-                max_pages=2,
-                force_refresh=True,
+            # source_refresh shares its per-company lock with
+            # research jobs, so they never refresh concurrently.
+            result = await _insightiq_news_asyncio.to_thread(
+                _source_refresh.refresh_one,
+                ticker,
+                "news",
+                force=True,
             )
+
+            if result["status"] == "busy":
+                raise HTTPException(
+                    status_code=429,
+                    detail="Another news refresh is running.",
+                    headers={"Retry-After": "10"},
+                )
+
+            if result["status"] == "failed":
+                raise RuntimeError("news refresh failed")
 
             after = _insightiq_news_status_snapshot(
                 ticker
@@ -777,9 +861,10 @@ async def insightiq_refresh_company_news(
 
             return {
                 **after,
-                "status": result.get(
-                    "status",
-                    "success",
+                "status": (
+                    "success"
+                    if result["status"] == "refreshed"
+                    else result["status"]
                 ),
                 "records_fetched": result.get(
                     "records_fetched",
@@ -818,6 +903,20 @@ from fastapi import Query as CompanyQuery
 
 from app.services import company_profile as _company_profile
 from app.services import report_history as _report_history
+
+
+def _require_research_ticker(ticker):
+    from app.services.market_registry import is_research_ticker
+
+    ticker = str(ticker or "").strip().upper()
+
+    if not is_research_ticker(ticker):
+        raise HTTPException(
+            status_code=404,
+            detail="Unsupported company ticker.",
+        )
+
+    return ticker
 
 
 def _require_supported_ticker(ticker):
@@ -889,7 +988,7 @@ def research_runs(
     limit: int = CompanyQuery(default=100, ge=1, le=500),
 ):
     if ticker is not None:
-        ticker = _require_supported_ticker(ticker)
+        ticker = _require_research_ticker(ticker)
 
     try:
         return _report_history.list_runs(
@@ -909,7 +1008,7 @@ def research_runs(
     dependencies=[Depends(require_api_key)],
 )
 def company_report(ticker: str, run_id: str):
-    ticker = _require_supported_ticker(ticker)
+    ticker = _require_research_ticker(ticker)
     run_id = validate_job_id(run_id)
 
     try:
@@ -950,7 +1049,7 @@ _summary_request_lock = threading.Lock()
     dependencies=[Depends(require_api_key)],
 )
 def create_executive_summary(ticker: str, run_id: str):
-    ticker = _require_supported_ticker(ticker)
+    ticker = _require_research_ticker(ticker)
     run_id = validate_job_id(run_id)
 
     try:
@@ -994,3 +1093,369 @@ def create_executive_summary(ticker: str, run_id: str):
 
     finally:
         _summary_request_lock.release()
+
+
+# ==========================================================
+# Source freshness and data refresh — authenticated
+# GET is read-only (no provider calls). POST calls SEC EDGAR
+# and/or NewsData.io through the existing ingestion pipelines.
+# ==========================================================
+
+from typing import List as _List
+
+from pydantic import Field as _Field
+
+
+class SourceRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sources: _List[Literal["sec", "news"]] = _Field(
+        default_factory=lambda: ["sec", "news"],
+        min_length=1,
+        max_length=2,
+    )
+
+    # False: refresh only sources older than the freshness policy.
+    # True: refresh now (subject to a 10-minute cooldown per source).
+    force: bool = False
+
+
+@app.get(
+    "/api/v1/companies/{ticker}/freshness",
+    dependencies=[Depends(require_api_key)],
+)
+def company_freshness(ticker: str):
+    ticker = _require_supported_ticker(ticker)
+
+    try:
+        return _source_refresh.freshness_snapshot(ticker)
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Source freshness is temporarily unavailable.",
+        )
+
+
+@app.post(
+    "/api/v1/companies/{ticker}/refresh",
+    dependencies=[Depends(require_api_key)],
+)
+async def refresh_company_sources(
+    ticker: str,
+    request: SourceRefreshRequest,
+):
+    ticker = _require_supported_ticker(ticker)
+
+    try:
+        outcome = await _insightiq_news_asyncio.to_thread(
+            _source_refresh.refresh_sources,
+            ticker,
+            tuple(dict.fromkeys(request.sources)),
+            request.force,
+            0.0,
+            _source_refresh.MANUAL_COOLDOWN_SECONDS if request.force else None,
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Source refresh is temporarily unavailable.",
+        )
+
+    statuses = {r["status"] for r in outcome["results"].values()}
+
+    if statuses == {"busy"}:
+        raise HTTPException(
+            status_code=429,
+            detail="A refresh of this data is already running.",
+            headers={"Retry-After": "10"},
+        )
+
+    return outcome
+
+
+
+# ==========================================================
+# Markets, company search and sector comparison — authenticated
+# GET routes are read-only (stored data only). POST routes may
+# call the market's data providers and, for comparisons, Groq.
+# ==========================================================
+
+import logging as _markets_logging
+from typing import List as _MarketsList
+
+from fastapi import Response as _MarketsResponse
+
+from app.services import market_ingestion as _market_ingestion
+from app.services import company_data as _company_data
+from app.services import market_registry as _market_registry
+from app.services import market_storage as _market_storage
+from app.services import sector_comparison as _sector_comparison
+from app.services import sector_report as _sector_report
+
+_markets_logger = _markets_logging.getLogger("insightiq.api.markets")
+
+try:
+    _market_storage.ensure_market_storage()
+except Exception:  # storage is created lazily on first write instead
+    _markets_logger.warning("Market storage could not be initialised at startup.")
+
+
+class MarketSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    q: str = _Field(min_length=1, max_length=60)
+
+
+class CompanyRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sources: _MarketsList[Literal["profile", "quote", "statements", "news"]] = _Field(
+        default_factory=lambda: ["profile", "quote", "statements", "news"],
+        min_length=1,
+        max_length=4,
+    )
+    force: bool = False
+    # Display name from a provider search result, for companies not yet stored.
+    name: str | None = _Field(default=None, max_length=120)
+
+
+class SectorComparisonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refresh: bool = True
+
+
+def _market_or_404(market):
+    try:
+        return _market_registry.require_market(market)
+    except _market_registry.UnknownMarket:
+        raise HTTPException(status_code=404, detail="Unknown market. Use US or IN.")
+
+
+def _symbol_or_422(symbol):
+    try:
+        return _market_registry.require_symbol(symbol)
+    except _market_registry.RegistryError:
+        raise HTTPException(status_code=422, detail="Invalid company symbol.")
+
+
+def _sector_or_404(market, sector):
+    try:
+        key, _ = _market_registry.sector_config(market, sector)
+        return key
+    except _market_registry.UnknownSector:
+        raise HTTPException(status_code=404, detail="Unknown sector for this market.")
+
+
+@app.get("/api/v1/markets", dependencies=[Depends(require_api_key)])
+def list_markets():
+    return {"markets": _market_registry.markets()}
+
+
+@app.get("/api/v1/markets/{market}/top-companies", dependencies=[Depends(require_api_key)])
+def market_top_companies(market: str, limit: int = CompanyQuery(default=5, ge=1, le=20)):
+    market = _market_or_404(market)
+    try:
+        return _market_registry.top_companies(market, limit)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Market data unavailable.")
+
+
+@app.get("/api/v1/markets/{market}/companies", dependencies=[Depends(require_api_key)])
+def market_company_search(market: str, search: str = CompanyQuery(default="", max_length=60)):
+    market = _market_or_404(market)
+    try:
+        return {"market": market, "query": search, "results": _market_registry.search_local(market, search)}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Company search unavailable.")
+
+
+@app.post("/api/v1/markets/{market}/companies/search", dependencies=[Depends(require_api_key)])
+async def market_provider_search(market: str, request: MarketSearchRequest):
+    """Live symbol search at the market's provider (explicit user action)."""
+    market = _market_or_404(market)
+    from app.services.market_providers.common import ProviderError
+
+    def run():
+        clients, missing = _market_ingestion.default_clients(market)
+        if market == "US":
+            client = clients.get("finnhub") or clients.get("fmp")
+            if client is None:
+                raise ProviderError(next(iter(missing.values()), "No US search provider is configured."))
+        else:
+            client = clients["yfinance"]
+        return client.search(request.q.strip())
+
+    try:
+        results = await _insightiq_news_asyncio.to_thread(run)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=exc.safe_message)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Provider search is unavailable.")
+    return {"market": market, "query": request.q, "results": results, "source": "provider"}
+
+
+@app.get("/api/v1/markets/{market}/companies/{symbol}", dependencies=[Depends(require_api_key)])
+def market_company_profile(market: str, symbol: str):
+    """Stored company data only (read-only; no provider calls)."""
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    try:
+        payload = _company_data.build_payload(market, symbol)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Company data unavailable.")
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Company not found. Search providers to add it.")
+    return payload
+
+
+class CompanyDataRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # auto: refresh only when never refreshed or older than the TTL.
+    # force: refresh now (manual button), subject to a short cooldown.
+    mode: Literal["auto", "force"] = "auto"
+    # Display name from a provider search result, for companies not yet stored.
+    name: str | None = _Field(default=None, max_length=120)
+
+
+@app.post("/api/v1/markets/{market}/companies/{symbol}/data", dependencies=[Depends(require_api_key)])
+async def market_company_data(market: str, symbol: str, request: CompanyDataRequest):
+    """Company data with the server-side freshness rules (may call providers)."""
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    try:
+        return await _insightiq_news_asyncio.to_thread(
+            _company_data.get_company_data, market, symbol, request.mode, request.name,
+        )
+    except _company_data.UnknownCompany as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except _company_data.NoCompanyData as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception:
+        _markets_logger.exception("Company data request failed for %s", symbol)
+        raise HTTPException(status_code=503, detail="Company data is temporarily unavailable.")
+
+
+@app.post("/api/v1/markets/{market}/companies/{symbol}/refresh", dependencies=[Depends(require_api_key)])
+async def market_company_refresh(market: str, symbol: str, request: CompanyRefreshRequest):
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    try:
+        outcome = await _insightiq_news_asyncio.to_thread(
+            _market_ingestion.refresh_company, market, symbol,
+            tuple(dict.fromkeys(request.sources)), request.force, None, request.name,
+        )
+    except _market_registry.RegistryError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception:
+        _markets_logger.warning("Company refresh failed for %s", symbol)
+        raise HTTPException(status_code=503, detail="Company refresh is temporarily unavailable.")
+    statuses = {r.get("status") for r in outcome["results"].values()}
+    if statuses == {"busy"}:
+        raise HTTPException(status_code=429, detail="A refresh for this company is already running.",
+                            headers={"Retry-After": "10"})
+    return outcome
+
+
+@app.post("/api/v1/markets/{market}/quotes/refresh", dependencies=[Depends(require_api_key)])
+async def market_quotes_refresh(market: str):
+    """Load the latest quotes for the market's universe (needed for the top-5 list)."""
+    market = _market_or_404(market)
+    symbols = [
+        c["symbol"]
+        for sector in _market_registry.market_config(market)["sectors"].values()
+        for c in sector["companies"]
+    ]
+    try:
+        outcome = await _insightiq_news_asyncio.to_thread(
+            _market_ingestion.refresh_many, market, symbols, ("quote",), False, None, len(symbols),
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="Market data refresh is temporarily unavailable.")
+    counts = {}
+    for results in outcome["outcomes"].values():
+        status = (results.get("quote") or {}).get("status", "error")
+        counts[status] = counts.get(status, 0) + 1
+    return {"market": market, "status_counts": counts, "top": _market_registry.top_companies(market, 5)}
+
+
+@app.get("/api/v1/markets/{market}/sectors", dependencies=[Depends(require_api_key)])
+def market_sectors(market: str, search: str = CompanyQuery(default="", max_length=60)):
+    market = _market_or_404(market)
+    try:
+        return {"market": market, "sectors": _market_registry.sectors(market, search)}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Sector list unavailable.")
+
+
+@app.get("/api/v1/markets/{market}/sectors/{sector}/comparison", dependencies=[Depends(require_api_key)])
+def latest_sector_comparison(market: str, sector: str):
+    market = _market_or_404(market)
+    key = _sector_or_404(market, sector)
+    try:
+        return _sector_comparison.latest_snapshot(market, key)
+    except _sector_comparison.SnapshotNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Sector comparison unavailable.")
+
+
+@app.get("/api/v1/markets/{market}/sectors/{sector}/comparisons", dependencies=[Depends(require_api_key)])
+def sector_comparison_history(market: str, sector: str):
+    market = _market_or_404(market)
+    key = _sector_or_404(market, sector)
+    return {"market": market, "sector_key": key,
+            "comparisons": _sector_comparison.list_snapshots(market, key)}
+
+
+@app.post("/api/v1/markets/{market}/sectors/{sector}/comparison", dependencies=[Depends(require_api_key)])
+async def generate_sector_comparison(market: str, sector: str, request: SectorComparisonRequest):
+    market = _market_or_404(market)
+    key = _sector_or_404(market, sector)
+    try:
+        return await _insightiq_news_asyncio.to_thread(
+            _sector_comparison.build_comparison, market, key, request.refresh,
+        )
+    except _sector_comparison.ComparisonBusy as exc:
+        raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "15"})
+    except _sector_comparison.ComparisonNoData as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception:
+        _markets_logger.exception("Sector comparison failed for %s/%s", market, key)
+        raise HTTPException(status_code=503, detail="The sector comparison could not be generated.")
+
+
+@app.get("/api/v1/sector-comparisons/{comparison_id}", dependencies=[Depends(require_api_key)])
+def get_sector_comparison(comparison_id: str):
+    try:
+        return _sector_comparison.read_snapshot(comparison_id)
+    except _sector_comparison.SnapshotNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get("/api/v1/sector-comparisons/{comparison_id}/report", dependencies=[Depends(require_api_key)])
+def download_sector_report(
+    comparison_id: str,
+    format: Literal["pdf", "docx"] = CompanyQuery(default="pdf"),
+):
+    try:
+        snapshot = _sector_comparison.read_snapshot(comparison_id)
+    except _sector_comparison.SnapshotNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    try:
+        content, media_type, extension = _sector_report.render(snapshot, format)
+    except Exception:
+        _markets_logger.exception("Report rendering failed for %s", comparison_id)
+        raise HTTPException(status_code=503, detail="The report could not be generated.")
+    filename = (
+        f"InsightIQ_{snapshot['market']}_{snapshot['sector_key']}_"
+        f"{snapshot['generated_at_utc'][:10]}.{extension}"
+    )
+    return _MarketsResponse(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

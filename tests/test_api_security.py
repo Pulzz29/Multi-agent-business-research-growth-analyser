@@ -55,7 +55,10 @@ def test_post_routes_require_key(client):
 
 def test_job_submission_validation(client, auth):
     # Schema validation runs before a job is created: no research starts.
-    assert client.post("/api/v1/jobs", json={"ticker": "TSLA"}, headers=auth).status_code == 422
+    # A well-formed symbol that is never registered (TSLA may now be a valid
+    # market company, which would start a real research job).
+    assert client.post("/api/v1/jobs", json={"ticker": "ZZZZ"}, headers=auth).status_code == 422
+    assert client.post("/api/v1/jobs", json={"ticker": "<bad>"}, headers=auth).status_code == 422
     assert client.post("/api/v1/jobs", json={"ticker": "MSFT", "x": 1}, headers=auth).status_code == 422
     assert client.post("/api/v1/jobs", json={}, headers=auth).status_code == 422
 

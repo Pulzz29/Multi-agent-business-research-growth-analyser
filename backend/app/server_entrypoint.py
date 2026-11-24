@@ -64,6 +64,23 @@ def main():
             "Server Groq credential is unavailable."
         )
 
+    # The per-session temp folder can change between Windows logins;
+    # realign the configured runtime database path before recovery.
+    from app.services.runtime_location import (
+        align_runtime_location,
+    )
+
+    alignment = align_runtime_location(
+        root,
+        config_path,
+        config,
+    )
+
+    for action in alignment["actions"]:
+        print("Runtime database:", action)
+
+    config = alignment["config"]
+
     database_path = Path(
         config["runtime_database_path"]
     ).resolve()

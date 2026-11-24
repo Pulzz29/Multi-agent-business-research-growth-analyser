@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export const COMPANY_TABS = ["overview", "financials", "forecasts", "news", "research"];
+export const MARKETS = ["US", "IN"];
 
 /**
  * Hash routes (survive reloads, no server config needed):
@@ -19,6 +20,18 @@ export function parseHash(hash) {
 
   if (parts[0] === "activity") return { page: "activity" };
 
+  // #/markets/US, #/markets/IN/companies/TCS.NS, #/markets/US/sectors[/technology]
+  if (parts[0] === "markets") {
+    const market = MARKETS.includes(String(parts[1] || "").toUpperCase()) ? parts[1].toUpperCase() : "US";
+    if (parts[2] === "companies" && parts[3]) {
+      return { page: "market-company", market, symbol: parts[3].toUpperCase() };
+    }
+    if (parts[2] === "sectors") {
+      return { page: "sectors", market, sector: parts[3] ? parts[3].toLowerCase() : null };
+    }
+    return { page: "market", market };
+  }
+
   if (parts[0] === "companies" && parts[1]) {
     const ticker = parts[1].toUpperCase();
     if (parts[2] === "reports" && parts[3]) {
@@ -33,6 +46,13 @@ export function parseHash(hash) {
 
 export function buildHash(route) {
   if (route.page === "activity") return "#/activity";
+  if (route.page === "market") return `#/markets/${route.market || "US"}`;
+  if (route.page === "market-company" && route.symbol) {
+    return `#/markets/${route.market || "US"}/companies/${encodeURIComponent(route.symbol)}`;
+  }
+  if (route.page === "sectors") {
+    return `#/markets/${route.market || "US"}/sectors${route.sector ? `/${encodeURIComponent(route.sector)}` : ""}`;
+  }
   if (route.page === "company" && route.ticker) {
     if (route.runId) return `#/companies/${route.ticker}/reports/${route.runId}`;
     if (route.tab && route.tab !== "overview") return `#/companies/${route.ticker}/${route.tab}`;

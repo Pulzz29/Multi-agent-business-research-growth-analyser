@@ -49,7 +49,9 @@ def test_summary_post_requires_key(client):
 
 def test_invalid_inputs(client, auth):
     assert client.get("/api/v1/companies/TSLA/overview", headers=auth).status_code == 404
-    assert client.get("/api/v1/research/runs?ticker=TSLA", headers=auth).status_code == 404
+    # Research history covers any registered market company (TSLA may be one),
+    # so use a symbol that is never registered.
+    assert client.get("/api/v1/research/runs?ticker=ZZZZ", headers=auth).status_code == 404
     assert client.get("/api/v1/companies/META/reports/not-a-uuid", headers=auth).status_code == 422
     # A report is only served under its own company.
     assert client.get(f"/api/v1/companies/AAPL/reports/{META_RUN}", headers=auth).status_code == 404

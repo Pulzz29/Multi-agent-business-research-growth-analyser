@@ -3,12 +3,19 @@ import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { Sidebar, Topbar } from "./components/Layout.jsx";
 import { ThemeToggle } from "./components/ui.jsx";
 import { api } from "./lib/api.js";
+import { companyByTicker } from "./lib/reportModel.js";
 import { useHashRoute } from "./lib/router.js";
 import { ActivityPage } from "./pages/ActivityPage.jsx";
 import { CompanyPage } from "./pages/CompanyPage.jsx";
+import { MarketCompanyPage } from "./pages/MarketCompanyPage.jsx";
+import { MarketPage } from "./pages/MarketPage.jsx";
 import { OverviewPage } from "./pages/OverviewPage.jsx";
+import { SectorComparisonPage } from "./pages/SectorComparisonPage.jsx";
 
 const PENDING = ["queued", "running"];
+
+// Indian (NSE/BSE) symbols carry an exchange suffix; everything else is US.
+const marketOf = (symbol) => (/\.(NS|BO)$/i.test(String(symbol || "")) ? "IN" : "US");
 const TOKEN_KEY = "insightiq-token";
 const THEME_KEY = "insightiq-theme";
 
@@ -193,13 +200,13 @@ export default function App() {
   }, [token, activeJob?.run_id, activeJob?.status, refresh, onAuthError]);
 
   const startResearch = useCallback(
-    async (ticker) => {
+    async (ticker, options = {}) => {
       if (!token || submitting.current || PENDING.includes(activeJob?.status)) return;
       submitting.current = true;
       setStartBusy(true);
       setJobError("");
       try {
-        const receipt = await api.submit(token, ticker);
+        const receipt = await api.submit(token, ticker, options);
         setActiveJob({
           ...receipt,
           created_at_utc: new Date().toISOString(),
@@ -254,7 +261,35 @@ export default function App() {
           {route.page === "activity" && (
             <ActivityPage token={token} runs={runs} dashboard={dashboard} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} />
           )}
-          {route.page === "company" && (
+          {route.page === "market" && <MarketPage key={route.market} token={token} market={route.market} navigate={navigate} onAuthError={onAuthError} />}
+          {(route.page === "market-company" || (route.page === "company" && !companyByTicker(route.ticker))) && (
+            // Provider-sourced companies (any company outside the six SEC dashboards).
+            <MarketCompanyPage
+              key={`${route.market || marketOf(route.ticker)}-${route.symbol || route.ticker}`}
+              token={token}
+              market={route.market || marketOf(route.ticker)}
+              symbol={route.symbol || route.ticker}
+              runId={route.runId}
+              showResearch={route.page === "company"}
+              navigate={navigate}
+              activeJob={activeJob}
+              jobError={jobError}
+              onStartResearch={startResearch}
+              startBusy={startBusy}
+              onAuthError={onAuthError}
+            />
+          )}
+          {route.page === "sectors" && (
+            <SectorComparisonPage
+              key={`${route.market}-${route.sector || "list"}`}
+              token={token}
+              market={route.market}
+              sector={route.sector}
+              navigate={navigate}
+              onAuthError={onAuthError}
+            />
+          )}
+          {route.page === "company" && companyByTicker(route.ticker) && (
             <CompanyPage
               key={route.ticker}
               token={token}
