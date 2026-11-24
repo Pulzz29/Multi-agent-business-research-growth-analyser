@@ -26,6 +26,39 @@ class ResearchJobError(RuntimeError):
     pass
 
 
+# Cancellation requests for running jobs (in this backend process). A
+# cancelled job is recorded as status "failed" with error_code "cancelled"
+# (the jobs table's status set is unchanged), and no report is saved.
+import threading as _threading
+
+_CANCEL_REQUESTS = set()
+_CANCEL_LOCK = _threading.Lock()
+
+
+def request_cancel(root, run_id):
+    """Cancel a queued job immediately or ask a running job to stop."""
+    validate_run_id(run_id)
+    job = read_job(run_id)
+    if job["status"] == "queued":
+        transition_job(root, run_id, "failed", error_type="JobCancelled", error_code="cancelled")
+        return read_job(run_id)
+    if job["status"] == "running":
+        with _CANCEL_LOCK:
+            _CANCEL_REQUESTS.add(run_id)
+        return {**job, "cancel_requested": True}
+    raise ResearchJobError("Only queued or running research jobs can be cancelled.")
+
+
+def cancel_requested(run_id):
+    with _CANCEL_LOCK:
+        return run_id in _CANCEL_REQUESTS
+
+
+def _clear_cancel(run_id):
+    with _CANCEL_LOCK:
+        _CANCEL_REQUESTS.discard(run_id)
+
+
 def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -460,7 +493,7 @@ def execute_research_job(root, ticker, graph_runner):
     Run a real LangGraph workflow and persist its
     complete result only after validation.
 
-    Never persist raw exceptions, Groq keys, or
+    Never persist raw exceptions, provider keys, or
     credential-bearing request payloads.
     """
     created = create_job(root, ticker)
@@ -633,15 +666,28 @@ def execute_queued_research_job(root, run_id, graph_runner):
     )
 
     try:
+        import time as _time
+
+        from app.core.config import get_settings
         from app.services.agent_tracing import (
             traced_research_runner,
         )
-
-        result = traced_research_runner(
-            graph_runner,
-            ticker,
-            run_id,
+        from app.services.ai_provider import (
+            JobCancelled,
+            check_job_continuation,
+            job_context,
         )
+
+        deadline = _time.monotonic() + get_settings().research_job_deadline_seconds
+        with job_context(cancel_check=lambda: cancel_requested(run_id), deadline_monotonic=deadline):
+            result = traced_research_runner(
+                graph_runner,
+                ticker,
+                run_id,
+            )
+            # Agents may fall back after a cancelled AI call; a cancelled or
+            # overdue job never publishes a report.
+            check_job_continuation()
 
         expected_statuses = {
             "financial": "completed",
@@ -752,15 +798,18 @@ def execute_queued_research_job(root, run_id, graph_runner):
             "INSIGHTIQ_AUTO_EXECUTIVE_SUMMARY", "1"
         ).strip() != "0":
             try:
+                # Same path as the report page and the button (one
+                # implementation, one per-run registry for dedupe).
                 from app.services.executive_summary import (
-                    generate_summary,
+                    start_brief,
                 )
 
-                generate_summary(
+                start_brief(
                     root,
                     run_id,
-                    ticker=ticker,
-                    record_failure=True,
+                    ticker,
+                    trigger="research_job",
+                    background=False,
                 )
             except Exception:
                 print(
@@ -784,6 +833,12 @@ def execute_queued_research_job(root, run_id, graph_runner):
                 refresh_failure = (
                     type(exc).__name__ == "SourceRefreshError"
                 )
+                error_code = (
+                    "source_refresh_failed" if refresh_failure
+                    else "cancelled" if type(exc).__name__ == "JobCancelled"
+                    else "deadline_exceeded" if type(exc).__name__ == "JobDeadlineExceeded"
+                    else "research_execution_failed"
+                )
 
                 if refresh_failure:
                     # The run stopped before any agent started.
@@ -805,11 +860,7 @@ def execute_queued_research_job(root, run_id, graph_runner):
                     "failed",
                     agent_statuses=agent_statuses,
                     error_type=type(exc).__name__,
-                    error_code=(
-                        "source_refresh_failed"
-                        if refresh_failure
-                        else "research_execution_failed"
-                    ),
+                    error_code=error_code,
                 )
         except Exception:
             # A storage failure must not disguise
@@ -817,3 +868,6 @@ def execute_queued_research_job(root, run_id, graph_runner):
             pass
 
         raise
+
+    finally:
+        _clear_cancel(run_id)

@@ -10,7 +10,8 @@ from app.services import financial_normalization as fin
 from app.services import forecasting
 
 
-CACHE_VERSION = 1
+# v2: point-in-time walk-forward selection/evaluation and empirical interval gate.
+CACHE_VERSION = 2
 # Legacy default kept for readers of older envelopes. The active TTL
 # comes from settings (INSIGHTIQ_FORECAST_CACHE_TTL_HOURS); the input
 # fingerprint is what invalidates a forecast when SEC data changes.
@@ -73,9 +74,15 @@ def project_root():
     return root
 
 
+def cache_directory_name(version=None):
+    """Each cache version has its own directory, so a method change never
+    overwrites the files written by an earlier version."""
+    return f"forecast_cache_v{CACHE_VERSION if version is None else version}"
+
+
 def cache_directory():
     root = project_root()
-    target = root / "data" / "forecast_cache_v1"
+    target = root / "data" / cache_directory_name()
     target.mkdir(parents=True, exist_ok=True)
     return target
 
@@ -102,6 +109,23 @@ def financial_review_digest():
         )
 
     return sha256_file(review_path)
+
+
+def _library_versions():
+    import numpy
+    import statsmodels
+
+    return {"numpy": numpy.__version__, "statsmodels": statsmodels.__version__}
+
+
+def _reconciliation_status(ticker):
+    """The company's SEC reconciliation state (in-app validation; core six included)."""
+    from app.services.sec_coverage import validation_status
+
+    status = validation_status(ticker)
+    if status.get("status") != "validated":
+        raise ForecastCacheError("Company SEC financials are not validated.")
+    return {"status": status.get("status"), "reason": status.get("reason")}
 
 
 def source_fingerprint(ticker, metric):
@@ -145,15 +169,29 @@ def source_fingerprint(ticker, metric):
         "horizon_quarters": forecasting.HORIZON,
         "minimum_training_quarters": forecasting.MIN_TRAIN,
         "maximum_history_quarters": forecasting.MAX_HISTORY,
+        "minimum_history_quarters": forecasting.MIN_HISTORY,
+        "selection_offsets": forecasting.SELECTION_OFFSETS,
+        "evaluation_offset": forecasting.EVALUATION_OFFSET,
+        "interval_gate": [forecasting.INTERVAL_MIN_POINTS, forecasting.INTERVAL_MIN_COVERAGE],
         "sarimax_candidates": forecasting.CANDIDATES,
+        "sarimax_maxiter": 70,
+        "interval_alpha": 0.05,
+        "library_versions": _library_versions(),
         "historical_inputs": historical_inputs,
+        # Every stored fact (incl. original, later-restated filings) feeds the
+        # point-in-time backtests, so any new or changed filing invalidates.
+        "all_sec_fact_inputs_sha256": sha256_text(canonical_json([
+            [r["id"], r["concept"], r["period_start"], r["period_end"], r["value_text"],
+             r["filed_at"], r["accession"], r["form"]]
+            for r in fin.load_financial_rows(ticker)
+        ])),
         "financial_normalization_code_sha256": sha256_file(
             module_root / "financial_normalization.py"
         ),
         "forecast_code_sha256": sha256_file(
             module_root / "forecasting.py"
         ),
-        "financial_review_sha256": financial_review_digest(),
+        "sec_reconciliation": _reconciliation_status(ticker),
     }
 
     return sha256_text(canonical_json(identity))
@@ -163,13 +201,13 @@ def cache_path(ticker, metric):
     if metric not in SUPPORTED_METRICS:
         raise ValueError("Unsupported financial metric.")
 
-    # Explicit symbol allowlist prevents unsafe filenames.
-    supported = {
-        "AAPL", "AMZN", "GOOGL",
-        "META", "MSFT", "NVDA",
-    }
+    # Only SEC-validated companies (symbols already validated against
+    # the registry's symbol pattern) may have forecast cache files.
+    import re
 
-    if ticker not in supported:
+    from app.services.sec_coverage import SEC_VALIDATED
+
+    if ticker not in SEC_VALIDATED or not re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,19}", ticker):
         raise ValueError("Unsupported company ticker.")
 
     return (
@@ -201,6 +239,9 @@ def validate_cached_result(result, ticker, metric):
     if not isinstance(
         result.get("backtesting"), dict
     ):
+        return False
+
+    if not isinstance(result.get("validation"), dict):
         return False
 
     if len(

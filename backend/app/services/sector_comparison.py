@@ -1,6 +1,6 @@
 """
 Sector comparison: metrics from stored provider data, deterministic ranking
-(ranking_service), a Groq-written narrative that is validated before use,
+(ranking_service), a AI-written narrative that is validated before use,
 and an immutable saved snapshot under reports/sector_comparisons/.
 
 The LLM never computes or changes a number or a rank. If its text for a
@@ -31,7 +31,7 @@ logger = logging.getLogger("insightiq.sector_comparison")
 SNAPSHOT_VERSION = 1
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 AI_LABEL = (
-    "AI-written explanation (Groq). Every number was checked against the comparison "
+    "AI-written explanation (Azure OpenAI). Every number was checked against the comparison "
     "data and causal or advisory wording was rejected; the ranking itself is computed "
     "deterministically and is not investment advice."
 )
@@ -54,6 +54,66 @@ class ComparisonBusy(ComparisonError):
 
 class SnapshotNotFound(ComparisonError):
     pass
+
+
+class SelectionError(ComparisonError):
+    """Invalid custom selection (unknown/out-of-sector symbol or wrong count)."""
+
+
+COMPARISON_TYPES = ("sector", "custom")
+
+
+def custom_limits():
+    settings = get_settings()
+    return {
+        "min_companies": settings.custom_comparison_min_companies,
+        "max_companies": settings.custom_comparison_max_companies,
+    }
+
+
+def validate_selection(market, sector_key, companies):
+    """
+    Validate a custom selection against the sector's member list.
+
+    Symbols are trimmed and upper-cased, then de-duplicated keeping the first
+    occurrence. Every symbol must be a member of the sector. The count after
+    de-duplication must be within the configured limits.
+    Returns (sector_key, sector, selected_members, duplicates_removed).
+    """
+    key, sector, members = registry.sector_members(market, sector_key)
+    by_symbol = {m["symbol"]: m for m in members}
+    limits = custom_limits()
+
+    cleaned, duplicates, invalid = [], [], []
+    for raw in companies or []:
+        symbol = str(raw or "").strip().upper()
+        if not registry.SYMBOL_RE.match(symbol):
+            invalid.append(str(raw)[:24])
+            continue
+        if symbol in cleaned:
+            if symbol not in duplicates:
+                duplicates.append(symbol)
+            continue
+        cleaned.append(symbol)
+    if invalid:
+        raise SelectionError(f"Invalid company symbol(s): {', '.join(invalid)}.")
+
+    outside = [s for s in cleaned if s not in by_symbol]
+    if outside:
+        raise SelectionError(
+            f"Not in the {sector['label']} sector: {', '.join(outside)}. "
+            "A custom comparison can only include companies from the selected sector."
+        )
+    if len(cleaned) < limits["min_companies"]:
+        raise SelectionError(
+            f"Select at least {limits['min_companies']} different companies "
+            f"({len(cleaned)} selected)."
+        )
+    if len(cleaned) > limits["max_companies"]:
+        raise SelectionError(
+            f"Select at most {limits['max_companies']} companies ({len(cleaned)} selected)."
+        )
+    return key, sector, [by_symbol[s] for s in cleaned], duplicates
 
 
 # ------------------------------------------------------------------ paths
@@ -88,9 +148,10 @@ def _date(text):
         return None
 
 
-def company_metrics(symbol):
-    """Compute comparison metrics from stored statements and the latest quote."""
-    periods = storage.statement_values(symbol, "annual")
+def company_metrics(symbol, as_of=None):
+    """Compute comparison metrics from stored statements and the latest quote
+    (as stored by ``as_of`` when given)."""
+    periods = storage.statement_values(symbol, "annual", as_of=as_of)
 
     def value(period, metric):
         row = (periods.get(period) or {}).get(metric)
@@ -120,8 +181,11 @@ def company_metrics(symbol):
         avg_equity = (equity + prior_equity) / 2 if equity is not None and prior_equity is not None else equity
         avg_assets = (assets + prior_assets) / 2 if assets is not None and prior_assets is not None else assets
 
+        # Same meaningfulness rule as the growth analysis: no percentage from a
+        # zero or negative base.
         metrics["revenue_growth_pct"] = (
-            _pct(revenue - prior_revenue, prior_revenue) if prior_revenue is not None else None
+            _pct(revenue - prior_revenue, prior_revenue)
+            if prior_revenue is not None and prior_revenue > 0 else None
         )
         metrics["net_margin_pct"] = _pct(net_income, revenue)
         metrics["operating_margin_pct"] = _pct(operating, revenue) if operating is not None else None
@@ -145,9 +209,13 @@ def company_metrics(symbol):
                 }.items()
             },
             "roe_basis": "average equity" if prior_equity is not None else "period-end equity",
+            # A newer fiscal year that is stored but incomplete (no revenue or
+            # net income) is disclosed instead of silently skipped.
+            "newer_incomplete_period_end": max(
+                (p for p in periods if p > latest and p not in usable), default=None),
         }
 
-    quote = storage.latest_quote(symbol)
+    quote = storage.latest_quote(symbol, as_of=as_of)
     if quote:
         for field in ("pe_ratio", "pb_ratio", "dividend_yield_pct", "market_cap", "beta"):
             number = _dec(quote.get(field))
@@ -164,7 +232,7 @@ def company_metrics(symbol):
     return rounded, inputs
 
 
-# --------------------------------------------------------- Groq narrative
+# ----------------------------------------------------------- AI narrative
 
 class CompanyNarrative(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -194,7 +262,7 @@ SYSTEM_PROMPT = (
 )
 
 
-def _payload(ranking, sector_label, market, currency, compact=False):
+def _payload(ranking, sector_label, market, currency, compact=False, custom=False):
     companies = []
     for c in ranking["companies"]:
         entry = {
@@ -214,8 +282,14 @@ def _payload(ranking, sector_label, market, currency, compact=False):
             "imputed": c["imputed_metrics"],
         }
         companies.append(entry)
+    scope = (
+        {"comparison_scope": f"custom selection of {len(companies)} companies from the sector; "
+                             "relative scores compare these companies only"}
+        if custom else {}
+    )
     return {
         "sector": sector_label,
+        **scope,
         "market": market,
         "currency": currency,
         "metric_format": "metric: [raw value, relative score 0-100]" if not compact else "metric: raw value",
@@ -275,20 +349,23 @@ def _validate_company_text(item, company, allowance):
             check_prose_field(text, field, allowance, set(), min_words=2, max_words=35, max_sentences=2)
 
 
-def deterministic_overview(ranking, sector_label, market_label):
+def deterministic_overview(ranking, sector_label, market_label, custom=False):
     ranked = [c for c in ranking["companies"] if c["ranked"]]
+    group = "selected " if custom else ""
     labels = ranking_service.load_ranking_config()["metrics"]
     used = ", ".join(labels[m]["label"] for m in ranking["method"]["metrics_used"])
     if not ranked:
         return (
-            f"{len(ranking['companies'])} {market_label} {sector_label} companies were reviewed, "
+            f"{len(ranking['companies'])} {group}{market_label} {sector_label} companies were reviewed, "
             "but there is not enough comparable data to rank them."
         )
     leaders = "; ".join(f"{c['rank']}. {c['name']} ({c['score']:.2f})" for c in ranked[:3])
     return (
-        f"{len(ranked)} of {len(ranking['companies'])} {market_label} {sector_label} companies "
+        f"{len(ranked)} of {len(ranking['companies'])} {group}{market_label} {sector_label} companies "
         f"were ranked with a weighted score from 0 to 100 using: {used}. "
-        f"Top positions: {leaders}. Scores are relative to this sector only."
+        f"Top positions: {leaders}. "
+        + ("Scores are relative to the selected companies only." if custom
+           else "Scores are relative to this sector only.")
     )
 
 
@@ -306,9 +383,10 @@ def _deterministic_points(company, kind):
 
 
 def write_narrative(ranking, sector_label, market, market_label, currency, client=None):
-    """One validated Groq call; per-company deterministic fallback."""
-    from app.services.groq_structured import (
-        GroqCallFailed, RequestProfile, configured_model, groq_runtime_settings,
+    """One validated Azure OpenAI call; per-company deterministic fallback."""
+    custom = ranking["method"].get("universe") == "selected"
+    from app.services.ai_provider import (
+        PROVIDER, AICallFailed, RequestProfile, ai_runtime_settings, configured_deployment,
         structured_completion,
     )
     from app.services.narrative_validation import NarrativeRejected, check_prose_field
@@ -318,9 +396,11 @@ def write_narrative(ranking, sector_label, market, market_label, currency, clien
     allowances = {c["symbol"]: _allowance_for(c, total_ranked, total) for c in ranking["companies"]}
 
     narrative = {
-        "model": configured_model(),
+        "provider": PROVIDER,
+        "deployment": configured_deployment(),
+        "model": None,
         "label": AI_LABEL,
-        "overview": deterministic_overview(ranking, sector_label, market_label),
+        "overview": deterministic_overview(ranking, sector_label, market_label, custom),
         "overview_source": "deterministic",
         "companies": {
             c["symbol"]: {
@@ -340,20 +420,27 @@ def write_narrative(ranking, sector_label, market, market_label, currency, clien
         narrative["status_reason"] = "No company could be ranked, so no AI explanation was requested."
         return narrative
 
-    full = groq_runtime_settings()["strategic_max_completion"]
+    full = ai_runtime_settings()["max_output_sector"]
     profiles = [
         RequestProfile("full", full, {"compact": False}),
-        RequestProfile("reduced", max(1200, int(full * 0.7)), {"compact": True}),
+        RequestProfile("reduced", full, {"compact": True}),
     ]
 
     def build(profile):
-        payload = _payload(ranking, sector_label, market_label, currency, profile.options["compact"])
+        payload = _payload(ranking, sector_label, market_label, currency, profile.options["compact"], custom)
         task = (
             "Write: overview (60 to 160 words: how the sector compares, who leads and why in "
             "terms of the metric scores, and important data gaps); then for every company in "
             "the input, why_it_ranks (2 to 4 sentences), strengths (up to 3 short points) and "
             "weaknesses (up to 3 short points). Use each company's exact symbol."
         )
+        if custom:
+            task += (
+                " These companies were selected by the user from the sector; they are not the "
+                "whole sector. The relative scores compare only these companies, so say in the "
+                "overview that the ranking is among the selected companies and do not describe "
+                "a company's position in the full sector."
+            )
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps({"task": task, "comparison": payload},
@@ -366,12 +453,13 @@ def write_narrative(ranking, sector_label, market, market_label, currency, clien
             agent="sector", call_name="sector_comparison", schema_name="insightiq_sector_narrative",
             schema_model=SectorNarrative, build_messages=build, profiles=profiles, client=client,
         )
-    except GroqCallFailed as failure:
+    except AICallFailed as failure:
         narrative["diagnostics"] = failure.diagnostics
         narrative["status_reason"] = f"AI explanation unavailable ({failure.reason}); deterministic text shown."
         return narrative
 
     narrative["diagnostics"] = diagnostics
+    narrative["model"] = diagnostics.get("model")
     known = {c["symbol"]: c for c in ranking["companies"]}
 
     try:
@@ -440,7 +528,12 @@ def read_snapshot(comparison_id, root=None):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def list_snapshots(market=None, sector_key=None, root=None, limit=50):
+def snapshot_type(doc):
+    """Older snapshots predate custom comparisons and are whole-sector ones."""
+    return doc.get("comparison_type") or "sector"
+
+
+def list_snapshots(market=None, sector_key=None, root=None, limit=50, comparison_type=None):
     directory = comparisons_dir(root)
     if not directory.is_dir():
         return []
@@ -454,6 +547,8 @@ def list_snapshots(market=None, sector_key=None, root=None, limit=50):
             continue
         if sector_key and doc.get("sector_key") != sector_key:
             continue
+        if comparison_type and snapshot_type(doc) != comparison_type:
+            continue
         items.append({
             "comparison_id": doc.get("comparison_id"),
             "market": doc.get("market"),
@@ -462,13 +557,16 @@ def list_snapshots(market=None, sector_key=None, root=None, limit=50):
             "generated_at_utc": doc.get("generated_at_utc"),
             "status": (doc.get("ranking") or {}).get("status"),
             "company_count": len(doc.get("companies") or []),
+            "comparison_type": snapshot_type(doc),
+            "selected_companies": [c.get("symbol") for c in doc.get("selected_companies") or []],
         })
     items.sort(key=lambda i: i.get("generated_at_utc") or "", reverse=True)
     return items[:limit]
 
 
-def latest_snapshot(market, sector_key, root=None):
-    items = list_snapshots(market, sector_key, root, limit=1)
+def latest_snapshot(market, sector_key, root=None, comparison_type="sector"):
+    """Latest snapshot of one type; whole-sector by default (custom ones never replace it)."""
+    items = list_snapshots(market, sector_key, root, limit=1, comparison_type=comparison_type)
     if not items:
         raise SnapshotNotFound("No comparison has been generated for this sector yet.")
     return read_snapshot(items[0]["comparison_id"], root)
@@ -476,27 +574,52 @@ def latest_snapshot(market, sector_key, root=None):
 
 # ---------------------------------------------------------------- service
 
-def build_comparison(market, sector_key, refresh=True, clients=None, groq_client=None, root=None):
+def build_comparison(market, sector_key, refresh=True, clients=None, ai_client=None, root=None,
+                     companies=None):
+    """
+    Whole-sector comparison, or (with ``companies``) a custom comparison of a
+    validated subset of the sector. A custom comparison refreshes and ranks
+    only the selected companies, normalising over them.
+    """
     market = registry.require_market(market)
-    key, sector, members = registry.sector_members(market, sector_key)
+    custom = companies is not None
+    duplicates = []
+    if custom:
+        key, sector, members, duplicates = validate_selection(market, sector_key, companies)
+    else:
+        key, sector, members = registry.sector_members(market, sector_key)
     market_cfg = registry.market_config(market)
     storage.ensure_market_storage()
+    symbols = [m["symbol"] for m in members]
 
-    lock_key = (market, key)
+    lock_key = (market, key, tuple(sorted(symbols))) if custom else (market, key)
     with _LOCKS_GUARD:
         lock = _LOCKS.setdefault(lock_key, threading.Lock())
     if not lock.acquire(blocking=False):
-        raise ComparisonBusy("A comparison for this sector is already being generated.")
+        raise ComparisonBusy(
+            "This comparison is already being generated." if custom
+            else "A comparison for this sector is already being generated."
+        )
+    logger.info(
+        "sector_comparison market=%s sector=%s type=%s companies=%s refresh=%s",
+        market, key, "custom" if custom else "sector", ",".join(symbols), bool(refresh),
+    )
     try:
         refresh_outcome = None
         if refresh and members:
             from app.services.market_ingestion import refresh_many
 
+            # Only the companies being compared are refreshed (for a custom
+            # comparison: the selection, never the rest of the sector), with the
+            # same sources and per-source freshness policies.
             refresh_outcome = refresh_many(
-                market, [m["symbol"] for m in members],
+                market, symbols,
                 sources=("profile", "quote", "statements"), clients=clients,
+                max_companies=len(symbols) if custom else None,
             )
 
+        # From here `companies` holds the per-company rows; the requested
+        # selection was already validated into `members`.
         companies, ranking_input = [], []
         for member in members:
             stored = storage.get_company(member["symbol"])
@@ -518,14 +641,16 @@ def build_comparison(market, sector_key, refresh=True, clients=None, groq_client
 
         if not any(c["data_status"] == "available" for c in companies):
             raise ComparisonNoData(
-                "No stored financial data is available for this sector yet. "
-                "Provider data could not be loaded (check the API keys and provider status)."
+                ("No stored financial data is available for the selected companies yet. " if custom
+                 else "No stored financial data is available for this sector yet. ")
+                + "Provider data could not be loaded (check the API keys and provider status)."
             )
 
-        ranking = ranking_service.rank_companies(ranking_input, key)
+        universe = "selected" if custom else "sector"
+        ranking = ranking_service.rank_companies(ranking_input, key, universe=universe)
         narrative = write_narrative(
             ranking, sector["label"], market, market_cfg["label"], market_cfg["currency"],
-            client=groq_client,
+            client=ai_client,
         )
 
         generated = datetime.now(timezone.utc).isoformat()
@@ -544,23 +669,32 @@ def build_comparison(market, sector_key, refresh=True, clients=None, groq_client
             "ranking": ranking,
             "narrative": narrative,
             "metric_definitions": config["metrics"],
-            "methodology": methodology_text(ranking, config, key),
+            "methodology": methodology_text(ranking, config, key, custom),
             "refresh": refresh_outcome,
+            "comparison_type": "custom" if custom else "sector",
             "disclaimers": [
-                "Rankings are relative to the companies in this sector only and are not investment advice.",
+                ("Rankings are relative to the selected companies only and are not investment advice."
+                 if custom else
+                 "Rankings are relative to the companies in this sector only and are not investment advice."),
                 "Financial ratios are computed by InsightIQ from the latest annual statements returned by "
                 "the data provider; market metrics come from the provider's latest quote.",
-                "Missing values were replaced by the sector median and are flagged as imputed.",
+                ("Missing values were replaced by the median of the selected companies and are flagged as imputed."
+                 if custom else
+                 "Missing values were replaced by the sector median and are flagged as imputed."),
                 "Provider data can be delayed, restated or incomplete; see the as-of dates per company.",
             ],
         }
+        if custom:
+            snapshot["selected_companies"] = [{"symbol": c["symbol"], "name": c["name"]} for c in companies]
+            snapshot["duplicates_removed"] = duplicates
+            snapshot["relative_note"] = ranking_service.RELATIVE_NOTE
         _write_snapshot(snapshot, root)
         return snapshot
     finally:
         lock.release()
 
 
-def methodology_text(ranking, config, sector_key):
+def methodology_text(ranking, config, sector_key, custom=False):
     method = ranking["method"]
     labels = config["metrics"]
     weights = "; ".join(
@@ -569,17 +703,24 @@ def methodology_text(ranking, config, sector_key):
         for m, w in method["weights_applied"].items()
     )
     dropped = "; ".join(f"{labels[d['metric']]['label']}: {d['reason']}" for d in method["metrics_dropped"])
+    within = "the selected companies" if custom else "the sector"
+    median_basis = "the median of the selected companies" if custom else "the sector median"
     lines = [
-        "Each metric is min-max normalised within the sector to a 0-100 score (inverted when lower "
+        f"Each metric is min-max normalised within {within} to a 0-100 score (inverted when lower "
         "is better; 50 when all companies are equal).",
         f"Applied weights: {weights}.",
-        "Composite score = sum of weight x metric score. Missing values use the sector median (flagged).",
+        f"Composite score = sum of weight x metric score. Missing values use {median_basis} (flagged).",
         f"A company is ranked only when real data covers at least "
         f"{config.get('min_weight_coverage', 0.6) * 100:.0f}% of the applied weight.",
         "Ties: scores are rounded to 2 decimals and equal scores share a rank.",
     ]
     if dropped:
         lines.append(f"Metrics not used: {dropped}.")
+    if custom:
+        lines.append(
+            f"Custom comparison of {len(ranking['companies'])} selected companies using this "
+            f"sector's weights. {ranking_service.RELATIVE_NOTE}"
+        )
     note = (config.get("notes") or {}).get(sector_key)
     if note:
         lines.append(note)

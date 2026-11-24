@@ -1,7 +1,7 @@
 """
 End-to-end research workflow (report schema v2) on an isolated runtime.
 
-Groq is replaced by a deterministic test-only fake; SEC and NewsData.io are
+Azure OpenAI is replaced by a deterministic test-only fake; SEC and NewsData.io are
 unreachable (network guard) or replaced by test-only runners. No real
 provider request is made and the real database / reports are untouched.
 """
@@ -13,7 +13,7 @@ from research_v2_support import (  # noqa: F401  (fixture import)
     completion,
     db_rows,
     default_handler,
-    install_fake_groq,
+    install_fake_ai,
     isolated_runtime,
     schema_name,
 )
@@ -29,7 +29,7 @@ def run(ticker, options=None):
 
 @pytest.mark.parametrize("ticker", TICKERS)
 def test_v2_report_for_every_company(isolated_runtime, monkeypatch, ticker):
-    client = install_fake_groq(monkeypatch)
+    client = install_fake_ai(monkeypatch)
     report = run(ticker)
 
     assert report["status"] == "completed"
@@ -43,7 +43,7 @@ def test_v2_report_for_every_company(isolated_runtime, monkeypatch, ticker):
     assert {"research_priorities", "source_evidence"} <= set(report["strategic"])
 
     fin = report["financial"]["analysis"]
-    assert fin["claims_selection"] == "groq"
+    assert fin["claims_selection"] == "ai"
     assert fin["findings"], fin["withheld"]
     for finding in fin["findings"]:
         assert finding["validation"]["status"] == "automated_checks_passed"
@@ -71,9 +71,26 @@ def test_v2_report_for_every_company(isolated_runtime, monkeypatch, ticker):
     assert freshness["sec"]["data_cutoff_period_end"]
     assert freshness["news"]["latest_cited_publication_date"]
 
-    # Every request respected the configured budget.
+    # Every request used the Responses API with the configured deployment,
+    # background mode, strict structured output and the configured caps.
+    from app.services.ai_provider import ai_runtime_settings
+
+    settings = ai_runtime_settings()
+    caps = {settings[k] for k in settings if k.startswith("max_output_")}
     for request in client.requests:
-        assert request["max_completion_tokens"] <= 2800
+        assert request["model"] == "gpt-5.4-pro"
+        assert request["background"] is True and request["store"] is True
+        assert request["text"]["format"]["strict"] is True
+        assert request["reasoning"] == {"effort": settings["reasoning_effort"]}
+        assert request["max_output_tokens"] in caps
+        assert "temperature" not in request and "messages" not in request
+
+    generation = report["generation"]
+    assert generation["provider"] == "azure_openai"
+    assert generation["deployment"] == "gpt-5.4-pro"
+    assert generation["models_served"] == ["gpt-5.4-pro-2026-03-05"]
+    assert calls["financial_analysis"]["response_id"].startswith("resp_test_")
+    assert calls["financial_analysis"]["reasoning_tokens"] == 300
 
     # JSON-serialisable exactly as research_jobs persists it.
     json.dumps(report, allow_nan=False)
@@ -82,7 +99,7 @@ def test_v2_report_for_every_company(isolated_runtime, monkeypatch, ticker):
 
 
 def test_refresh_failure_is_labelled_and_research_continues(isolated_runtime, monkeypatch):
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
 
     # Network is blocked by the test guard, so any real refresh must fail.
     report = run("MSFT", {"refresh": "if_stale", "on_refresh_failure": "continue_with_cached"})
@@ -105,7 +122,7 @@ def test_refresh_failure_is_labelled_and_research_continues(isolated_runtime, mo
 def test_refresh_failure_with_fail_policy_stops(isolated_runtime, monkeypatch):
     from app.services.source_refresh import SourceRefreshError
 
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     with pytest.raises(SourceRefreshError):
         run("MSFT", {"refresh": "if_stale", "on_refresh_failure": "fail"})
 
@@ -116,7 +133,7 @@ def test_financial_provider_failure_uses_deterministic_fallback(isolated_runtime
             return completion("{not json", finish_reason="stop")
         return default_handler(kwargs, n)
 
-    install_fake_groq(monkeypatch, handler)
+    install_fake_ai(monkeypatch, handler)
     report = run("AAPL")
     fin = report["financial"]["analysis"]
     assert fin["claims_selection"] == "deterministic_fallback"
@@ -130,16 +147,16 @@ def test_financial_provider_failure_uses_deterministic_fallback(isolated_runtime
 
 
 def test_news_writing_failure_keeps_selection(isolated_runtime, monkeypatch):
-    from groq import APITimeoutError
+    from openai import APITimeoutError
     import httpx
 
     def handler(kwargs, n):
         if schema_name(kwargs) == "insightiq_news_analysis":
-            raise APITimeoutError(request=httpx.Request("POST", "https://api.groq.com"))
+            raise APITimeoutError(request=httpx.Request("POST", "https://insightiq-test.openai.azure.com/openai/v1/responses"))
         return default_handler(kwargs, n)
 
-    install_fake_groq(monkeypatch, handler)
-    monkeypatch.setattr("app.services.groq_structured.time.sleep", lambda s: None)
+    install_fake_ai(monkeypatch, handler)
+    monkeypatch.setattr("app.services.ai_provider.time.sleep", lambda s: None)
     report = run("NVDA")
     assert report["news"]["analysis"]["status"] == "unavailable"
     assert "timeout" in report["news"]["analysis"]["status_reason"]
@@ -151,7 +168,7 @@ def test_news_writing_failure_keeps_selection(isolated_runtime, monkeypatch):
 def test_withheld_strategic_analysis_falls_back_to_template(isolated_runtime, monkeypatch):
     def handler(kwargs, n):
         if schema_name(kwargs) == "insightiq_strategic_analysis":
-            body = json.loads(default_handler(kwargs, n).choices[0].message.content)
+            body = json.loads(default_handler(kwargs, n).output_text)
             body["priorities"][0]["interpretation"] = (
                 "Strong revenue was driven by the new product launch, which caused "
                 "the company to outperform and will increase margins next year. "
@@ -163,7 +180,7 @@ def test_withheld_strategic_analysis_falls_back_to_template(isolated_runtime, mo
             return completion(json.dumps(body))
         return default_handler(kwargs, n)
 
-    install_fake_groq(monkeypatch, handler)
+    install_fake_ai(monkeypatch, handler)
     report = run("META")
     strategic = report["strategic"]
     assert strategic["analysis_status"] == "partial"
@@ -175,27 +192,38 @@ def test_withheld_strategic_analysis_falls_back_to_template(isolated_runtime, mo
     assert first["monitoring_question_source"] == "template"
 
 
-def test_strategic_provider_failure_fails_job_cleanly(isolated_runtime, monkeypatch):
-    """A failed strategic call fails the job; it is never left 'running'."""
-    from app.services import research_jobs
-    from app.agents.research_workflow import run_research_workflow
-
+def test_strategic_provider_failure_marks_section_unavailable(isolated_runtime, monkeypatch):
+    """No priorities are invented when the strategic AI call fails."""
     def handler(kwargs, n):
         if schema_name(kwargs) == "insightiq_strategic_analysis":
             return completion("", finish_reason="length")
         return default_handler(kwargs, n)
 
-    install_fake_groq(monkeypatch, handler)
+    install_fake_ai(monkeypatch, handler)
+    report = run("GOOGL")
+    strategic = report["strategic"]
+    assert strategic["research_priorities"] == []
+    assert strategic["analysis_status"] == "unavailable"
+    assert "output_token_limit" in strategic["status_reason"]
+    calls = {c["call"]: c for c in report["generation"]["calls"]}
+    assert calls["strategic_analysis"]["status"] == "failed"
+    assert calls["strategic_analysis"]["failure_reason"] == "output_token_limit"
+
+
+def test_failing_workflow_fails_job_cleanly(isolated_runtime, monkeypatch):
+    """A job whose workflow raises is marked failed; it is never left 'running'."""
+    from app.services import research_jobs
+
     monkeypatch.setenv("INSIGHTIQ_AUTO_EXECUTIVE_SUMMARY", "0")
     root = isolated_runtime.root
     research_jobs.initialize_job_storage()
     job = research_jobs.create_job(root, "GOOGL")
 
+    def failing_runner(ticker, run_id):
+        raise RuntimeError("simulated workflow failure")
+
     with pytest.raises(Exception):
-        research_jobs.execute_queued_research_job(
-            root, job["run_id"],
-            lambda t, run_id: run_research_workflow(t, run_id=run_id, options={"refresh": "skip"}),
-        )
+        research_jobs.execute_queued_research_job(root, job["run_id"], failing_runner)
 
     stored = research_jobs.read_job(job["run_id"])
     assert stored["status"] == "failed"
@@ -207,7 +235,7 @@ def test_completed_job_persists_new_immutable_report(isolated_runtime, monkeypat
     from app.services import research_jobs, report_history
     from app.agents.research_workflow import run_research_workflow
 
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     monkeypatch.setenv("INSIGHTIQ_AUTO_EXECUTIVE_SUMMARY", "0")
     monkeypatch.setattr(
         "app.services.research_backup.backup_completed_research_job",
@@ -237,8 +265,7 @@ def test_completed_job_persists_new_immutable_report(isolated_runtime, monkeypat
     def forbidden(*a, **k):
         raise AssertionError("provider call during read")
 
-    monkeypatch.setattr("app.services.groq_structured.default_client", forbidden)
-    monkeypatch.setattr("app.agents.news_agent.Groq", forbidden)
+    monkeypatch.setattr("app.services.ai_provider.default_client", forbidden)
     monkeypatch.setattr("app.services.sec_ingestion.refresh_sec_company", forbidden)
     monkeypatch.setattr("app.services.news_ingestion.refresh_news_company", forbidden)
     document = report_history.read_report("AMZN", run_ids[0])
@@ -271,10 +298,37 @@ def test_existing_v1_reports_remain_readable(report_file):
 def test_v2_report_feeds_executive_summary_context(isolated_runtime, monkeypatch):
     from app.services import executive_summary as es
 
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     report = run("MSFT")
-    context, messages, budget = es.fit_to_budget(report)
-    assert budget["validated_ai_findings_included"] is True
+    from app.services import ai_provider
+
+    context = es.build_context(report, include_descriptions=True, include_ai_findings=True)
     finding = context["validated_financial_findings"][0]
     assert set(finding["evidence_ids"]) <= es.allowed_evidence_ids(context)
-    assert budget["estimated_input_tokens"] + es.MAX_COMPLETION_TOKENS <= es.REQUEST_TOKEN_BUDGET
+    # The full context level fits the configured Azure input budget.
+    instructions, items = ai_provider.split_messages(es.build_messages(context))
+    estimate = ai_provider.estimate_request_tokens(
+        instructions, items, ai_provider.text_format("insightiq_executive_summary", es.ExecutiveSummary))
+    assert estimate <= ai_provider.ai_runtime_settings()["input_token_budget"]
+
+
+def test_ai_selecting_no_material_news_completes_on_financial_evidence(isolated_runtime, monkeypatch):
+    # The AI may judge that none of the verified candidates is material. The run
+    # must then use financial evidence only, say why, and keep the call record
+    # (response ID and billed tokens) - never substitute a deterministic pick.
+    def handler(kwargs, n):
+        if schema_name(kwargs) == "insightiq_news_selections":
+            return completion(json.dumps({"selected_articles": []}), response_id="resp_none")
+        return default_handler(kwargs, n)
+
+    install_fake_ai(monkeypatch, handler)
+    report = run("NVDA")
+    news = report["news"]
+    assert news["approved_primary_articles"] == [] and news["selected_articles"] == []
+    assert news["analysis"]["status"] == "unavailable"
+    assert "selected as material" in news["analysis"]["status_reason"]
+    assert any("found none of the" in d for d in news["disclosures"])
+    call = [c for c in report["generation"]["calls"] if c["call"] == "news_selection"][0]
+    assert call["status"] == "completed" and call["response_id"] == "resp_none"
+    assert call["input_tokens"] is not None
+    assert report["agent_statuses"]["news"] == "completed"

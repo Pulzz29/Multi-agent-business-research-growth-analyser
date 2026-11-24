@@ -53,11 +53,7 @@ function TopCompanies({ token, market, navigate, onAuthError }) {
   }, [token, market, reloadKey, onAuthError]);
 
   async function loadQuotes() {
-    const ok = window.confirm(
-      `Load the latest market data for the ${MARKET_LABELS[market]} company universe?\n\n` +
-        "This calls the market data provider once per company (it can take a minute or two) and respects the provider's rate limits."
-    );
-    if (!ok) return;
+    if (loadState.busy) return;
     setLoadState({ busy: true, message: "Loading market data from the provider…", tone: "info" });
     try {
       const result = await api.refreshMarketQuotes(token, market);
@@ -78,13 +74,23 @@ function TopCompanies({ token, market, navigate, onAuthError }) {
       title={`Largest ${MARKET_LABELS[market]} companies`}
       subtitle="Top 5 by the latest stored market capitalisation"
       action={
-        <button type="button" className="btn btn-ghost btn-sm" onClick={loadQuotes} disabled={loadState.busy}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={loadQuotes}
+          disabled={loadState.busy}
+          title="Calls the market data provider once per company (can take a minute or two; rate limits are respected)"
+        >
           <RefreshCw size={14} className={loadState.busy ? "spin" : ""} aria-hidden="true" />
           {loadState.busy ? "Loading…" : "Load market data"}
         </button>
       }
     >
-      {loadState.message && <Notice tone={loadState.tone}>{loadState.message}</Notice>}
+      {loadState.message ? (
+        <Notice tone={loadState.tone}>{loadState.message}</Notice>
+      ) : (
+        <p className="small muted">Load market data calls the provider once per company; it can take a minute or two.</p>
+      )}
       {state.loading && <Skeleton lines={3} />}
       {state.error && <ErrorState message={state.error} onRetry={() => setReloadKey((k) => k + 1)} />}
       {!state.loading && !state.error && !companies.length && (

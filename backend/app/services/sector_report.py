@@ -1,6 +1,6 @@
 """
 Render a saved sector-comparison snapshot as PDF (reportlab) or DOCX
-(python-docx). Rendering reads only the snapshot: no provider or Groq calls.
+(python-docx). Rendering reads only the snapshot: no data-provider or AI calls.
 """
 
 import io
@@ -64,8 +64,27 @@ def report_model(snapshot):
             "quote_provider": (inputs.get("quote") or {}).get("provider"),
             "quote_fetched_at": (inputs.get("quote") or {}).get("fetched_at"),
         })
+    custom = (snapshot.get("comparison_type") or "sector") == "custom"
+    selected = snapshot.get("selected_companies") or []
+    if custom:
+        title = (
+            f"Custom comparison: {snapshot['sector_label']}, {len(selected)} companies"
+            f" — {snapshot['market_label']}"
+        )
+    else:
+        title = f"{snapshot['sector_label']} sector comparison — {snapshot['market_label']}"
     return {
-        "title": f"{snapshot['sector_label']} sector comparison — {snapshot['market_label']}",
+        "title": title,
+        "custom": custom,
+        "selected_line": (
+            "Selected companies: " + "; ".join(f"{c.get('name') or c['symbol']} ({c['symbol']})" for c in selected)
+            if custom else None
+        ),
+        "relative_note": snapshot.get("relative_note") if custom else None,
+        "median_note": (
+            "* missing value replaced by the median of the selected companies for scoring." if custom
+            else "* missing value replaced by the sector median for scoring."
+        ),
         "generated": _date(snapshot["generated_at_utc"]),
         "comparison_id": snapshot["comparison_id"],
         "currency": snapshot["currency"],
@@ -117,6 +136,10 @@ def render_pdf(snapshot):
         p(f"Generated {m['generated']} · Comparison {m['comparison_id']} · Currency {m['currency']}", small),
         p(f"Data sources — {m['sources']}", small),
         Spacer(1, 6),
+    ]
+    if m["custom"]:
+        story += [p(m["selected_line"]), p(m["relative_note"]), Spacer(1, 4)]
+    story += [
         p("Overview", h2),
         p(m["overview"]),
         p(m["ai_label"] if m["overview_source"] == "ai" else
@@ -166,7 +189,7 @@ def render_pdf(snapshot):
         )
     width = (269 * mm - 26 * mm) / max(1, len(m["metrics"]))
     story.append(_table(table_rows, Table, TableStyle, colors, [26 * mm] + [width] * len(m["metrics"])))
-    story.append(p("* missing value replaced by the sector median for scoring.", small))
+    story.append(p(m["median_note"], small))
 
     story.append(PageBreak())
     story.append(p("Company assessments", h2))
@@ -191,20 +214,18 @@ def render_pdf(snapshot):
     for line in m["disclaimers"]:
         story.append(p("• " + line, small))
 
-    doc.build(story)
+    from app.services.pdf_common import page_decorator
+
+    footer = page_decorator(f"InsightIQ · {m['title']}")
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()
 
 
 def _table(rows, Table, TableStyle, colors, widths):
-    table = Table(rows, colWidths=widths, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eeff")),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cfd6e1")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f6f8")]),
-    ]))
-    return table
+    # Shared with the company research report PDF.
+    from app.services.pdf_common import styled_table
+
+    return styled_table(rows, widths)
 
 
 # ------------------------------------------------------------------- DOCX
@@ -225,6 +246,9 @@ def render_docx(snapshot):
     document.add_paragraph(
         f"Generated {m['generated']} · Comparison {m['comparison_id']} · Currency {m['currency']}")
     document.add_paragraph(f"Data sources — {m['sources']}")
+    if m["custom"]:
+        document.add_paragraph(m["selected_line"])
+        document.add_paragraph(m["relative_note"])
 
     document.add_heading("Overview", level=1)
     document.add_paragraph(m["overview"] or "")
@@ -255,8 +279,7 @@ def render_docx(snapshot):
         cells[0].text = r["symbol"]
         for i, (key, _) in enumerate(m["metrics"], start=1):
             cells[i].text = r["values"][key] + (" *" if key in r["imputed"] else "")
-    document.add_paragraph("* missing value replaced by the sector median for scoring. "
-                           "The PDF version includes the score chart.")
+    document.add_paragraph(m["median_note"] + " The PDF version includes the score chart.")
 
     document.add_heading("Company assessments", level=1)
     for r in m["rows"]:

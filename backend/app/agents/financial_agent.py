@@ -19,12 +19,12 @@ from app.services.financial_claims import (
     validate_financial_claims,
 )
 from app.services import evidence_package as packages
-from app.services.groq_structured import (
-    GroqCallFailed,
+from app.services.ai_provider import (
+    AICallFailed,
     RequestProfile,
     ResponseRejected,
-    configured_model,
-    groq_runtime_settings,
+    ai_runtime_settings,
+    brief_diagnostics,
     structured_completion,
 )
 from app.services.narrative_validation import (
@@ -39,10 +39,9 @@ from app.services.forecast_cache import (
 )
 
 
-SUPPORTED_TICKERS = frozenset({
-    "AAPL", "AMZN", "GOOGL",
-    "META", "MSFT", "NVDA",
-})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 
 FINANCIAL_METRICS = (
     "revenue",
@@ -71,7 +70,7 @@ class FinancialState(TypedDict, total=False):
     elapsed_seconds: float
     financial_analysis: dict
     evidence_package: dict
-    groq_call: dict
+    ai_call: dict
     disclosures: list[str]
 
 
@@ -81,72 +80,31 @@ def active_root():
     ).resolve()
 
 
-def load_financial_quality(ticker):
-    path = (
-        active_root()
-        / "reports"
-        / "forecast_uncertainty_quality_review.json"
-    )
-
-    if not path.is_file():
-        raise FinancialAgentError(
-            "Forecast quality review is missing."
-        )
-
-    document = json.loads(
-        path.read_text(encoding="utf-8")
-    )
-
-    if document.get("assessment_failures"):
-        raise FinancialAgentError(
-            "Forecast quality review contains failures."
-        )
-
-    assessments = document["assessments"][ticker]
-
-    return {
-        metric: assessments[metric]
-        for metric in FINANCIAL_METRICS
-    }
-
-
 def verify_financial_review(ticker):
-    path = (
-        active_root()
-        / "reports"
-        / "financial_evidence_reconciliation_final.json"
-    )
+    """
+    The company's SEC financials must be validated (quarters reconcile to 10-K
+    annual totals). The original six also carry their documented review.
+    """
+    from app.services.sec_coverage import CORE_SEC_VALIDATED, validation_status
 
-    if not path.is_file():
+    status = validation_status(ticker)
+    if status.get("status") != "validated":
         raise FinancialAgentError(
-            "Financial SEC reconciliation is missing."
+            "Company SEC financials are not validated: " + str(status.get("reason"))
         )
-
-    review = json.loads(
-        path.read_text(encoding="utf-8")
-    )
-
-    if review.get("critical_issues"):
-        raise FinancialAgentError(
-            "Financial SEC reconciliation has critical issues."
-        )
-
-    if ticker not in review.get("companies", {}):
-        raise FinancialAgentError(
-            "Company is not covered by financial review."
-        )
-
+    review = {}
+    path = active_root() / "reports" / "financial_evidence_reconciliation_final.json"
+    if ticker in CORE_SEC_VALIDATED and path.is_file():
+        review = json.loads(path.read_text(encoding="utf-8"))
+        if review.get("critical_issues"):
+            raise FinancialAgentError("Financial SEC reconciliation has critical issues.")
     return {
         "nonmaterial_differences": [
-            issue
-            for issue in review.get(
-                "nonmaterial_differences", []
-            )
+            issue for issue in review.get("nonmaterial_differences", [])
             if issue.get("ticker") == ticker
         ],
-        "historical_diagnostic_counts": review.get(
-            "historical_diagnostic_counts", {}
-        ),
+        "historical_diagnostic_counts": review.get("historical_diagnostic_counts", {}),
+        "validation": status,
     }
 
 
@@ -287,8 +245,7 @@ FINANCIAL_SYSTEM_PROMPT = (
 
 
 def financial_profiles():
-    settings = groq_runtime_settings()
-    full = settings["financial_max_completion"]
+    full = ai_runtime_settings()["max_output_financial"]
     return [
         RequestProfile(
             "full", full,
@@ -296,7 +253,7 @@ def financial_profiles():
              "findings_min": 3, "findings_max": 5},
         ),
         RequestProfile(
-            "reduced", max(1200, int(full * 0.75)),
+            "reduced", full,
             {"quarters_per_metric": 5, "forecast_quarters": 2,
              "latest_qoq_per_metric": 1,
              "findings_min": 2, "findings_max": 3},
@@ -461,9 +418,9 @@ def deterministic_claims(evidence_records):
     return validate_financial_claims(response, evidence_records)
 
 
-def analyze_financial_evidence(ticker, package, evidence_records, client=None):
+def _analyze_financial_evidence_unscoped(ticker, package, evidence_records, client=None):
     """
-    One bounded Groq request: claim selection (strictly validated) plus
+    One bounded Azure OpenAI request: claim selection (strictly validated) plus
     AI-written findings (validated individually). Returns
     (verified_brief, analysis, call_diagnostics).
     """
@@ -476,7 +433,7 @@ def analyze_financial_evidence(ticker, package, evidence_records, client=None):
         except FinancialClaimError as error:
             raise ResponseRejected(str(error)) from None
 
-    claims_selection = "groq"
+    claims_selection = "ai"
     analysis_status_reason = None
 
     try:
@@ -491,7 +448,7 @@ def analyze_financial_evidence(ticker, package, evidence_records, client=None):
             client=client,
         )
         findings, withheld = evaluate_financial_findings(parsed.findings, package)
-    except GroqCallFailed as failure:
+    except AICallFailed as failure:
         diagnostics = failure.diagnostics
         verified = deterministic_claims(evidence_records)
         findings, withheld = [], []
@@ -516,20 +473,17 @@ def analyze_financial_evidence(ticker, package, evidence_records, client=None):
     verified_brief = {
         "ticker": ticker,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "model": configured_model(),
+        "model": diagnostics.get("model") or diagnostics.get("deployment"),
+        "provider": diagnostics.get("provider"),
+        "deployment": diagnostics.get("deployment"),
         "verified_claims": verified,
         "verified_statements": render_verified_financial_claims(verified),
         "diagnostics": {
-            "response_id": diagnostics.get("response_id"),
-            "finish_reason": diagnostics.get("finish_reason"),
-            "elapsed_seconds": diagnostics.get("elapsed_seconds"),
-            "prompt_tokens": diagnostics.get("prompt_tokens"),
-            "completion_tokens": diagnostics.get("completion_tokens"),
-            "total_tokens": diagnostics.get("total_tokens"),
+            **brief_diagnostics(diagnostics),
             "source_records_available": len(evidence_records),
             "claims_verified": len(verified),
             "claims_selection": claims_selection,
-            "strict_schema_validation": claims_selection == "groq",
+            "strict_schema_validation": claims_selection == "ai",
             "exact_amount_validation": True,
             "exact_reporting_period_validation": True,
             "sec_evidence_id_validation": True,
@@ -555,78 +509,71 @@ def analyze_financial_evidence(ticker, package, evidence_records, client=None):
 
 
 def quality_provenance(root=None):
-    path = (root or active_root()) / "reports" / "forecast_uncertainty_quality_review.json"
-    assessed = None
-    try:
-        assessed = json.loads(path.read_text(encoding="utf-8")).get("assessed_at_utc")
-    except (OSError, ValueError):
-        pass
     return {
-        "interval_quality_source": "reports/forecast_uncertainty_quality_review.json",
-        "assessed_at_utc": assessed,
-        "recomputed_this_run": False,
+        "interval_quality_source": "computed by the forecast's point-in-time walk-forward validation",
+        "recomputed_this_run": True,
         "note": (
-            "Holdout error and interval-coverage figures come from a stored "
-            "historical review; they were not recomputed during this research run."
+            "Held-out error and interval coverage are computed from out-of-sample "
+            "quarters using only SEC filings available at each forecast origin."
         ),
     }
 
 
+def quality_from_validation(validation):
+    v = validation or {}
+    return {
+        "selected_mae_billion_usd": v.get("selected_mae_billion_usd"),
+        "baseline_mae_billion_usd": v.get("baseline_mae_billion_usd"),
+        "beats_baseline": v.get("beats_baseline"),
+        "interval_status": v.get("interval_status") or "unavailable",
+        "interval_coverage": v.get("interval_coverage"),
+        "interval_points": v.get("interval_points"),
+        "interval_display_allowed": bool(v.get("interval_display_allowed")),
+        "interval_warning": v.get("interval_warning"),
+        "holdout_quarters": v.get("holdout_quarters"),
+        "evaluation_method": v.get("method"),
+    }
+
+
 def build_forecasts(ticker, financials):
-    forecasts = {}
-    quality = load_financial_quality(ticker)
+    """
+    Forecasts for each metric with quality from their own validation. A metric
+    whose history is too short (or whose validation cannot run) is reported
+    as unavailable with the reason; nothing is filled in.
+    """
+    from app.services.forecasting import ForecastingError
 
+    forecasts, quality, unavailable = {}, {}, {}
     for metric in FINANCIAL_METRICS:
-        cached = forecast_financial_metric_cached(
-            ticker,
-            metric,
-        )
-
+        try:
+            cached = forecast_financial_metric_cached(ticker, metric)
+        except (ForecastingError, ValueError) as exc:
+            unavailable[metric] = str(exc)[:300]
+            continue
         forecast = cached["forecast"]
-
-        latest_observed = financials[metric][-1][
-            "period_end"
-        ]
-
-        if (
-            forecast["last_observed_period_end"]
-            != latest_observed
-        ):
-            raise FinancialAgentError(
-                "Forecast source period is stale."
-            )
-
+        latest_observed = financials[metric][-1]["period_end"]
+        if forecast["last_observed_period_end"] != latest_observed:
+            raise FinancialAgentError("Forecast source period is stale.")
+        quality[metric] = quality_from_validation(forecast.get("validation"))
         forecasts[metric] = {
             "source": "statistical_projection",
             "cache_status": cached["cache_status"],
             "cache_reason": cached.get("cache_reason"),
             "last_reported_sec_period": latest_observed,
             "model": forecast["selected_model"],
-            "horizon_quarters": forecast[
-                "horizon_quarters"
-            ],
+            "horizon_quarters": forecast["horizon_quarters"],
             "predictions": forecast["forecast"],
             "backtesting": forecast["backtesting"],
-            "selection_reason": forecast[
-                "selection_reason"
-            ],
+            "validation": forecast.get("validation"),
+            "selection_reason": forecast["selection_reason"],
             "interval_quality": {
-                "status": quality[metric][
-                    "interval_status"
-                ],
-                "observed_holdout_coverage": quality[
-                    metric
-                ]["interval_coverage"],
-                "display_allowed": quality[
-                    metric
-                ]["interval_display_allowed"],
-                "warning": quality[metric][
-                    "interval_warning"
-                ],
+                "status": quality[metric]["interval_status"],
+                "observed_holdout_coverage": quality[metric]["interval_coverage"],
+                "display_allowed": quality[metric]["interval_display_allowed"],
+                "warning": quality[metric]["interval_warning"],
             },
         }
-
-    return forecasts, quality
+    return forecasts, quality, unavailable
 
 
 def financial_agent_node(state: FinancialState):
@@ -655,7 +602,7 @@ def financial_agent_node(state: FinancialState):
 
     # Deterministic forecasts first (fingerprinted cache: recomputed only
     # when SEC inputs or forecasting code change).
-    forecasts, quality = build_forecasts(ticker, financials)
+    forecasts, quality, forecasts_unavailable = build_forecasts(ticker, financials)
     provenance = quality_provenance()
 
     package = packages.build_financial_package(
@@ -663,7 +610,7 @@ def financial_agent_node(state: FinancialState):
         forecasts, quality, provenance,
     )
 
-    # Real Groq request: exact claim validation plus
+    # One Azure OpenAI request: exact claim validation plus
     # individually validated AI-written findings.
     verified_brief, analysis, call_diagnostics = (
         analyze_financial_evidence(
@@ -684,8 +631,9 @@ def financial_agent_node(state: FinancialState):
         "values, not taken from the model.",
         "Historical SEC normalization diagnostics "
         "remain documented and unresolved.",
-        "Forecast prediction intervals are model-based "
-        "and have not been statistically calibrated.",
+        "Forecast models are chosen on point-in-time folds and evaluated on a "
+        "later held-out fold; prediction intervals are shown only when their "
+        "out-of-sample coverage passed the display gate.",
     ]
 
     if review["nonmaterial_differences"]:
@@ -694,9 +642,12 @@ def financial_agent_node(state: FinancialState):
             "differences exist for this company."
         )
 
+    for metric, reason in forecasts_unavailable.items():
+        disclosures.append(f"No {metric.replace('_', ' ')} forecast: {reason}")
+
     if any(
         not quality[metric]["interval_display_allowed"]
-        for metric in FINANCIAL_METRICS
+        for metric in quality
     ):
         disclosures.append(
             "One or more model prediction intervals "
@@ -714,11 +665,12 @@ def financial_agent_node(state: FinancialState):
         "financial_evidence": evidence_records,
         "verified_financial_claims": verified_brief,
         "forecasts": forecasts,
+        "forecasts_unavailable": forecasts_unavailable,
         "forecast_quality": quality,
         "forecast_quality_provenance": provenance,
         "financial_analysis": analysis,
         "evidence_package": package,
-        "groq_call": call_diagnostics,
+        "ai_call": call_diagnostics,
         "disclosures": disclosures,
     }
 
@@ -778,3 +730,14 @@ def run_financial_agent(ticker):
             timezone.utc
         ).isoformat(),
     }
+
+
+def analyze_financial_evidence(ticker, package, evidence_records, client=None):
+    """Runs the AI step with company-scope validation bound (see narrative_validation)."""
+    import json as _json
+
+    from app.services.narrative_validation import company_scope
+
+    evidence_text = _json.dumps(package, default=str, ensure_ascii=False)
+    with company_scope(ticker, evidence_text):
+        return _analyze_financial_evidence_unscoped(ticker, package, evidence_records, client=client)

@@ -1,0 +1,197 @@
+{
+  "ticker": "MSFT",
+  "run_id": "5a25fd13-a894-4b58-ba69-ed8c4422fbe8",
+  "verified_at_utc": "2026-11-24T11:02:20.816143+00:00",
+  "job": {
+    "status": "completed",
+    "created_at_utc": "2026-11-24T10:25:15.423085+00:00",
+    "started_at_utc": "2026-11-24T10:25:16.271101+00:00",
+    "finished_at_utc": "2026-11-24T10:49:29.181563+00:00",
+    "agent_statuses": {
+      "financial": "completed",
+      "news": "completed",
+      "strategic": "completed"
+    }
+  },
+  "report_generated_at_utc": "2026-11-24T10:49:29.085878+00:00",
+  "generation": {
+    "provider": "azure_openai",
+    "deployment": "gpt-5.4-pro",
+    "models_served": [
+      "gpt-5.4-pro"
+    ],
+    "ai_analysis_status": {
+      "financial": "partial",
+      "news": "completed",
+      "strategic": "partial"
+    },
+    "calls": [
+      {
+        "agent": "financial",
+        "call": "financial_analysis",
+        "status": "completed",
+        "model": "gpt-5.4-pro",
+        "response_id": "resp_0c675c0a5c9ec135006b05666276588193abf9e7ced42ebc7e",
+        "input_tokens": 3072,
+        "output_tokens": 23238,
+        "reasoning_tokens": 10829,
+        "total_tokens": 26310,
+        "elapsed_seconds": 662.763,
+        "provider_requests": 1,
+        "failure_reason": null,
+        "fallback_reason": null
+      },
+      {
+        "agent": "news",
+        "call": "news_selection",
+        "status": "completed",
+        "model": "gpt-5.4-pro",
+        "response_id": "resp_021af0e245201884006b0568e8209481939d7d0ce246e88455",
+        "input_tokens": 2204,
+        "output_tokens": 2388,
+        "reasoning_tokens": 1152,
+        "total_tokens": 4592,
+        "elapsed_seconds": 70.803,
+        "provider_requests": 1,
+        "failure_reason": null,
+        "fallback_reason": null
+      },
+      {
+        "agent": "news",
+        "call": "news_analysis",
+        "status": "completed",
+        "model": "gpt-5.4-pro",
+        "response_id": "resp_0fba6fb38c87c997006b056933afec8194a6e064a5836f71e8",
+        "input_tokens": 867,
+        "output_tokens": 2693,
+        "reasoning_tokens": 970,
+        "total_tokens": 3560,
+        "elapsed_seconds": 92.585,
+        "provider_requests": 1,
+        "failure_reason": null,
+        "fallback_reason": null
+      },
+      {
+        "agent": "strategic",
+        "call": "strategic_analysis",
+        "status": "completed",
+        "model": "gpt-5.4-pro",
+        "response_id": "resp_0634881d5b4265f3006b05699329ac81909fd3d89f4acc3db4",
+        "input_tokens": 2179,
+        "output_tokens": 12127,
+        "reasoning_tokens": 5145,
+        "total_tokens": 14306,
+        "elapsed_seconds": 548.179,
+        "provider_requests": 1,
+        "failure_reason": null,
+        "fallback_reason": null
+      }
+    ]
+  },
+  "source_freshness": {
+    "research_generated_at_utc": "2026-11-24T10:49:29.085878+00:00",
+    "refresh_mode": "if_stale",
+    "on_refresh_failure": "continue_with_cached",
+    "refresh_failures": [],
+    "sec": {
+      "refresh_status": "cached_fresh",
+      "evidence_state": "cached_within_policy",
+      "provider_called": false,
+      "records_inserted": null,
+      "error_category": null,
+      "message": "Stored evidence is within the freshness policy.",
+      "policy_max_age_hours": 24,
+      "last_successful_refresh_at": "2026-11-24T09:22:24.810082+00:00",
+      "latest_filed_at": "2026-10-28",
+      "latest_periodic_filing": {
+        "accession": "0001193125-26-436133",
+        "form": "10-Q",
+        "filed_at": "2026-10-28"
+      },
+      "data_cutoff_period_end": "2026-09-30",
+      "note": "SEC financial statements are periodic filings, not real-time data. A successful refresh confirms the latest available filing."
+    },
+    "news": {
+      "refresh_status": "cached_fresh",
+      "evidence_state": "cached_within_policy",
+      "provider_called": false,
+      "records_inserted": null,
+      "error_category": null,
+      "message": "Stored evidence is within the freshness policy.",
+      "policy_max_age_hours": 6,
+      "last_successful_refresh_at": "2026-11-24T09:41:57.982066+00:00",
+      "latest_cited_publication_date": "2026-11-23T21:10:29+00:00",
+      "latest_stored_publication_date": "2026-11-23T21:13:53+00:00",
+      "stored_article_count": 44
+    },
+    "forecasts": {
+      "revenue": {
+        "cache_status": "hit",
+        "cache_reason": "cache_hit",
+        "data_cutoff_period_end": "2026-09-30"
+      },
+      "operating_cash_flow": {
+        "cache_status": "hit",
+        "cache_reason": "cache_hit",
+        "data_cutoff_period_end": "2026-09-30"
+      }
+    },
+    "sec_facts_changed_during_preparation": false
+  },
+  "news_articles_cited": [
+    "Microsoft Azure flaw exploited to steal customers' API credentials",
+    "Microsoft admits some emails bounced during global Outlook outage, reveals new failures",
+    "Microsoft establishes Israeli AI team to defend encryption against quantum threats",
+    "Pinterest announces partnership with Microsoft Ads"
+  ],
+  "validation_withheld": {
+    "financial": [
+      {
+        "finding_id": "FIN_3",
+        "reason": "interpretation: too long"
+      }
+    ],
+    "news": [],
+    "strategic": [
+      {
+        "evidence_id": "SEC_revenue_20260930",
+        "reason": "supporting evidence ID not in the strategic package"
+      },
+      {
+        "evidence_id": "SEC_operating_cash_flow_20260930",
+        "reason": "supporting evidence ID not in the strategic package"
+      }
+    ]
+  },
+  "strategic_priorities": 4,
+  "previous_report_still_accessible": "1c5c8279-fd35-429d-8f5a-f4cd25a50815",
+  "executive_summary": {
+    "status": "completed",
+    "provider": "azure_openai",
+    "model": "gpt-5.4-pro",
+    "word_count": 197,
+    "reason": null,
+    "diagnostics": {
+      "provider": "azure_openai",
+      "deployment": "gpt-5.4-pro",
+      "model": "gpt-5.4-pro",
+      "response_id": "resp_0619e169932375f7006b056bc0b6d8819580bae2fd45ec0ab2",
+      "response_status": "completed",
+      "elapsed_seconds": 315.464,
+      "input_tokens": 4012,
+      "output_tokens": 13718,
+      "reasoning_tokens": 6622,
+      "total_tokens": 17730,
+      "estimated_input_tokens": 5591,
+      "input_token_budget": 24000,
+      "context_level": "full",
+      "article_descriptions_included": true,
+      "validated_ai_findings_included": true
+    }
+  },
+  "browser": {
+    "azure_label_rendered": true,
+    "groq_label_absent": true,
+    "route": "/companies/MSFT/reports/5a25fd13-a894-4b58-ba69-ed8c4422fbe8"
+  }
+}

@@ -13,7 +13,7 @@ import pytest
 from market_fixtures import india_clients, us_clients
 from research_v2_support import (  # noqa: F401
     db_rows,
-    install_fake_groq,
+    install_fake_ai,
     isolated_runtime,
 )
 
@@ -47,7 +47,7 @@ def test_research_profiles(isolated_runtime):
 
 def test_us_provider_research_end_to_end(isolated_runtime, monkeypatch):
     seed("US", "ORCL", us_clients())
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     report = run("ORCL")
 
     assert report["research_profile"] == "provider" and report["currency"] == "USD"
@@ -89,7 +89,7 @@ def test_india_provider_research_without_news(isolated_runtime, monkeypatch):
     outcome = seed("IN", "RELIANCE.NS", clients)
     # NewsData.io is unreachable offline: the failure is reported, not hidden.
     assert outcome["results"]["news"]["status"] == "failed"
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     report = run("RELIANCE.NS")
 
     assert report["currency"] == "INR" and report["market"] == "IN"
@@ -122,15 +122,15 @@ def test_india_news_attribution_uses_registry_names(isolated_runtime):
     assert not explicit_company_mention("Indian IT stocks rally", "TCS.NS")
 
 
-def test_forecast_runs_with_enough_quarters(isolated_runtime):
+def test_provider_forecast_is_unavailable_without_point_in_time_validation(isolated_runtime):
+    """Provider statements carry no filing dates, so a point-in-time backtest
+    cannot be built: no forecast is fitted, and the reason says why."""
     from app.agents.provider_financial import provider_forecast
 
     seed("IN", "ONGC.NS", india_clients(quarters=24))
     forecast, reason = provider_forecast("ONGC.NS", "revenue")
-    assert reason is None, reason
-    assert len(forecast["predictions"]) == 4
-    assert forecast["interval_quality"]["status"] == "not_assessed"
-    assert forecast["last_reported_period"].endswith("-12-31")
+    assert forecast is None
+    assert "28" in reason or "filing dates" in reason
 
 
 # ---------------------------------------------------------- validation
@@ -139,7 +139,7 @@ def test_claim_validation_is_exact(isolated_runtime):
     from types import SimpleNamespace
 
     from app.agents.provider_financial import select_records, validate_claims
-    from app.services.groq_structured import ResponseRejected
+    from app.services.ai_provider import ResponseRejected
 
     seed("US", "ORCL", us_clients())
     records, choice, currency = select_records("ORCL")
@@ -180,7 +180,7 @@ def test_company_without_statements_is_refused(isolated_runtime, monkeypatch):
     from app.services.market_ingestion import refresh_company
 
     refresh_company("US", "ADBE", ("profile",), clients=us_clients())
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     with pytest.raises(ProviderFinancialError, match="No stored revenue"):
         run("ADBE")
 
@@ -195,7 +195,7 @@ def test_job_report_history_and_api(isolated_runtime, monkeypatch):
     from app.services import research_jobs
 
     seed("US", "ORCL", us_clients())
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     monkeypatch.setenv("INSIGHTIQ_AUTO_EXECUTIVE_SUMMARY", "0")
     monkeypatch.setattr("app.services.research_backup.backup_completed_research_job",
                         lambda root, run_id: {"backup_status": "verified"})
@@ -227,9 +227,10 @@ def test_executive_summary_context_uses_report_currency(isolated_runtime, monkey
     from app.services import executive_summary as es
 
     seed("IN", "RELIANCE.NS", india_clients())
-    install_fake_groq(monkeypatch)
+    install_fake_ai(monkeypatch)
     report = run("RELIANCE.NS")
-    context, messages, budget = es.fit_to_budget(report)
+    context = es.build_context(report)
+    messages = es.build_messages(context)
     assert context["currency"] == "INR"
     assert context["data_source"] == "provider-reported financial statements"
     observation = context["sec_financial_observations"][0]

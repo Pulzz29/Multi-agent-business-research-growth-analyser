@@ -106,8 +106,14 @@ export function buildComparisonModel(snapshot) {
     })),
   }));
 
+  const comparisonType = snapshot.comparison_type === "custom" ? "custom" : "sector";
   return {
     id: snapshot.comparison_id,
+    comparisonType,
+    isCustom: comparisonType === "custom",
+    selectedCompanies: list(snapshot.selected_companies),
+    duplicatesRemoved: list(snapshot.duplicates_removed),
+    relativeNote: comparisonType === "custom" ? snapshot.relative_note || ranking.method?.relative_note || null : null,
     market: snapshot.market,
     marketLabel: snapshot.market_label || MARKET_LABELS[snapshot.market] || snapshot.market,
     currency: snapshot.currency,

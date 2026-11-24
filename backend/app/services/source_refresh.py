@@ -32,7 +32,9 @@ from app.core.config import get_settings
 from app.database.sqlite_manager import connect
 
 
-SUPPORTED_TICKERS = frozenset({"AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 SOURCES = {"sec": "SEC", "news": "NEWSDATA"}
 SOURCE_ORDER = ("sec", "news")  # news ingestion needs the SEC company row
 MANUAL_COOLDOWN_SECONDS = 600

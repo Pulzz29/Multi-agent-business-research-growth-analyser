@@ -78,7 +78,7 @@ finally:
     con.close()
 result["primary_detail"] = detail
 
-for folder in ("reports", "data/forecast_cache_v1", "data/research_job_journal", "data/job_backup_status"):
+for folder in ("reports", "data/forecast_cache_v1", "data/forecast_cache_v2", "data/research_job_journal", "data/job_backup_status"):
     base = root / folder
     if base.is_dir():
         for p in sorted(base.rglob("*")):

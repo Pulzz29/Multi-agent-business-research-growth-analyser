@@ -5,7 +5,7 @@ Everything here is assembled from data InsightIQ has already stored:
 SEC facts (through the existing normalization), stored NewsData.io
 articles, and the persisted forecast cache files.
 
-This module never calls Groq, NewsData.io or SEC, never trains a
+This module never calls the AI provider, NewsData.io or SEC, never trains a
 forecast model, and never writes to the database or to disk.
 In particular it does not call forecast_cache.forecast_financial_metric_cached()
 or forecast_cache.source_fingerprint(), and reads the cache envelope directly.
@@ -22,14 +22,18 @@ from app.database.sqlite_manager import connect
 from app.services import financial_normalization as fin
 from app.services import forecast_cache
 
-SUPPORTED_COMPANIES = {
-    "AAPL": "Apple Inc.",
-    "AMZN": "Amazon.com, Inc.",
-    "GOOGL": "Alphabet Inc.",
-    "META": "Meta Platforms, Inc.",
-    "MSFT": "Microsoft Corporation",
-    "NVDA": "NVIDIA Corporation",
-}
+# Companies on the validated SEC pipeline (live set; see sec_coverage.py).
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_COMPANIES  # noqa: E402
+
+
+def display_name(ticker):
+    """Display name from the verified company identity (universe / registry)."""
+    try:
+        from app.services.company_identity import identity_for
+
+        return identity_for(ticker).display_name
+    except Exception:
+        return ticker
 
 METRICS = ("revenue", "operating_cash_flow")
 
@@ -91,9 +95,18 @@ def _normalized(ticker):
 
 
 def _pct_change(current, previous):
-    if previous is None or current is None or previous == 0:
-        return None
-    return float((current - previous) / abs(previous) * 100)
+    """Percentage change under the growth-analysis rules: no percentage from a
+    zero or negative base (see growth_analysis.change)."""
+    from app.services.growth_analysis import change
+
+    return change(current, previous)["value_pct"]
+
+
+def _growth(current, previous):
+    from app.services.growth_analysis import change
+
+    outcome = change(current, previous)
+    return outcome["value_pct"], outcome["status"], outcome.get("reason")
 
 
 def _fiscal_label(row):
@@ -133,8 +146,12 @@ def build_series(rows):
             "evidence": row["evidence"],
             "qoq_change_pct": None,
             "qoq_basis": None,
+            "qoq_status": None,
+            "qoq_reason": None,
             "yoy_change_pct": None,
             "yoy_basis": None,
+            "yoy_status": None,
+            "yoy_reason": None,
         }
         out.append((item, value, start, end))
         by_end[row["period_end"]] = (item, value)
@@ -144,7 +161,7 @@ def build_series(rows):
         if index > 0:
             prev_item, prev_value, _, prev_end = out[index - 1]
             if prev_end and start and prev_end + timedelta(days=1) == start:
-                item["qoq_change_pct"] = _pct_change(value, prev_value)
+                item["qoq_change_pct"], item["qoq_status"], item["qoq_reason"] = _growth(value, prev_value)
                 item["qoq_basis"] = prev_item["period_end"]
         # Year-over-year: same fiscal quarter in the immediately preceding fiscal year,
         # with a period end 350-380 days earlier (handles 52/53-week fiscal calendars).
@@ -156,7 +173,7 @@ def build_series(rows):
                 if gap > 380:
                     break
                 if 350 <= gap <= 380 and prev_item["fiscal_quarter"] == item["fiscal_quarter"]:
-                    item["yoy_change_pct"] = _pct_change(value, prev_value)
+                    item["yoy_change_pct"], item["yoy_status"], item["yoy_reason"] = _growth(value, prev_value)
                     item["yoy_basis"] = prev_item["period_end"]
                     break
     return [item for item, *_ in out]
@@ -184,7 +201,9 @@ def _shift_quarter_end(end, quarters):
 
 def read_forecast(ticker, metric):
     """Read the persisted forecast cache envelope without recomputation."""
-    path = project_root() / "data" / "forecast_cache_v1" / f"{ticker}_{metric}.json"
+    from app.services.forecast_cache import cache_directory_name
+
+    path = project_root() / "data" / cache_directory_name() / f"{ticker}_{metric}.json"
     if not path.is_file():
         return {"available": False, "reason": "No stored forecast for this metric."}
 
@@ -193,6 +212,15 @@ def read_forecast(ticker, metric):
         result = envelope["result"]
     except (OSError, ValueError, KeyError, TypeError):
         return {"available": False, "reason": "Stored forecast could not be read."}
+
+    if envelope.get("version") != forecast_cache.CACHE_VERSION:
+        return {
+            "available": False,
+            "reason": (
+                "The stored forecast was computed with an earlier validation method; "
+                "it is recomputed (with point-in-time validation) on the next research run."
+            ),
+        }
 
     integrity_ok = (
         forecast_cache.validate_cached_result(result, ticker, metric)
@@ -203,7 +231,13 @@ def read_forecast(ticker, metric):
         return {"available": False, "reason": "Stored forecast failed its integrity check."}
 
     cached_at = envelope.get("cached_at_utc")
-    ttl = envelope.get("ttl_seconds") or forecast_cache.CACHE_TTL_SECONDS
+    ttl = forecast_cache.cache_ttl_seconds()
+    # The fingerprint covers every SEC fact and the forecasting code: a
+    # mismatch means newer data exists than the forecast was built from.
+    try:
+        inputs_current = forecast_cache.source_fingerprint(ticker, metric) == envelope.get("fingerprint")
+    except Exception:
+        inputs_current = None
     ttl_expired = None
     try:
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(cached_at)).total_seconds()
@@ -254,6 +288,12 @@ def read_forecast(ticker, metric):
         "cached_at_utc": cached_at,
         "ttl_seconds": ttl,
         "ttl_expired": ttl_expired,
+        "inputs_current": inputs_current,
+        "stale_reason": (
+            "Newer SEC data exists than this forecast used; it is recomputed on the next research run."
+            if inputs_current is False else None
+        ),
+        "validation": result.get("validation"),
         "predictions": predictions,
         "backtesting": backtesting,
         "final_fit_converged": (result.get("final_fit_diagnostics") or {}).get("converged"),
@@ -262,17 +302,10 @@ def read_forecast(ticker, metric):
 
 
 def _news(conn, ticker, limit=60):
-    rows = conn.execute(
-        """
-        SELECT id, title, description, article_url, source_name, published_at,
-               retrieved_at, relevance_score, relevance_reason, provider
-        FROM news_articles
-        WHERE company_ticker = ?
-        ORDER BY published_at DESC, id DESC
-        LIMIT ?
-        """,
-        (ticker, limit),
-    ).fetchall()
+    """Company news that passes the strict relevance rules (read-only)."""
+    from app.services.news_relevance import load_company_news
+
+    rows, _ = load_company_news(conn, ticker, limit=limit)
     return [
         {
             "evidence_id": f"NEWS_{ticker}_{r['id']}",
@@ -283,8 +316,9 @@ def _news(conn, ticker, limit=60):
             "publisher": r["source_name"],
             "published_at": r["published_at"],
             "retrieved_at": r["retrieved_at"],
-            "relevance_score": r["relevance_score"],
-            "relevance_reason": r["relevance_reason"],
+            "relevance_score": r["relevance"]["score"],
+            "relevance_reason": r["relevance"]["reason"],
+            "event_type": r["relevance"]["event_type"],
             "provider": r["provider"],
         }
         for r in rows
@@ -292,14 +326,15 @@ def _news(conn, ticker, limit=60):
 
 
 def news_status(conn, ticker):
-    article = conn.execute(
-        """
-        SELECT COUNT(*) AS article_count, MAX(published_at) AS latest_published_at,
-               MAX(retrieved_at) AS latest_retrieved_at
-        FROM news_articles WHERE company_ticker = ?
-        """,
-        (ticker,),
-    ).fetchone()
+    from app.services.news_relevance import load_company_news
+
+    verified, summary = load_company_news(conn, ticker, limit=1000)
+    article = {
+        # Counts and dates describe verified company-specific news only.
+        "article_count": len(verified),
+        "latest_published_at": max((r["published_at"] for r in verified if r.get("published_at")), default=None),
+        "latest_retrieved_at": max((r["retrieved_at"] for r in verified if r.get("retrieved_at")), default=None),
+    }
     refresh = conn.execute(
         """
         SELECT completed_at FROM source_refreshes
@@ -313,6 +348,11 @@ def news_status(conn, ticker):
         "latest_published_at": article["latest_published_at"],
         "latest_retrieved_at": article["latest_retrieved_at"],
         "last_successful_refresh_at": refresh["completed_at"] if refresh else None,
+        "stored_article_count": summary["stored"],
+        "hidden_article_count": summary["hidden"],
+        "hidden_by_reason": summary["hidden_by_reason"],
+        "relevance_version": summary["relevance_version"],
+        "message": summary["message"],
     }
 
 
@@ -355,13 +395,18 @@ def company_overview(ticker, latest_report=None):
     latest_period = max(
         (s[-1]["period_end"] for s in financials.values() if s), default=None
     )
+    # The headline cards describe one common quarter: the latest quarter for
+    # which every metric is stored (None when the series do not overlap).
+    common_ends = set.intersection(*[{r["period_end"] for r in s} for s in financials.values()])         if all(financials.values()) else set()
+    latest_common = max(common_ends, default=None)
+    latest_age = (date.today() - _parse_date(latest_period)).days if latest_period else None
 
     return {
         "ticker": ticker,
         "company": {
             "ticker": ticker,
-            "name": company.get("name") or SUPPORTED_COMPANIES[ticker],
-            "display_name": SUPPORTED_COMPANIES[ticker],
+            "name": company.get("name") or display_name(ticker),
+            "display_name": display_name(ticker),
             "cik": company.get("cik"),
         },
         "financials": financials,
@@ -373,6 +418,9 @@ def company_overview(ticker, latest_report=None):
         "news": news,
         "freshness": {
             "latest_financial_period_end": latest_period,
+            "latest_common_period_end": latest_common,
+            "latest_period_age_days": latest_age,
+            "stale": latest_age is not None and latest_age > 200,
             "sec_fact_count": sec["fact_count"],
             "sec_latest_filed_at": sec["latest_filed_at"],
             "sec_latest_retrieved_at": sec["latest_retrieved_at"],
@@ -394,7 +442,7 @@ def company_summary_row(ticker, latest_report=None):
     with connect() as conn:
         status = news_status(conn, ticker)
 
-    row = {"ticker": ticker, "name": SUPPORTED_COMPANIES[ticker]}
+    row = {"ticker": ticker, "name": display_name(ticker)}
     for metric in METRICS:
         series = build_series(data.get(metric, []))
         latest = _latest(series)

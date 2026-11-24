@@ -64,7 +64,10 @@ def test_job_submission_validation(client, auth):
 
 
 def test_news_refresh_rejects_unsupported_ticker(client, auth):
-    for bad in ("TSLA", "", "../MSFT"):
+    # This posts to the live backend with a valid key, so every symbol here
+    # must be one that can never be registered: a supported ticker would start
+    # a real NewsData.io refresh.
+    for bad in ("ZZZZ", "", "../MSFT", "TSLA.FAKE"):
         assert client.post("/api/v1/news/refresh", json={"ticker": bad}, headers=auth).status_code == 422
 
 
@@ -75,7 +78,8 @@ def test_docs_disabled(client):
 
 def test_companies(client, auth):
     body = client.get("/api/v1/companies", headers=auth).json()
-    assert body["supported_tickers"] == list(TICKERS) and body["count"] == 6
+    # The original six are always SEC-validated; onboarding may validate more US companies.
+    assert set(TICKERS) <= set(body["supported_tickers"]) and body["count"] == len(body["supported_tickers"])
 
 
 def test_dashboard_overview(client, auth):
@@ -142,11 +146,13 @@ def test_news_status(client, auth, ticker, baseline):
     con = sqlite3.connect(working_database_path().resolve().as_uri() + "?mode=ro", uri=True)
     stored = con.execute("SELECT COUNT(*) FROM news_articles WHERE company_ticker = ?", (ticker,)).fetchone()[0]
     con.close()
-    assert body["article_count"] == stored >= baseline["primary_detail"]["news_by_ticker"].get(ticker, 0)
+    # Every stored article is accounted for: verified + hidden (strict relevance rules).
+    assert body["stored_article_count"] == stored >= baseline["primary_detail"]["news_by_ticker"].get(ticker, 0)
+    assert body["article_count"] + body["hidden_article_count"] == stored
 
 
 def test_news_status_unsupported(client, auth):
-    assert client.get("/api/v1/news/status/TSLA", headers=auth).status_code in (404, 422)
+    assert client.get("/api/v1/news/status/ZZZZ", headers=auth).status_code in (404, 422)
 
 
 def test_error_responses_do_not_leak_internals(client, auth):

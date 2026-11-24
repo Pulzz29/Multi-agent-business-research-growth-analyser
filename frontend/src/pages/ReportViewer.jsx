@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
-import { BrainCircuit, Database, FileText, Landmark, Newspaper, Sparkles, Target } from "lucide-react";
-import { Badge, Card, ClampText, EmptyState, EvidencePanel, ExternalLink, Notice, StatusBadge } from "../components/ui.jsx";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, BrainCircuit, Database, Download, FileText, Landmark, Newspaper, Sparkles, Target, TrendingUp } from "lucide-react";
+import { Badge, Card, ClampText, EmptyState, EvidencePanel, ExternalLink, Notice, Skeleton, StatusBadge } from "../components/ui.jsx";
+import { ReportCharts } from "../components/ReportCharts.jsx";
+import { panelState, shouldAutoStart } from "../lib/briefModel.js";
 import { api } from "../lib/api.js";
 import {
   exactUsd,
@@ -271,7 +273,8 @@ function SourceFreshness({ model }) {
         label="Generation and refresh details"
         rows={[
           ["Research generated (UTC)", f.research_generated_at_utc],
-          ["Model", g?.model],
+          ["AI provider and model", g?.providerLabel || g?.model],
+          ["Azure deployment", g?.deployment],
           ["AI analysis — financial", g?.aiStatus?.financial],
           ["AI analysis — news", g?.aiStatus?.news],
           ["AI analysis — strategic", g?.aiStatus?.strategic],
@@ -297,7 +300,7 @@ function SourceFreshness({ model }) {
                   <th>Call</th>
                   <th>Outcome</th>
                   <th>Profile</th>
-                  <th className="num">Tokens in / out</th>
+                  <th className="num">Tokens in / out (reasoning)</th>
                   <th className="num">Requests</th>
                   <th>Fallback</th>
                 </tr>
@@ -310,7 +313,8 @@ function SourceFreshness({ model }) {
                     <td>{humanize(c.status || "")}</td>
                     <td>{c.profile_used || "—"}</td>
                     <td className="num">
-                      {c.prompt_tokens ?? "—"} / {c.completion_tokens ?? "—"}
+                      {c.input_tokens ?? c.prompt_tokens ?? "—"} / {c.output_tokens ?? c.completion_tokens ?? "—"}
+                      {c.reasoning_tokens != null ? ` (${c.reasoning_tokens})` : ""}
                     </td>
                     <td className="num">{c.provider_requests ?? "—"}</td>
                     <td className="small">{c.failure_reason || c.fallback_reason || "—"}</td>
@@ -326,30 +330,167 @@ function SourceFreshness({ model }) {
   );
 }
 
-/* ------------------------------------------------------- executive summary */
+/** "1200 / 900 / 300" from Azure fields, or the older prompt/completion fields. */
+function tokenText(d) {
+  if (!d) return null;
+  const input = d.input_tokens ?? d.prompt_tokens;
+  const output = d.output_tokens ?? d.completion_tokens;
+  if (input == null && output == null) return "not reported by the provider";
+  return `${input ?? "—"} / ${output ?? "—"}${d.reasoning_tokens != null ? ` / ${d.reasoning_tokens}` : ""}`;
+}
 
-function ExecutiveSummary({ token, model, summary, onSummary }) {
+/* ----------------------------------------------------------- PDF download */
+
+// Downloads immediately (the simpler option): if the AI summary has not been
+// generated yet, the PDF says so in that section; download again afterwards.
+function DownloadReportButton({ token, model }) {
   const [state, setState] = useState({ busy: false, error: "" });
-
-  async function generate() {
-    const ok = window.confirm(
-      "Generate an AI executive summary for this saved report?\n\n" +
-        "• Makes one Groq request (uses your Groq quota).\n" +
-        "• Uses only this report's evidence; every figure and evidence ID is checked before saving.\n" +
-        "• Saved separately — the original report is not changed."
-    );
-    if (!ok) return;
+  async function save() {
     setState({ busy: true, error: "" });
     try {
-      const result = await api.generateSummary(token, model.ticker, model.runId);
+      const { blob, filename } = await api.downloadReportPdf(token, model.ticker, model.runId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setState({ busy: false, error: "" });
-      onSummary(result);
-    } catch (error) {
-      setState({ busy: false, error: error.message });
+    } catch (err) {
+      setState({ busy: false, error: err.message });
     }
   }
+  return (
+    <div className="download-report">
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={save}
+        disabled={state.busy}
+        title="PDF with the AI summary and research (if generated), charts, growth and ratio tables, news sources and disclaimer"
+      >
+        <Download size={14} aria-hidden="true" />
+        {state.busy ? "Preparing PDF…" : "Download report"}
+      </button>
+      {state.error && <span className="small tone-negative"> {state.error}</span>}
+    </div>
+  );
+}
 
-  const completed = summary?.status === "completed";
+/* ------------------------------------------------------- executive summary */
+
+function useBriefStatus(token, model, isLatest, onSummary) {
+  // Server-side state of the AI summary + thorough research for this report:
+  // status (none/generating/completed/unavailable) and job_status
+  // (none/pending/running/done/failed). Polls while a generation runs.
+  const [job, setJob] = useState(null);
+  const [error, setError] = useState("");
+  const [seq, setSeq] = useState(0);
+  const autoStarted = useRef(false);
+  const onSummaryRef = useRef(onSummary);
+  const notified = useRef(null);
+  onSummaryRef.current = onSummary;
+  const ticker = model.ticker;
+  const runId = model.runId;
+
+  // The parent passes a new callback on every render; keep it in a ref and
+  // notify only when the stored summary actually changes.
+  const apply = useCallback((result) => {
+    setJob(result);
+    const s = result?.summary;
+    const key = s ? `${s.status}|${s.generated_at_utc}|${(s.attempt || {}).status}` : null;
+    if (s && key !== notified.current && s.status !== "generating") {
+      notified.current = key;
+      onSummaryRef.current?.(s);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+    const controller = new AbortController();
+    async function poll(tries = 0) {
+      try {
+        const result = await api.summaryStatus(token, ticker, runId, controller.signal);
+        if (cancelled) return;
+        apply(result);
+        const running = result.status === "generating";
+        // Automatic generation rules: lib/briefModel.js (tested).
+        if (shouldAutoStart(result, { isLatest, alreadyStarted: autoStarted.current })) {
+          autoStarted.current = true;
+          const started = await api.generateSummary(token, ticker, runId, false);
+          if (cancelled) return;
+          apply(started);
+          timer = window.setTimeout(() => poll(0), 5000);
+          return;
+        }
+        if (running && tries < 240) timer = window.setTimeout(() => poll(tries + 1), 5000);
+      } catch (e) {
+        if (!cancelled && e.name !== "AbortError") setError(e.message);
+      }
+    }
+    poll();
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [token, ticker, runId, isLatest, apply, seq]);
+
+  const start = useCallback(
+    async (force) => {
+      setError("");
+      try {
+        const result = await api.generateSummary(token, ticker, runId, force);
+        apply(result);
+        setSeq((n) => n + 1); // restart polling
+      } catch (e) {
+        setError(e.message);
+      }
+    },
+    [token, ticker, runId, apply]
+  );
+  return { job, error, start };
+}
+
+function SourcesList({ sources }) {
+  if (!sources?.length) {
+    return <p className="small muted">No news sources: no verified company-specific articles were used.</p>;
+  }
+  return (
+    <ol className="sources-list">
+      {sources.map((s) => (
+        <li key={s.url}>
+          <ExternalLink href={s.url}>{s.title || s.url}</ExternalLink>
+          <span className="small muted">
+            {" "}
+            · {s.publisher || "Unknown publisher"}
+            {s.published_at ? ` · ${formatDate(s.published_at)}` : ""}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ExecutiveSummary({ token, model, summary, onSummary, isLatest }) {
+  const { job, error, start } = useBriefStatus(token, model, isLatest, onSummary);
+  const { record, completed, running, failed, research } = panelState(job, summary);
+
+  const button = (
+    <button
+      type="button"
+      className="btn btn-primary btn-sm"
+      onClick={() => start(true)}
+      disabled={running}
+      title="Makes one Azure OpenAI request (uses tokens; can take a few minutes)"
+    >
+      <Sparkles size={14} aria-hidden="true" />
+      {running ? "Generating and validating…" : completed ? "Regenerate" : "Generate summary"}
+    </button>
+  );
 
   return (
     <Card
@@ -358,16 +499,36 @@ function ExecutiveSummary({ token, model, summary, onSummary }) {
       title="Executive summary"
       subtitle={
         completed
-          ? `AI-written from this report's evidence · ${formatDateTime(summary.generated_at_utc)} · ${summary.word_count} words`
+          ? `Generated on ${formatDateTime(record.generated_at_utc)}${record.data_as_of ? ` · based on data as of ${formatDateTime(record.data_as_of)}` : ""} · ${record.word_count} words`
           : "A synthesis of the saved report"
       }
-      action={completed ? <Badge tone="info">Evidence-checked</Badge> : null}
+      action={completed ? <div className="badge-row"><Badge tone="info">Evidence-checked</Badge>{button}</div> : null}
       className="summary-card"
     >
+      {running && (
+        <Notice tone="info" title={completed ? "Regenerating" : "Generating the AI summary and thorough research"}>
+          {completed ? "The version below stays visible until the new one passes every check." : "This can take a few minutes; the rest of the report is available below."}
+        </Notice>
+      )}
+      {failed && !running && (
+        <Notice tone="warning" title="The latest generation did not complete">
+          {job?.error || record?.reason || "The summary service is unavailable."}{" "}
+          {completed ? "The previous version is shown." : "The report itself is complete and shown below."}{" "}
+          <button type="button" className="btn btn-sm" onClick={() => start(true)}>
+            Retry
+          </button>
+        </Notice>
+      )}
+      {error && <Notice tone="error">Summary request failed: {error}</Notice>}
+      {completed && !running && (
+        <p className="small muted">
+          Regenerate makes one Azure OpenAI request (can take a few minutes); this version stays visible until the new one passes its checks.
+        </p>
+      )}
       {completed ? (
         <>
           <div className="summary-body">
-            {summary.sections.map((section) => (
+            {record.sections.map((section) => (
               <div key={section.section} className="summary-section">
                 <h3>{SUMMARY_SECTION_TITLES[section.section] || humanize(section.section)}</h3>
                 <p>{section.text}</p>
@@ -383,43 +544,72 @@ function ExecutiveSummary({ token, model, summary, onSummary }) {
               </div>
             ))}
           </div>
-          <p className="small muted">{summary.disclosure}</p>
+          <h3 className="research-heading">Thorough research</h3>
+          {research?.sections?.length ? (
+            <div className="summary-body research-body">
+              {research.sections.map((section) => (
+                <div key={section.section} className="summary-section">
+                  <h4>{section.title || humanize(section.section)}</h4>
+                  <p>{section.text}</p>
+                  {section.evidence_ids?.length > 0 && (
+                    <p className="evidence-chips" aria-label="Cited evidence">
+                      {section.evidence_ids.map((id) => (
+                        <code key={id} className="chip">
+                          {id}
+                        </code>
+                      ))}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {research.withheld?.length > 0 && (
+                <Notice tone="warning" title="Sections withheld by validation">
+                  {research.withheld.map((w) => `${w.title || humanize(w.section)}: ${w.reason}`).join(" · ")}
+                </Notice>
+              )}
+            </div>
+          ) : running ? (
+            <Skeleton lines={6} />
+          ) : (
+            <p className="small muted">
+              {isLatest
+                ? "Thorough research has not been generated for this summary yet."
+                : "This summary was created before thorough research was added. Use Regenerate to create both."}
+            </p>
+          )}
+          <h3 className="research-heading">Sources</h3>
+          <SourcesList sources={record.sources || job?.sources} />
+          <p className="small muted">
+            AI-generated from this report and InsightIQ's computed figures. Not investment advice. {record.disclosure}
+          </p>
           <EvidencePanel
             label="Summary validation"
             rows={[
-              ["Model", summary.model],
-              ["Strict schema", summary.validation?.strict_schema],
-              ["All evidence IDs exist in report", summary.validation?.evidence_ids_in_report],
-              ["All numbers grounded in report", summary.validation?.numbers_grounded_in_report],
-              ["Causal / advisory language rejected", summary.validation?.causal_and_advisory_language_rejected],
-              ["Source report SHA-256", summary.source_report_sha256],
-              ["Tokens (prompt / completion)", `${summary.diagnostics?.prompt_tokens ?? "—"} / ${summary.diagnostics?.completion_tokens ?? "—"}`],
+              ["AI provider and model", record.provider === "azure_openai" ? `Azure OpenAI · ${record.model || record.deployment || "not recorded"}` : record.model],
+              ["Strict schema", record.validation?.strict_schema],
+              ["All evidence IDs exist in report", record.validation?.evidence_ids_in_report],
+              ["All numbers grounded in report", record.validation?.numbers_grounded_in_report],
+              ["Causal / advisory language rejected", record.validation?.causal_and_advisory_language_rejected],
+              ["Research sections validated individually", record.validation?.research_sections_validated_individually],
+              ["Based on dataset (SHA-256)", record.based_on?.dataset_sha256],
+              ["Source report SHA-256", record.source_report_sha256],
+              ["Tokens (input / output / reasoning)", tokenText(record.diagnostics)],
+              ["Earlier versions kept", record.previous_versions?.length || 0],
             ]}
           />
         </>
+      ) : running ? (
+        <Skeleton lines={8} />
       ) : (
-        <>
-          {summary?.status === "unavailable" && (
-            <Notice tone="warning" title="The automatic summary could not be validated">
-              {summary.reason} The report itself is complete and shown below.
-            </Notice>
-          )}
-          <EmptyState
-            title={summary?.status === "unavailable" ? "Try generating the summary again" : "No executive summary for this report yet"}
-            icon={Sparkles}
-            action={
-              <button type="button" className="btn btn-primary btn-sm" onClick={generate} disabled={state.busy}>
-                <Sparkles size={14} aria-hidden="true" />
-                {state.busy ? "Generating and validating…" : "Generate summary"}
-              </button>
-            }
-          >
-            {summary?.status === "unavailable"
-              ? "A new attempt makes one Groq request grounded strictly in this report and is saved only if it passes every check. The findings below are complete without it."
-              : "Reports created before this feature have no summary. Generating one uses a single Groq request grounded strictly in this report; the findings below are complete without it."}
-          </EmptyState>
-          {state.error && <Notice tone="error">Summary not saved: {state.error}</Notice>}
-        </>
+        <EmptyState
+          title={record?.status === "unavailable" ? "Try generating the summary again" : "No executive summary for this report yet"}
+          icon={Sparkles}
+          action={button}
+        >
+          {record?.status === "unavailable"
+            ? "A new attempt makes one Azure OpenAI request grounded strictly in this report and is saved only if it passes every check. The findings below are complete without it."
+            : "Generating one uses a single Azure OpenAI request grounded strictly in this report and InsightIQ's computed figures; the findings below are complete without it."}
+        </EmptyState>
       )}
     </Card>
   );
@@ -614,13 +804,17 @@ function FinancialSection({ model }) {
                       <td>{formatDate(f.last_reported_sec_period)}</td>
                       <td className="num">{first ? billions(first.predicted_billion_usd, model.currency) : "—"}</td>
                       <td className="num">
-                        {first && first.lower_95_billion_usd !== null
+                        {first && (f.interval_quality?.display_allowed ?? q?.interval_display_allowed) &&
+                        Number.isFinite(first.lower_95_billion_usd) && Number.isFinite(first.upper_95_billion_usd)
                           ? `${billions(first.lower_95_billion_usd, model.currency)} – ${billions(first.upper_95_billion_usd, model.currency)}`
-                          : "—"}
+                          : "Not validated"}
                       </td>
                       <td className="small">
                         {q
-                          ? `MAE ${formatBillions(q.selected_mae_billion_usd)} vs baseline ${formatBillions(q.baseline_mae_billion_usd)}; ${q.interval_hits}/${q.holdout_quarters} holdout quarters inside interval`
+                          ? `MAE ${formatBillions(q.selected_mae_billion_usd)} vs baseline ${formatBillions(q.baseline_mae_billion_usd)}` +
+                            (q.interval_points != null
+                              ? `; interval covered ${q.interval_coverage != null ? Math.round(q.interval_coverage * 100) + "%" : "—"} of ${q.interval_points} out-of-sample quarters`
+                              : q.interval_hits != null ? `; ${q.interval_hits}/${q.holdout_quarters} holdout quarters inside interval` : "")
                           : "—"}
                       </td>
                     </tr>
@@ -659,7 +853,7 @@ function FinancialSection({ model }) {
           ["Exact amount validation", diagnostics?.exact_amount_validation],
           ["Exact period validation", diagnostics?.exact_reporting_period_validation],
           ["SEC evidence ID validation", diagnostics?.sec_evidence_id_validation],
-          ["Tokens (prompt / completion)", diagnostics ? `${diagnostics.prompt_tokens ?? "—"} / ${diagnostics.completion_tokens ?? "—"}` : null],
+          ["Tokens (input / output / reasoning)", tokenText(diagnostics)],
           ["Response time", diagnostics?.elapsed_seconds !== undefined ? formatSeconds(diagnostics.elapsed_seconds) : null],
         ]}
       />
@@ -833,7 +1027,7 @@ function NewsSection({ model }) {
           ["Estimated input tokens / budget", budget ? `${budget.estimated_input_tokens} / ${budget.input_token_budget}` : null],
           ["Schema validated", diagnostics?.schema_validated],
           ["Evidence IDs validated", diagnostics?.evidence_ids_validated],
-          ["Tokens (prompt / completion)", diagnostics ? `${diagnostics.prompt_tokens ?? "—"} / ${diagnostics.completion_tokens ?? "—"}` : null],
+          ["Tokens (input / output / reasoning)", tokenText(diagnostics)],
         ]}
       />
     </Card>
@@ -994,7 +1188,7 @@ function StrategicSection({ model }) {
           ["Theme constraints verified", diagnostics?.theme_constraints_verified],
           ["Request profile", diagnostics?.profile_used],
           ["Provider requests", diagnostics?.provider_requests],
-          ["Tokens (prompt / completion)", diagnostics ? `${diagnostics.prompt_tokens ?? "—"} / ${diagnostics.completion_tokens ?? "—"}` : null],
+          ["Tokens (input / output / reasoning)", tokenText(diagnostics)],
         ]}
       />
     </Card>
@@ -1010,6 +1204,8 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
   const sections = [
     { id: "freshness", label: "Sources", icon: Database },
     { id: "summary", label: "Summary", icon: Sparkles },
+    { id: "charts", label: "Charts", icon: BarChart3 },
+    { id: "growth", label: "Growth", icon: TrendingUp },
     { id: "financial", label: "Financial", icon: Landmark },
     { id: "news", label: "News", icon: Newspaper },
     { id: "strategic", label: "Strategic", icon: BrainCircuit },
@@ -1038,6 +1234,7 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
               </Badge>
             )}
             {model.elapsed !== undefined && <Badge tone="neutral">Ran in {formatSeconds(model.elapsed)}</Badge>}
+            <DownloadReportButton token={token} model={model} />
             {inDatabase === false && (
               <Badge tone="warning" title="The job record is missing from the runtime database; this report was loaded from its original saved file.">
                 Loaded from saved file
@@ -1069,7 +1266,8 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
       </div>
 
       <SourceFreshness model={model} />
-      <ExecutiveSummary token={token} model={model} summary={doc.summary} onSummary={onSummary} />
+      <ExecutiveSummary token={token} model={model} summary={doc.summary} onSummary={onSummary} isLatest={isLatest} />
+      <ReportCharts token={token} ticker={model.ticker} runId={model.runId} />
       <FinancialSection model={model} />
       <NewsSection model={model} />
       <StrategicSection model={model} />

@@ -3,7 +3,7 @@
 * The database is snapshotted from the LIVE runtime working copy with SQLite's backup API
   (read-only source connection), so the running application is neither stopped nor modified.
 * Every packaged file is scanned for credential values from .env / .env.test (values are read
-  in-process and never printed) and for Groq / NewsData key patterns; any hit aborts the build.
+  in-process and never printed) and for known provider key patterns; any hit aborts the build.
 * deployment_manifest.json records SHA-256 for every file, database counts and research runs.
 
 Usage: .venv\\Scripts\\python.exe scripts\\build_deployment_zip.py <output_dir>
@@ -36,7 +36,7 @@ INCLUDE = [
     "data/server_startup_config.json",
     "data/sqlite_backups/*.sqlite3", "data/sqlite_backups/*.manifest.json",
     "data/backups/*.sqlite3",
-    "data/forecast_cache_v1/*.json", "data/research_job_journal/*.json", "data/job_backup_status/*.json",
+    "data/forecast_cache_v1/*.json", "data/forecast_cache_v2/*.json", "data/research_job_journal/*.json", "data/job_backup_status/*.json",
     "reports/*.json", "reports/research_runs/*.json", "reports/news_refresh_frontend_backup/**/*",
     "migration_reports/*.md", "migration_reports/artifacts/baseline_original.json",
     "migration_reports/artifacts/*.diff",
@@ -75,7 +75,7 @@ def secret_values():
         if path.is_file():
             for key, value in dotenv_values(path).items():
                 value = (value or "").strip()
-                if key not in ("API_ACCESS_KEY", "GROQ_API_KEY", "NEWSDATA_API_KEY", "SEC_USER_AGENT"):
+                if key not in ("API_ACCESS_KEY", "AZURE_OPENAI_API_KEY", "NEWSDATA_API_KEY", "FINNHUB_API_KEY", "FMP_API_KEY", "SEC_USER_AGENT"):
                     continue
                 if len(value) < 8 or "placeholder" in value or "example.invalid" in value:
                     continue  # empty or the deliberately fake offline-test values

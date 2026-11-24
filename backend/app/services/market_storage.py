@@ -180,12 +180,7 @@ def register_company(*, symbol, market, name, exchange=None, currency=None, sect
     return get_company(symbol)
 
 
-def get_company(symbol):
-    ensure_market_storage()
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM market_companies WHERE symbol = ?", (symbol,)).fetchone()
-    if row is None:
-        return None
+def _company_item(row):
     item = dict(row)
     item["in_universe"] = bool(item["in_universe"])
     try:
@@ -195,16 +190,24 @@ def get_company(symbol):
     return item
 
 
-def list_companies(market, sector_key=None):
+def get_company(symbol):
     ensure_market_storage()
-    sql = "SELECT symbol FROM market_companies WHERE market = ?"
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM market_companies WHERE symbol = ?", (symbol,)).fetchone()
+    return None if row is None else _company_item(row)
+
+
+def list_companies(market, sector_key=None):
+    """All stored companies of a market in one query (no per-row lookups)."""
+    ensure_market_storage()
+    sql = "SELECT * FROM market_companies WHERE market = ?"
     params = [market]
     if sector_key:
         sql += " AND sector_key = ?"
         params.append(sector_key)
     with connect() as conn:
         rows = conn.execute(sql + " ORDER BY symbol", params).fetchall()
-    return [get_company(r["symbol"]) for r in rows]
+    return [_company_item(r) for r in rows]
 
 
 # ---------------------------------------------------------------- quotes
@@ -231,12 +234,15 @@ def insert_quote(symbol, provider, quote):
         )
 
 
-def latest_quote(symbol):
+def latest_quote(symbol, as_of=None):
+    """Most recent stored quote; with ``as_of`` (ISO timestamp), the most recent
+    one stored by then (point-in-time)."""
     ensure_market_storage()
+    clause, params = ("AND fetched_at <= ?", (symbol, str(as_of))) if as_of else ("", (symbol,))
     with connect() as conn:
         row = conn.execute(
-            "SELECT * FROM market_quotes WHERE symbol = ? ORDER BY fetched_at DESC, id DESC LIMIT 1",
-            (symbol,),
+            f"SELECT * FROM market_quotes WHERE symbol = ? {clause} ORDER BY fetched_at DESC, id DESC LIMIT 1",
+            params,
         ).fetchone()
     if row is None:
         return None
@@ -271,17 +277,20 @@ def insert_statement_rows(rows):
         return conn.total_changes - before
 
 
-def statement_values(symbol, period_type="annual"):
-    """Latest stored value per (period_end, metric): {period_end: {metric: row}}."""
+def statement_values(symbol, period_type="annual", as_of=None):
+    """Latest stored value per (period_end, metric): {period_end: {metric: row}}.
+    With ``as_of`` (ISO timestamp), only rows stored by then are used, so a
+    saved report's figures can be rebuilt exactly as they were (point-in-time)."""
     ensure_market_storage()
+    clause, params = ("AND fetched_at <= ?", (symbol, period_type, str(as_of))) if as_of else ("", (symbol, period_type))
     with connect() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT * FROM market_statements
-            WHERE symbol = ? AND period_type = ?
+            WHERE symbol = ? AND period_type = ? {clause}
             ORDER BY period_end, fetched_at, id
             """,
-            (symbol, period_type),
+            params,
         ).fetchall()
     out = {}
     for row in rows:

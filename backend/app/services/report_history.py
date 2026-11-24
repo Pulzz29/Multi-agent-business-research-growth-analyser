@@ -22,7 +22,9 @@ from pathlib import Path
 from app.core.config import get_settings
 from app.database.sqlite_manager import connect
 
-SUPPORTED_TICKERS = frozenset({"AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 
 
 def is_known_ticker(ticker):
@@ -301,4 +303,51 @@ def read_report(ticker, run_id):
             "created_at_utc": (row or {}).get("created_at_utc"),
             "finished_at_utc": (row or {}).get("finished_at_utc"),
         },
+        "news_evidence_resolution": news_evidence_resolution(doc),
     }
+
+
+def resolve_news_evidence(conn, ticker, article):
+    """
+    Locate a saved report's cited article in the current database.
+
+    Database IDs are not stable across a restore (IDs can be reissued), so an
+    ID is trusted only when it still points to the same company and URL;
+    otherwise the article is looked up by company and source URL. A citation
+    is never resolved to another company's article.
+    """
+    url = article.get("source_url")
+    db_id = article.get("database_id")
+    if db_id is not None:
+        row = conn.execute(
+            "SELECT id, company_ticker, article_url FROM news_articles WHERE id = ?", (int(db_id),)
+        ).fetchone()
+        if row is not None and row["company_ticker"] == ticker and row["article_url"] == url:
+            return {"status": "resolved", "database_id": row["id"]}
+    if url:
+        row = conn.execute(
+            "SELECT id FROM news_articles WHERE company_ticker = ? AND article_url = ? ORDER BY id LIMIT 1",
+            (ticker, url),
+        ).fetchone()
+        if row is not None:
+            return {"status": "resolved_by_source_url", "database_id": row["id"]}
+    return {"status": "unresolvable", "database_id": None}
+
+
+def news_evidence_resolution(doc):
+    """{evidence_id: resolution} for every news article cited by a saved report."""
+    ticker = doc.get("ticker")
+    news = doc.get("news") or {}
+    articles = {}
+    for article in (news.get("selected_articles") or []) + (news.get("approved_primary_articles") or []):
+        if article.get("evidence_id"):
+            articles[article["evidence_id"]] = article
+    if not articles:
+        return {}
+    try:
+        from app.database.sqlite_manager import connect
+
+        with connect() as conn:
+            return {eid: resolve_news_evidence(conn, ticker, a) for eid, a in articles.items()}
+    except Exception:
+        return {eid: {"status": "unknown", "database_id": None} for eid in articles}

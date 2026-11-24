@@ -15,7 +15,6 @@ from app.database.sqlite_manager import (
     connect, transaction, utc_now, sync_snapshot_to_drive,
     create_recovery_point,
 )
-from app.services.sec_ingestion import SUPPORTED_TICKERS
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,8 @@ def normalized_article_url(value):
         return None
 
     host = parsed.hostname.lower()
+    if host.startswith("www."):
+        host = host[4:]
     netloc = host
 
     if parsed.port:
@@ -70,7 +71,7 @@ def normalized_article_url(value):
 
     # A canonical publisher link is used for duplicate detection.
     return urlunsplit(
-        (parsed.scheme.lower(), netloc, path.rstrip("/") or "/", "", "")
+        ("https", netloc, path.rstrip("/") or "/", "", "")
     )
 
 
@@ -89,111 +90,6 @@ def parse_published_at(value):
         parsed = parsed.replace(tzinfo=timezone.utc)
 
     return parsed.astimezone(timezone.utc).isoformat()
-
-
-def company_search_term(company_name):
-    words = re.findall(r"[A-Za-z0-9]+", company_name or "")
-    if not words:
-        raise NewsIngestionError("SEC company name is unavailable.")
-
-    # The primary term is derived from the genuine SEC registry name.
-    # This is not a fabricated company alias.
-    return words[0]
-
-
-# General business-topic signals, not company-specific financial data.
-BUSINESS_SIGNALS = frozenset({
-    "revenue", "earnings", "profit", "margin", "cash flow",
-    "financial", "quarterly", "annual", "investor",
-    "business", "enterprise", "commercial", "corporate",
-    "acquisition", "merger", "investment", "partnership",
-    "contract", "customer", "sales", "market share",
-    "competition", "competitor", "strategy", "growth",
-    "expansion", "layoffs", "workforce", "restructuring",
-    "regulation", "regulator", "antitrust", "lawsuit",
-    "security breach", "cyberattack", "outage",
-    "service disruption", "cloud", "artificial intelligence",
-    "ai infrastructure", "data center", "datacenter",
-    "product launch", "product release", "launches",
-    "subscription", "pricing", "supply chain",
-    "manufacturing", "guidance", "forecast",
-    "chief executive", "ceo", "management",
-    "shareholder", "stock", "shares", "dividend",
-    "research and development", "capital expenditure",
-})
-
-# Incidental personal stories that mention a company's product
-# are not evidence of that company's business performance.
-INCIDENTAL_PERSONAL_SIGNALS = frozenset({
-    "ex-partner", "ex partner", "former partner",
-    "banned from contacting", "restraining order",
-    "domestic abuse", "stalking",
-    "personal dispute", "relationship dispute",
-})
-
-
-def relevance_for_article(article, company_term, ticker):
-    title = str(article.get("title") or "")
-    description = str(article.get("description") or "")
-
-    keywords = article.get("keywords")
-    if not isinstance(keywords, list):
-        keywords = []
-
-    keyword_text = " ".join(map(str, keywords))
-
-    searchable = " ".join([
-        title, description, keyword_text
-    ]).lower()
-
-    title_lower = title.lower()
-
-    company_pattern = re.compile(
-        rf"(?<![A-Za-z0-9]){re.escape(company_term)}(?![A-Za-z0-9])",
-        re.IGNORECASE,
-    )
-
-    ticker_pattern = re.compile(
-        rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])",
-        re.IGNORECASE,
-    )
-
-    company_mentioned = bool(
-        company_pattern.search(searchable)
-        or ticker_pattern.search(searchable)
-    )
-
-    if not company_mentioned:
-        return 0.0, "company_not_mentioned"
-
-    business_matches = sorted(
-        signal
-        for signal in BUSINESS_SIGNALS
-        if signal in searchable
-    )
-
-    incidental_matches = sorted(
-        signal
-        for signal in INCIDENTAL_PERSONAL_SIGNALS
-        if signal in searchable
-    )
-
-    if incidental_matches and not business_matches:
-        return 0.05, "incidental_personal_story"
-
-    if business_matches:
-        if company_pattern.search(title_lower):
-            return 0.9, "company_business_development"
-
-        if ticker_pattern.search(title_lower):
-            return 0.85, "ticker_business_development"
-
-        return 0.7, "company_business_context"
-
-    if incidental_matches:
-        return 0.1, "incidental_company_product_mention"
-
-    return 0.35, "company_mentioned_business_impact_unverified"
 
 
 def validate_article(article):
@@ -311,6 +207,46 @@ class NewsDataClient:
         raise NewsIngestionError("NewsData.io attempts exhausted.")
 
 
+NEWSDATA_QUERY_MAX_CHARS = 100  # NewsData.io rejects longer q / qInTitle values (HTTP 422)
+
+
+def news_query_terms(identity, search_terms=None, limit=5, max_chars=NEWSDATA_QUERY_MAX_CHARS):
+    """
+    Quoted headline-search terms for NewsData.io: the company's distinctive
+    names first, then its ambiguous one-word names (headline matches are
+    re-checked by the relevance rules). A longer form that contains a kept
+    shorter term is redundant for a phrase search ("Infosys Ltd" is matched by
+    "Infosys") and is dropped; the joined query stays within NewsData.io's
+    100-character limit.
+    """
+    import re as _re
+
+    candidates = []
+    for term in list(search_terms or []) + [n.text for n in identity.names if not n.ambiguous] + [
+            n.text for n in identity.names if n.ambiguous and not n.acronym]:
+        cleaned = str(term or "").strip().strip('"')
+        if cleaned and cleaned.lower() not in {t.lower() for t in candidates}:
+            candidates.append(cleaned)
+    if not candidates:
+        candidates = [identity.display_name]
+
+    # Shorter forms first, so longer forms that contain them are recognised as redundant.
+    ordered = sorted(candidates, key=lambda t: (len(t), candidates.index(t)))
+    kept = []
+    for term in ordered:
+        if any(_re.search(rf"(?<![A-Za-z0-9]){_re.escape(k)}(?![A-Za-z0-9])", term, _re.IGNORECASE) for k in kept):
+            continue
+        kept.append(term)
+    kept.sort(key=candidates.index)  # restore priority order
+
+    terms = []
+    for term in kept[:limit]:
+        query = " OR ".join(f'"{t}"' for t in terms + [term])
+        if len(query) <= max_chars:
+            terms.append(term)
+    return terms or [kept[0][: max_chars - 2]]
+
+
 async def refresh_news_company(
     ticker,
     max_articles=30,
@@ -329,8 +265,6 @@ async def refresh_news_company(
         str(t).strip() for t in (search_terms or []) if str(t or "").strip()
     ][:3]
 
-    if ticker not in SUPPORTED_TICKERS and not search_terms:
-        raise ValueError(f"Unsupported ticker: {ticker}")
 
     if not (1 <= max_articles <= 200):
         raise ValueError("max_articles must be between 1 and 200.")
@@ -402,11 +336,14 @@ async def refresh_news_company(
                         "coverage": "previous_refresh_reused",
                     }
 
-    company_term = company["name"]
-    primary_term = (
-        search_terms[0] if search_terms
-        else company_search_term(company_term)
-    )
+    # Verified company identity: drives both the provider query (headline
+    # search on the company's names) and the strict relevance decision.
+    from app.services.company_identity import identity_for, universe_identities
+    from app.services.news_relevance import assess_article
+
+    identity = identity_for(ticker)
+    others = universe_identities()
+    query_terms = news_query_terms(identity, search_terms)
 
     refresh_started = utc_now()
 
@@ -425,6 +362,7 @@ async def refresh_news_company(
     raw_fetched = 0
     rejected = 0
     irrelevant = 0
+    rejected_reasons = {}
     duplicate_in_batch = 0
     accepted = []
     seen_ids = set()
@@ -436,11 +374,9 @@ async def refresh_news_company(
         provider = NewsDataClient()
 
         params = {
-            "q": (
-                " OR ".join(f'"{term}"' for term in search_terms)
-                if search_terms
-                else f'"{primary_term}" OR "{ticker}"'
-            ),
+            # Headline search: the strict relevance rules require the company
+            # to be named in the headline, so body-only matches are not fetched.
+            "qInTitle": " OR ".join(f'"{term}"' for term in query_terms),
             "language": "en",
         }
 
@@ -490,21 +426,30 @@ async def refresh_news_company(
                     seen_ids.add(provider_id)
                     seen_urls.add(canonical_url)
 
-                    score, reason = max(
-                        (
-                            relevance_for_article(article, term, ticker)
-                            for term in (search_terms or [primary_term])
-                        ),
-                        key=lambda result: result[0],
+                    verdict = assess_article(
+                        {
+                            "title": valid["title"],
+                            "description": valid["description"],
+                            "published_at": valid["published_at"],
+                        },
+                        identity,
+                        others=others,
+                        max_age_days=settings.news_max_age_days,
                     )
 
-                    if score < 0.60:
+                    if verdict["decision"] != "accept":
                         irrelevant += 1
+                        rejected_reasons[verdict["reason"]] = (
+                            rejected_reasons.get(verdict["reason"], 0) + 1
+                        )
                         continue
 
-                    valid["relevance_score"] = score
-                    valid["relevance_reason"] = reason
+                    valid["relevance_score"] = verdict["score"]
+                    valid["relevance_reason"] = verdict["reason"]
                     valid["metadata"] = {
+                        "relevance_version": verdict["relevance_version"],
+                        "event_type": verdict["event_type"],
+                        "primary_subject": verdict["primary_subject"],
                         "provider_id_supplied": valid[
                             "provider_id_supplied"
                         ],
@@ -652,6 +597,7 @@ async def refresh_news_company(
             "records_already_stored": already_stored,
             "records_rejected": rejected,
             "records_irrelevant": irrelevant,
+            "irrelevant_by_reason": rejected_reasons,
             "duplicates_in_batch": duplicate_in_batch,
             "coverage": end_reason,
             "snapshot_verified": snapshot["integrity_ok"],

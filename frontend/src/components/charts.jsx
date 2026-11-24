@@ -41,7 +41,7 @@ function yTicks(min, max) {
  * series: [{ id, label, tone, dashed, points: [{ x: "YYYY-MM-DD", y, note }], band: [{ x, lo, hi }] }]
  * y values are in the unit given by yFormat (e.g. billions of USD).
  */
-export function LineChart({ series, height = 280, yFormat = (v) => v, xFormat, ariaLabel, footnote }) {
+export function LineChart({ series, height = 280, yFormat = (v) => v, xFormat, ariaLabel, footnote, yTitle, xTitle }) {
   const [wrapRef, width] = useWidth();
   const [active, setActive] = useState(null);
   const pad = { top: 16, right: 16, bottom: 30, left: 58 };
@@ -146,6 +146,7 @@ export function LineChart({ series, height = 280, yFormat = (v) => v, xFormat, a
 
   return (
     <figure className="chart" ref={wrapRef}>
+      {yTitle && <p className="chart-axis-title">{yTitle}</p>}
       <div className="chart-legend" aria-hidden="true">
         {prepared.map((s) => (
           <span key={s.id} className="legend-item">
@@ -248,12 +249,13 @@ export function LineChart({ series, height = 280, yFormat = (v) => v, xFormat, a
         )}
       </div>
       {footnote && <figcaption className="chart-note">{footnote}</figcaption>}
+      {xTitle && <p className="chart-axis-title chart-axis-x">{xTitle}</p>}
     </figure>
   );
 }
 
 /** Grouped vertical bars. data: [{ key, label, values: [{ id, value, tone, title }] }] */
-export function BarChart({ data, height = 240, yFormat = (v) => v, legend, ariaLabel }) {
+export function BarChart({ data, height = 240, yFormat = (v) => v, legend, ariaLabel, yTitle, xTitle }) {
   const [wrapRef, width] = useWidth();
   const [active, setActive] = useState(null);
   const pad = { top: 14, right: 12, bottom: 34, left: 54 };
@@ -261,8 +263,8 @@ export function BarChart({ data, height = 240, yFormat = (v) => v, legend, ariaL
   const innerH = height - pad.top - pad.bottom;
   const values = data.flatMap((d) => d.values.map((v) => v.value)).filter((v) => Number.isFinite(v));
   if (!values.length) return null;
-  const yMin = Math.min(0, ...values);
-  const yMax = Math.max(...values) * 1.08;
+  const yMin = Math.min(0, ...values) * 1.08;
+  const yMax = Math.max(0, ...values) * 1.08 || 1;
   const sy = (v) => pad.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
   const group = innerW / data.length;
   const perGroup = data[0]?.values.length || 1;
@@ -271,6 +273,7 @@ export function BarChart({ data, height = 240, yFormat = (v) => v, legend, ariaL
 
   return (
     <figure className="chart" ref={wrapRef}>
+      {yTitle && <p className="chart-axis-title">{yTitle}</p>}
       {legend && (
         <div className="chart-legend" aria-hidden="true">
           {legend.map((l) => (
@@ -336,6 +339,7 @@ export function BarChart({ data, height = 240, yFormat = (v) => v, legend, ariaL
           </div>
         )}
       </div>
+      {xTitle && <p className="chart-axis-title chart-axis-x">{xTitle}</p>}
     </figure>
   );
 }

@@ -45,10 +45,12 @@ def billions(value_usd):
 
 
 def percent_change(current, previous):
+    # Same rule as growth_analysis.change: a zero or negative base (a loss or
+    # negative cash flow) gives no percentage, so none is offered as evidence.
     current, previous = Decimal(str(current)), Decimal(str(previous))
-    if previous == 0:
+    if previous <= 0:
         return None
-    return ((current - previous) / abs(previous) * 100).quantize(
+    return ((current - previous) / previous * 100).quantize(
         Decimal("0.1"), rounding=ROUND_HALF_UP
     )
 
@@ -180,17 +182,25 @@ def build_financial_package(
         q = (quality or {}).get(metric, {})
         predictions = []
         decimals = []
+        # Intervals are sent only when they exist and passed the quality gate;
+        # otherwise the model sees the point estimate and "interval unavailable".
+        intervals_allowed = q.get("interval_display_allowed") is not False
         for row in item.get("predictions") or []:
+            if row.get("predicted_billion_usd") is None:
+                continue
             point = round(float(row["predicted_billion_usd"]), 2)
-            low = round(float(row["lower_95_billion_usd"]), 2)
-            high = round(float(row["upper_95_billion_usd"]), 2)
+            low_raw, high_raw = row.get("lower_95_billion_usd"), row.get("upper_95_billion_usd")
+            has_interval = intervals_allowed and low_raw is not None and high_raw is not None
+            low = round(float(low_raw), 2) if has_interval else None
+            high = round(float(high_raw), 2) if has_interval else None
             predictions.append({
                 "quarters_ahead": row.get("fiscal_quarter_ahead"),
                 "estimate_billion_usd": point,
                 "lower_95_billion_usd": low,
                 "upper_95_billion_usd": high,
+                "interval": "available" if has_interval else "unavailable (not validated)",
             })
-            decimals += [point, low, high]
+            decimals += [v for v in (point, low, high) if v is not None]
         mae = q.get("selected_mae_billion_usd")
         base = q.get("baseline_mae_billion_usd")
         mae_r = round(float(mae), 2) if mae is not None else None
@@ -368,11 +378,16 @@ def render_observation(item):
         first = (item.get("predictions") or [None])[0]
         if not first:
             return None
+        low, high = first.get("lower_95_billion_usd"), first.get("upper_95_billion_usd")
+        interval = (
+            f"95% model interval {low:.2f}–{high:.2f}"
+            if low is not None and high is not None
+            else "95% model interval not shown (it did not pass the out-of-sample quality check)"
+        )
         return (
             f"Statistical estimate (not a reported result) for the next quarter's "
             f"{METRIC_LABELS[item['metric']].lower()}: USD {first['estimate_billion_usd']:.2f} "
-            f"billion, 95% model interval {first['lower_95_billion_usd']:.2f}–"
-            f"{first['upper_95_billion_usd']:.2f} [{item['evidence_id']}]."
+            f"billion, {interval} [{item['evidence_id']}]."
         )
     return None
 

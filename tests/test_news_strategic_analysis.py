@@ -3,13 +3,13 @@ News intelligence and strategic analysis validation (offline).
 
 Articles below are synthetic test inputs that mimic stored NewsData.io rows;
 they are never written to any database. Model output is constructed
-directly or produced by the test-only fake Groq client.
+directly or produced by the test-only fake Azure OpenAI client.
 """
 import json
 
 import pytest
 
-from research_v2_support import FakeGroqClient, completion
+from research_v2_support import FakeAIClient, completion
 
 ARTICLES = [
     {
@@ -204,12 +204,11 @@ def test_write_news_analysis_with_fake_provider(monkeypatch):
     def handler(kw, n):
         return completion(json.dumps({"items": [item().model_dump()]}))
 
-    client = FakeGroqClient(handler)
-    monkeypatch.setenv("GROQ_API_KEY", "gsk_TEST_ONLY")
+    client = FakeAIClient(handler)
     analysis, diag = news_agent.write_news_analysis("MSFT", ARTICLES, client=client)
     assert analysis["status"] == "completed"
     assert diag["agent"] == "news" and diag["profile_used"] == "full"
-    sent = json.loads(client.requests[0]["messages"][1]["content"])
+    sent = json.loads(client.requests[0]["input"][-1]["content"])
     assert {a["evidence_id"] for a in sent["articles"]} == {a["evidence_id"] for a in ARTICLES}
     assert all("source_url" not in a for a in sent["articles"])  # links never sent/echoed
 

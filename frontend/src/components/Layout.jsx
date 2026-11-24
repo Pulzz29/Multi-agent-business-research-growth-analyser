@@ -95,7 +95,7 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
         </nav>
 
         <div className="sidebar-foot">
-          <p>Data: SEC EDGAR · FMP · Finnhub · Yahoo Finance · NewsData.io · Groq</p>
+          <p>Data: SEC EDGAR · FMP · Finnhub · Yahoo Finance · NewsData.io · Azure OpenAI</p>
           <p>Research support only. Not investment advice.</p>
         </div>
       </aside>

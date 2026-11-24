@@ -1,0 +1,69 @@
+{
+  "ticker": "MSFT",
+  "run_id": "5a25fd13-a894-4b58-ba69-ed8c4422fbe8",
+  "verified_at_utc": "2026-11-24T14:45:26.946544+00:00",
+  "before": {
+    "status": "completed",
+    "job_status": "done",
+    "is_current": false,
+    "generated_at_utc": "2026-11-24T10:54:49.866941+00:00"
+  },
+  "result": {
+    "status": "completed",
+    "job_status": "done",
+    "is_current": true,
+    "generated_at_utc": "2026-11-24T14:45:06.847390+00:00",
+    "data_as_of": "2026-11-24T10:49:29.085878+00:00",
+    "error": null
+  },
+  "seconds_from_open_to_result": 793.8,
+  "azure": {
+    "provider": "azure_openai",
+    "deployment": "gpt-5.4-pro",
+    "model": "gpt-5.4-pro",
+    "response_id": "resp_0289320260e647b3006b059fe9b9e88194834634b1e0579b62",
+    "input_tokens": 6191,
+    "output_tokens": 14197,
+    "reasoning_tokens": 6183,
+    "total_tokens": 20388,
+    "elapsed_seconds": 781.928,
+    "provider_requests": null,
+    "context_level": "full",
+    "failure_reason": null
+  },
+  "billed_all_attempts": null,
+  "summary_words": 193,
+  "summary_sections": [
+    "financial_position",
+    "news_developments",
+    "risks_and_opportunities",
+    "monitoring_priorities",
+    "evidence_limitations"
+  ],
+  "research_status": "completed",
+  "research_sections": [
+    "business_overview",
+    "financial_performance",
+    "growth_analysis",
+    "valuation_snapshot",
+    "recent_news",
+    "key_risks",
+    "outlook"
+  ],
+  "research_withheld": [],
+  "sources": 4,
+  "attempt": {
+    "status": "done",
+    "started_at_utc": "2026-11-24T14:31:58.952951+00:00",
+    "finished_at_utc": "2026-11-24T14:45:06.847414+00:00",
+    "forced": false,
+    "trigger": "auto"
+  },
+  "previous_versions_kept": 1,
+  "cache_hit_on_reopen": true,
+  "pdf": {
+    "file": "Microsoft_Corporation_Research_Report_2026-11-24.pdf",
+    "bytes": 17280,
+    "is_pdf": true
+  }
+}

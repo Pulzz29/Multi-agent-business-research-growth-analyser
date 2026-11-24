@@ -45,11 +45,14 @@ FINANCIAL_CONCEPTS = frozenset({
     "CostOfGoodsAndServicesSold",
     "OperatingExpenses",
     "ResearchAndDevelopmentExpense",
+    # Per-share values (unit USD/shares), for EPS growth.
+    "EarningsPerShareDiluted",
+    "EarningsPerShareBasic",
 })
 
-SUPPORTED_TICKERS = frozenset({
-    "AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"
-})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 
 PERIODIC_FORMS = frozenset({"10-Q", "10-K", "10-Q/A", "10-K/A"})
 
@@ -454,7 +457,9 @@ def _record_failed_refresh(ticker, started_at, exc):
 async def refresh_sec_company(ticker, force_refresh=False):
     ticker = str(ticker).upper().strip()
 
-    if ticker not in SUPPORTED_TICKERS:
+    from app.services.sec_coverage import sec_eligible
+
+    if not sec_eligible(ticker):
         raise ValueError(
             f"Unsupported company ticker: {ticker}"
         )

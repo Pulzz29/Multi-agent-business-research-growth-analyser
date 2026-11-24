@@ -343,9 +343,17 @@ def test_forecast_cache_hit_without_recompute_and_invalidation_on_input_change(
 ):
     from app.services import forecast_cache, forecasting
 
+    # Snapshot caches from an earlier method version are recomputed once...
+    from research_v2_support import make_cache_stale
+
+    make_cache_stale("MSFT", "revenue")
+    first = forecast_cache.forecast_financial_metric_cached("MSFT", "revenue")
+    assert first["cache_status"] == "miss"
+
     def no_training(*a, **k):
         raise AssertionError("forecast was recomputed")
 
+    # ...and then served from the cache without retraining.
     monkeypatch.setattr(forecasting, "forecast_financial_metric", no_training)
     hit = forecast_cache.forecast_financial_metric_cached("MSFT", "revenue")
     assert hit["cache_status"] == "hit"
@@ -353,8 +361,8 @@ def test_forecast_cache_hit_without_recompute_and_invalidation_on_input_change(
 
     original = forecast_cache.fin.normalized_quarterly_financials
 
-    def changed(ticker):
-        data = original(ticker)
+    def changed(ticker, as_of=None):
+        data = original(ticker, as_of=as_of)
         data["revenue"][-1] = dict(data["revenue"][-1], value=str(int(data["revenue"][-1]["value"]) + 1))
         return data
 

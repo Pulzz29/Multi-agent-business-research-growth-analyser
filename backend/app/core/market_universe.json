@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Curated company universe for the market and sector comparison features. Symbols are exchange tickers used by the data providers (US: Finnhub/FMP; India: Yahoo Finance via yfinance, NSE suffix .NS). Sector membership is InsightIQ's curated classification; a company's provider-reported sector is stored alongside it for transparency. Edit this file to add or remove companies; no code change is needed.",
+  "description": "Curated company universe for the market and sector comparison features. Symbols are exchange tickers used by the data providers (US: Finnhub/FMP; India: Yahoo Finance via yfinance, NSE suffix .NS). Sector membership is InsightIQ's curated classification; a company's provider-reported sector is stored alongside it for transparency. Edit this file to add or remove companies; no code change is needed. US entries carry 'aliases' (common short names and documented former names used in news); Indian entries carry 'news_terms'. Aliases are matched with ambiguity rules (core/name_ambiguity.json).",
   "markets": {
     "US": {
       "label": "United States",
@@ -15,88 +15,387 @@
         "technology": {
           "label": "Technology",
           "companies": [
-            {"symbol": "AAPL", "name": "Apple Inc."},
-            {"symbol": "MSFT", "name": "Microsoft Corporation"},
-            {"symbol": "NVDA", "name": "NVIDIA Corporation"},
-            {"symbol": "ORCL", "name": "Oracle Corporation"},
-            {"symbol": "ADBE", "name": "Adobe Inc."},
-            {"symbol": "CSCO", "name": "Cisco Systems, Inc."}
+            {
+              "symbol": "AAPL",
+              "name": "Apple Inc.",
+              "aliases": [
+                "Apple"
+              ]
+            },
+            {
+              "symbol": "MSFT",
+              "name": "Microsoft Corporation",
+              "aliases": [
+                "Microsoft"
+              ]
+            },
+            {
+              "symbol": "NVDA",
+              "name": "NVIDIA Corporation",
+              "aliases": [
+                "Nvidia"
+              ]
+            },
+            {
+              "symbol": "ORCL",
+              "name": "Oracle Corporation",
+              "aliases": [
+                "Oracle"
+              ]
+            },
+            {
+              "symbol": "ADBE",
+              "name": "Adobe Inc.",
+              "aliases": [
+                "Adobe"
+              ]
+            },
+            {
+              "symbol": "CSCO",
+              "name": "Cisco Systems, Inc.",
+              "aliases": [
+                "Cisco"
+              ]
+            }
           ]
         },
         "communication_services": {
           "label": "Communication Services",
           "companies": [
-            {"symbol": "GOOGL", "name": "Alphabet Inc."},
-            {"symbol": "META", "name": "Meta Platforms, Inc."},
-            {"symbol": "NFLX", "name": "Netflix, Inc."},
-            {"symbol": "DIS", "name": "The Walt Disney Company"},
-            {"symbol": "TMUS", "name": "T-Mobile US, Inc."},
-            {"symbol": "VZ", "name": "Verizon Communications Inc."}
+            {
+              "symbol": "GOOGL",
+              "name": "Alphabet Inc.",
+              "aliases": [
+                "Alphabet",
+                "Google"
+              ]
+            },
+            {
+              "symbol": "META",
+              "name": "Meta Platforms, Inc.",
+              "aliases": [
+                "Meta Platforms",
+                "Meta"
+              ]
+            },
+            {
+              "symbol": "NFLX",
+              "name": "Netflix, Inc.",
+              "aliases": [
+                "Netflix"
+              ]
+            },
+            {
+              "symbol": "DIS",
+              "name": "The Walt Disney Company",
+              "aliases": [
+                "Walt Disney",
+                "Disney"
+              ]
+            },
+            {
+              "symbol": "TMUS",
+              "name": "T-Mobile US, Inc.",
+              "aliases": [
+                "T-Mobile"
+              ]
+            },
+            {
+              "symbol": "VZ",
+              "name": "Verizon Communications Inc.",
+              "aliases": [
+                "Verizon"
+              ]
+            }
           ]
         },
         "retail": {
           "label": "Retail",
           "companies": [
-            {"symbol": "AMZN", "name": "Amazon.com, Inc."},
-            {"symbol": "WMT", "name": "Walmart Inc."},
-            {"symbol": "COST", "name": "Costco Wholesale Corporation"},
-            {"symbol": "HD", "name": "The Home Depot, Inc."},
-            {"symbol": "TGT", "name": "Target Corporation"},
-            {"symbol": "LOW", "name": "Lowe's Companies, Inc."}
+            {
+              "symbol": "AMZN",
+              "name": "Amazon.com, Inc.",
+              "aliases": [
+                "Amazon.com",
+                "Amazon"
+              ]
+            },
+            {
+              "symbol": "WMT",
+              "name": "Walmart Inc.",
+              "aliases": [
+                "Walmart"
+              ]
+            },
+            {
+              "symbol": "COST",
+              "name": "Costco Wholesale Corporation",
+              "aliases": [
+                "Costco Wholesale",
+                "Costco"
+              ]
+            },
+            {
+              "symbol": "HD",
+              "name": "The Home Depot, Inc.",
+              "aliases": [
+                "Home Depot"
+              ]
+            },
+            {
+              "symbol": "TGT",
+              "name": "Target Corporation",
+              "aliases": [
+                "Target"
+              ]
+            },
+            {
+              "symbol": "LOW",
+              "name": "Lowe's Companies, Inc.",
+              "aliases": [
+                "Lowe's"
+              ]
+            }
           ]
         },
         "fmcg": {
           "label": "FMCG / Consumer Staples",
           "companies": [
-            {"symbol": "PG", "name": "The Procter & Gamble Company"},
-            {"symbol": "KO", "name": "The Coca-Cola Company"},
-            {"symbol": "PEP", "name": "PepsiCo, Inc."},
-            {"symbol": "CL", "name": "Colgate-Palmolive Company"},
-            {"symbol": "KMB", "name": "Kimberly-Clark Corporation"},
-            {"symbol": "MDLZ", "name": "Mondelez International, Inc."}
+            {
+              "symbol": "PG",
+              "name": "The Procter & Gamble Company",
+              "aliases": [
+                "Procter & Gamble",
+                "P&G"
+              ]
+            },
+            {
+              "symbol": "KO",
+              "name": "The Coca-Cola Company",
+              "aliases": [
+                "Coca-Cola"
+              ]
+            },
+            {
+              "symbol": "PEP",
+              "name": "PepsiCo, Inc.",
+              "aliases": [
+                "PepsiCo"
+              ]
+            },
+            {
+              "symbol": "CL",
+              "name": "Colgate-Palmolive Company",
+              "aliases": [
+                "Colgate-Palmolive"
+              ]
+            },
+            {
+              "symbol": "KMB",
+              "name": "Kimberly-Clark Corporation",
+              "aliases": [
+                "Kimberly-Clark"
+              ]
+            },
+            {
+              "symbol": "MDLZ",
+              "name": "Mondelez International, Inc.",
+              "aliases": [
+                "Mondelez"
+              ]
+            }
           ]
         },
         "banking": {
           "label": "Banking",
           "companies": [
-            {"symbol": "JPM", "name": "JPMorgan Chase & Co."},
-            {"symbol": "BAC", "name": "Bank of America Corporation"},
-            {"symbol": "WFC", "name": "Wells Fargo & Company"},
-            {"symbol": "C", "name": "Citigroup Inc."},
-            {"symbol": "GS", "name": "The Goldman Sachs Group, Inc."},
-            {"symbol": "MS", "name": "Morgan Stanley"}
+            {
+              "symbol": "JPM",
+              "name": "JPMorgan Chase & Co.",
+              "aliases": [
+                "JPMorgan Chase",
+                "JPMorgan"
+              ]
+            },
+            {
+              "symbol": "BAC",
+              "name": "Bank of America Corporation",
+              "aliases": [
+                "Bank of America"
+              ]
+            },
+            {
+              "symbol": "WFC",
+              "name": "Wells Fargo & Company",
+              "aliases": [
+                "Wells Fargo"
+              ]
+            },
+            {
+              "symbol": "C",
+              "name": "Citigroup Inc.",
+              "aliases": [
+                "Citigroup",
+                "Citi"
+              ]
+            },
+            {
+              "symbol": "GS",
+              "name": "The Goldman Sachs Group, Inc.",
+              "aliases": [
+                "Goldman Sachs"
+              ]
+            },
+            {
+              "symbol": "MS",
+              "name": "Morgan Stanley",
+              "aliases": [
+                "Morgan Stanley"
+              ]
+            }
           ]
         },
         "pharma": {
           "label": "Pharma",
           "companies": [
-            {"symbol": "LLY", "name": "Eli Lilly and Company"},
-            {"symbol": "JNJ", "name": "Johnson & Johnson"},
-            {"symbol": "MRK", "name": "Merck & Co., Inc."},
-            {"symbol": "PFE", "name": "Pfizer Inc."},
-            {"symbol": "ABBV", "name": "AbbVie Inc."},
-            {"symbol": "BMY", "name": "Bristol-Myers Squibb Company"}
+            {
+              "symbol": "LLY",
+              "name": "Eli Lilly and Company",
+              "aliases": [
+                "Eli Lilly",
+                "Lilly"
+              ]
+            },
+            {
+              "symbol": "JNJ",
+              "name": "Johnson & Johnson",
+              "aliases": [
+                "Johnson & Johnson",
+                "J&J"
+              ]
+            },
+            {
+              "symbol": "MRK",
+              "name": "Merck & Co., Inc.",
+              "aliases": [
+                "Merck"
+              ]
+            },
+            {
+              "symbol": "PFE",
+              "name": "Pfizer Inc.",
+              "aliases": [
+                "Pfizer"
+              ]
+            },
+            {
+              "symbol": "ABBV",
+              "name": "AbbVie Inc.",
+              "aliases": [
+                "AbbVie"
+              ]
+            },
+            {
+              "symbol": "BMY",
+              "name": "Bristol-Myers Squibb Company",
+              "aliases": [
+                "Bristol-Myers Squibb",
+                "Bristol Myers Squibb"
+              ]
+            }
           ]
         },
         "energy": {
           "label": "Energy",
           "companies": [
-            {"symbol": "XOM", "name": "Exxon Mobil Corporation"},
-            {"symbol": "CVX", "name": "Chevron Corporation"},
-            {"symbol": "COP", "name": "ConocoPhillips"},
-            {"symbol": "EOG", "name": "EOG Resources, Inc."},
-            {"symbol": "SLB", "name": "SLB N.V."},
-            {"symbol": "OXY", "name": "Occidental Petroleum Corporation"}
+            {
+              "symbol": "XOM",
+              "name": "Exxon Mobil Corporation",
+              "aliases": [
+                "Exxon Mobil",
+                "ExxonMobil",
+                "Exxon"
+              ]
+            },
+            {
+              "symbol": "CVX",
+              "name": "Chevron Corporation",
+              "aliases": [
+                "Chevron"
+              ]
+            },
+            {
+              "symbol": "COP",
+              "name": "ConocoPhillips",
+              "aliases": [
+                "ConocoPhillips"
+              ]
+            },
+            {
+              "symbol": "EOG",
+              "name": "EOG Resources, Inc.",
+              "aliases": [
+                "EOG Resources"
+              ]
+            },
+            {
+              "symbol": "SLB",
+              "name": "SLB N.V.",
+              "aliases": [
+                "SLB",
+                "Schlumberger"
+              ]
+            },
+            {
+              "symbol": "OXY",
+              "name": "Occidental Petroleum Corporation",
+              "aliases": [
+                "Occidental Petroleum",
+                "Occidental"
+              ]
+            }
           ]
         },
         "automobile": {
           "label": "Automobile",
           "companies": [
-            {"symbol": "TSLA", "name": "Tesla, Inc."},
-            {"symbol": "GM", "name": "General Motors Company"},
-            {"symbol": "F", "name": "Ford Motor Company"},
-            {"symbol": "RIVN", "name": "Rivian Automotive, Inc."},
-            {"symbol": "LCID", "name": "Lucid Group, Inc."}
+            {
+              "symbol": "TSLA",
+              "name": "Tesla, Inc.",
+              "aliases": [
+                "Tesla"
+              ]
+            },
+            {
+              "symbol": "GM",
+              "name": "General Motors Company",
+              "aliases": [
+                "General Motors"
+              ]
+            },
+            {
+              "symbol": "F",
+              "name": "Ford Motor Company",
+              "aliases": [
+                "Ford Motor",
+                "Ford"
+              ]
+            },
+            {
+              "symbol": "RIVN",
+              "name": "Rivian Automotive, Inc.",
+              "aliases": [
+                "Rivian"
+              ]
+            },
+            {
+              "symbol": "LCID",
+              "name": "Lucid Group, Inc.",
+              "aliases": [
+                "Lucid Group",
+                "Lucid"
+              ]
+            }
           ]
         }
       }
@@ -114,101 +413,468 @@
         "it": {
           "label": "IT / Technology",
           "companies": [
-            {"symbol": "TCS.NS", "name": "Tata Consultancy Services Ltd", "news_terms": ["Tata Consultancy Services", "TCS"]},
-            {"symbol": "INFY.NS", "name": "Infosys Ltd", "news_terms": ["Infosys"]},
-            {"symbol": "HCLTECH.NS", "name": "HCL Technologies Ltd", "news_terms": ["HCL Technologies", "HCLTech"]},
-            {"symbol": "WIPRO.NS", "name": "Wipro Ltd", "news_terms": ["Wipro"]},
-            {"symbol": "TECHM.NS", "name": "Tech Mahindra Ltd", "news_terms": ["Tech Mahindra"]},
-            {"symbol": "LTIM.NS", "name": "LTIMindtree Ltd", "news_terms": ["LTIMindtree"]}
+            {
+              "symbol": "TCS.NS",
+              "name": "Tata Consultancy Services Ltd",
+              "news_terms": [
+                "Tata Consultancy Services",
+                "TCS"
+              ]
+            },
+            {
+              "symbol": "INFY.NS",
+              "name": "Infosys Ltd",
+              "news_terms": [
+                "Infosys"
+              ]
+            },
+            {
+              "symbol": "HCLTECH.NS",
+              "name": "HCL Technologies Ltd",
+              "news_terms": [
+                "HCL Technologies",
+                "HCLTech"
+              ]
+            },
+            {
+              "symbol": "WIPRO.NS",
+              "name": "Wipro Ltd",
+              "news_terms": [
+                "Wipro"
+              ]
+            },
+            {
+              "symbol": "TECHM.NS",
+              "name": "Tech Mahindra Ltd",
+              "news_terms": [
+                "Tech Mahindra"
+              ]
+            },
+            {
+              "symbol": "LTIM.NS",
+              "name": "LTIMindtree Ltd",
+              "news_terms": [
+                "LTIMindtree"
+              ]
+            }
           ]
         },
         "banking": {
           "label": "Banking",
           "companies": [
-            {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Ltd", "news_terms": ["HDFC Bank"]},
-            {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Ltd", "news_terms": ["ICICI Bank"]},
-            {"symbol": "SBIN.NS", "name": "State Bank of India", "news_terms": ["State Bank of India", "SBI"]},
-            {"symbol": "KOTAKBANK.NS", "name": "Kotak Mahindra Bank Ltd", "news_terms": ["Kotak Mahindra Bank"]},
-            {"symbol": "AXISBANK.NS", "name": "Axis Bank Ltd", "news_terms": ["Axis Bank"]},
-            {"symbol": "INDUSINDBK.NS", "name": "IndusInd Bank Ltd", "news_terms": ["IndusInd Bank"]}
+            {
+              "symbol": "HDFCBANK.NS",
+              "name": "HDFC Bank Ltd",
+              "news_terms": [
+                "HDFC Bank"
+              ]
+            },
+            {
+              "symbol": "ICICIBANK.NS",
+              "name": "ICICI Bank Ltd",
+              "news_terms": [
+                "ICICI Bank"
+              ]
+            },
+            {
+              "symbol": "SBIN.NS",
+              "name": "State Bank of India",
+              "news_terms": [
+                "State Bank of India",
+                "SBI"
+              ]
+            },
+            {
+              "symbol": "KOTAKBANK.NS",
+              "name": "Kotak Mahindra Bank Ltd",
+              "news_terms": [
+                "Kotak Mahindra Bank"
+              ]
+            },
+            {
+              "symbol": "AXISBANK.NS",
+              "name": "Axis Bank Ltd",
+              "news_terms": [
+                "Axis Bank"
+              ]
+            },
+            {
+              "symbol": "INDUSINDBK.NS",
+              "name": "IndusInd Bank Ltd",
+              "news_terms": [
+                "IndusInd Bank"
+              ]
+            }
           ]
         },
         "fmcg": {
           "label": "FMCG",
           "companies": [
-            {"symbol": "HINDUNILVR.NS", "name": "Hindustan Unilever Ltd", "news_terms": ["Hindustan Unilever", "HUL"]},
-            {"symbol": "ITC.NS", "name": "ITC Ltd", "news_terms": ["ITC Ltd", "ITC"]},
-            {"symbol": "NESTLEIND.NS", "name": "Nestle India Ltd", "news_terms": ["Nestle India"]},
-            {"symbol": "BRITANNIA.NS", "name": "Britannia Industries Ltd", "news_terms": ["Britannia"]},
-            {"symbol": "DABUR.NS", "name": "Dabur India Ltd", "news_terms": ["Dabur"]},
-            {"symbol": "TATACONSUM.NS", "name": "Tata Consumer Products Ltd", "news_terms": ["Tata Consumer Products"]}
+            {
+              "symbol": "HINDUNILVR.NS",
+              "name": "Hindustan Unilever Ltd",
+              "news_terms": [
+                "Hindustan Unilever",
+                "HUL"
+              ]
+            },
+            {
+              "symbol": "ITC.NS",
+              "name": "ITC Ltd",
+              "news_terms": [
+                "ITC Ltd",
+                "ITC"
+              ]
+            },
+            {
+              "symbol": "NESTLEIND.NS",
+              "name": "Nestle India Ltd",
+              "news_terms": [
+                "Nestle India"
+              ]
+            },
+            {
+              "symbol": "BRITANNIA.NS",
+              "name": "Britannia Industries Ltd",
+              "news_terms": [
+                "Britannia"
+              ]
+            },
+            {
+              "symbol": "DABUR.NS",
+              "name": "Dabur India Ltd",
+              "news_terms": [
+                "Dabur"
+              ]
+            },
+            {
+              "symbol": "TATACONSUM.NS",
+              "name": "Tata Consumer Products Ltd",
+              "news_terms": [
+                "Tata Consumer Products"
+              ]
+            }
           ]
         },
         "pharma": {
           "label": "Pharma",
           "companies": [
-            {"symbol": "SUNPHARMA.NS", "name": "Sun Pharmaceutical Industries Ltd", "news_terms": ["Sun Pharma", "Sun Pharmaceutical"]},
-            {"symbol": "DRREDDY.NS", "name": "Dr. Reddy's Laboratories Ltd", "news_terms": ["Dr Reddy's", "Dr. Reddy's"]},
-            {"symbol": "CIPLA.NS", "name": "Cipla Ltd", "news_terms": ["Cipla"]},
-            {"symbol": "DIVISLAB.NS", "name": "Divi's Laboratories Ltd", "news_terms": ["Divi's Laboratories"]},
-            {"symbol": "LUPIN.NS", "name": "Lupin Ltd", "news_terms": ["Lupin"]},
-            {"symbol": "ZYDUSLIFE.NS", "name": "Zydus Lifesciences Ltd", "news_terms": ["Zydus Lifesciences", "Zydus"]}
+            {
+              "symbol": "SUNPHARMA.NS",
+              "name": "Sun Pharmaceutical Industries Ltd",
+              "news_terms": [
+                "Sun Pharma",
+                "Sun Pharmaceutical"
+              ]
+            },
+            {
+              "symbol": "DRREDDY.NS",
+              "name": "Dr. Reddy's Laboratories Ltd",
+              "news_terms": [
+                "Dr Reddy's",
+                "Dr. Reddy's"
+              ]
+            },
+            {
+              "symbol": "CIPLA.NS",
+              "name": "Cipla Ltd",
+              "news_terms": [
+                "Cipla"
+              ]
+            },
+            {
+              "symbol": "DIVISLAB.NS",
+              "name": "Divi's Laboratories Ltd",
+              "news_terms": [
+                "Divi's Laboratories"
+              ]
+            },
+            {
+              "symbol": "LUPIN.NS",
+              "name": "Lupin Ltd",
+              "news_terms": [
+                "Lupin"
+              ]
+            },
+            {
+              "symbol": "ZYDUSLIFE.NS",
+              "name": "Zydus Lifesciences Ltd",
+              "news_terms": [
+                "Zydus Lifesciences",
+                "Zydus"
+              ]
+            }
           ]
         },
         "energy": {
           "label": "Energy",
           "companies": [
-            {"symbol": "RELIANCE.NS", "name": "Reliance Industries Ltd", "news_terms": ["Reliance Industries"]},
-            {"symbol": "ONGC.NS", "name": "Oil and Natural Gas Corporation Ltd", "news_terms": ["ONGC"]},
-            {"symbol": "NTPC.NS", "name": "NTPC Ltd", "news_terms": ["NTPC"]},
-            {"symbol": "POWERGRID.NS", "name": "Power Grid Corporation of India Ltd", "news_terms": ["Power Grid Corporation"]},
-            {"symbol": "BPCL.NS", "name": "Bharat Petroleum Corporation Ltd", "news_terms": ["Bharat Petroleum", "BPCL"]},
-            {"symbol": "IOC.NS", "name": "Indian Oil Corporation Ltd", "news_terms": ["Indian Oil"]}
+            {
+              "symbol": "RELIANCE.NS",
+              "name": "Reliance Industries Ltd",
+              "news_terms": [
+                "Reliance Industries"
+              ]
+            },
+            {
+              "symbol": "ONGC.NS",
+              "name": "Oil and Natural Gas Corporation Ltd",
+              "news_terms": [
+                "ONGC"
+              ]
+            },
+            {
+              "symbol": "NTPC.NS",
+              "name": "NTPC Ltd",
+              "news_terms": [
+                "NTPC"
+              ]
+            },
+            {
+              "symbol": "POWERGRID.NS",
+              "name": "Power Grid Corporation of India Ltd",
+              "news_terms": [
+                "Power Grid Corporation"
+              ]
+            },
+            {
+              "symbol": "BPCL.NS",
+              "name": "Bharat Petroleum Corporation Ltd",
+              "news_terms": [
+                "Bharat Petroleum",
+                "BPCL"
+              ]
+            },
+            {
+              "symbol": "IOC.NS",
+              "name": "Indian Oil Corporation Ltd",
+              "news_terms": [
+                "Indian Oil"
+              ]
+            }
           ]
         },
         "automobile": {
           "label": "Automobile",
           "companies": [
-            {"symbol": "MARUTI.NS", "name": "Maruti Suzuki India Ltd", "news_terms": ["Maruti Suzuki"]},
-            {"symbol": "M&M.NS", "name": "Mahindra & Mahindra Ltd", "news_terms": ["Mahindra & Mahindra", "M&M"]},
-            {"symbol": "BAJAJ-AUTO.NS", "name": "Bajaj Auto Ltd", "news_terms": ["Bajaj Auto"]},
-            {"symbol": "EICHERMOT.NS", "name": "Eicher Motors Ltd", "news_terms": ["Eicher Motors", "Royal Enfield"]},
-            {"symbol": "HEROMOTOCO.NS", "name": "Hero MotoCorp Ltd", "news_terms": ["Hero MotoCorp"]},
-            {"symbol": "TVSMOTOR.NS", "name": "TVS Motor Company Ltd", "news_terms": ["TVS Motor"]}
+            {
+              "symbol": "MARUTI.NS",
+              "name": "Maruti Suzuki India Ltd",
+              "news_terms": [
+                "Maruti Suzuki"
+              ]
+            },
+            {
+              "symbol": "M&M.NS",
+              "name": "Mahindra & Mahindra Ltd",
+              "news_terms": [
+                "Mahindra & Mahindra",
+                "M&M"
+              ]
+            },
+            {
+              "symbol": "BAJAJ-AUTO.NS",
+              "name": "Bajaj Auto Ltd",
+              "news_terms": [
+                "Bajaj Auto"
+              ]
+            },
+            {
+              "symbol": "EICHERMOT.NS",
+              "name": "Eicher Motors Ltd",
+              "news_terms": [
+                "Eicher Motors",
+                "Royal Enfield"
+              ]
+            },
+            {
+              "symbol": "HEROMOTOCO.NS",
+              "name": "Hero MotoCorp Ltd",
+              "news_terms": [
+                "Hero MotoCorp"
+              ]
+            },
+            {
+              "symbol": "TVSMOTOR.NS",
+              "name": "TVS Motor Company Ltd",
+              "news_terms": [
+                "TVS Motor"
+              ]
+            }
           ]
         },
         "retail": {
           "label": "Retail",
           "companies": [
-            {"symbol": "DMART.NS", "name": "Avenue Supermarts Ltd", "news_terms": ["DMart", "Avenue Supermarts"]},
-            {"symbol": "TRENT.NS", "name": "Trent Ltd", "news_terms": ["Trent Ltd", "Zudio"]},
-            {"symbol": "TITAN.NS", "name": "Titan Company Ltd", "news_terms": ["Titan Company"]},
-            {"symbol": "NYKAA.NS", "name": "FSN E-Commerce Ventures Ltd (Nykaa)", "news_terms": ["Nykaa"]},
-            {"symbol": "ETERNAL.NS", "name": "Eternal Ltd (Zomato)", "news_terms": ["Eternal", "Zomato", "Blinkit"]}
+            {
+              "symbol": "DMART.NS",
+              "name": "Avenue Supermarts Ltd",
+              "news_terms": [
+                "DMart",
+                "Avenue Supermarts"
+              ]
+            },
+            {
+              "symbol": "TRENT.NS",
+              "name": "Trent Ltd",
+              "news_terms": [
+                "Trent Ltd",
+                "Zudio"
+              ]
+            },
+            {
+              "symbol": "TITAN.NS",
+              "name": "Titan Company Ltd",
+              "news_terms": [
+                "Titan Company"
+              ]
+            },
+            {
+              "symbol": "NYKAA.NS",
+              "name": "FSN E-Commerce Ventures Ltd (Nykaa)",
+              "news_terms": [
+                "Nykaa"
+              ]
+            },
+            {
+              "symbol": "ETERNAL.NS",
+              "name": "Eternal Ltd (Zomato)",
+              "news_terms": [
+                "Eternal",
+                "Zomato",
+                "Blinkit"
+              ]
+            }
           ]
         },
         "telecom": {
           "label": "Telecom",
           "companies": [
-            {"symbol": "BHARTIARTL.NS", "name": "Bharti Airtel Ltd", "news_terms": ["Bharti Airtel", "Airtel"]},
-            {"symbol": "IDEA.NS", "name": "Vodafone Idea Ltd", "news_terms": ["Vodafone Idea"]},
-            {"symbol": "INDUSTOWER.NS", "name": "Indus Towers Ltd", "news_terms": ["Indus Towers"]},
-            {"symbol": "TATACOMM.NS", "name": "Tata Communications Ltd", "news_terms": ["Tata Communications"]}
+            {
+              "symbol": "BHARTIARTL.NS",
+              "name": "Bharti Airtel Ltd",
+              "news_terms": [
+                "Bharti Airtel",
+                "Airtel"
+              ]
+            },
+            {
+              "symbol": "IDEA.NS",
+              "name": "Vodafone Idea Ltd",
+              "news_terms": [
+                "Vodafone Idea"
+              ]
+            },
+            {
+              "symbol": "INDUSTOWER.NS",
+              "name": "Indus Towers Ltd",
+              "news_terms": [
+                "Indus Towers"
+              ]
+            },
+            {
+              "symbol": "TATACOMM.NS",
+              "name": "Tata Communications Ltd",
+              "news_terms": [
+                "Tata Communications"
+              ]
+            }
           ]
         }
       }
     }
   },
   "provider_sector_map": {
-    "technology": ["technology", "information technology", "software", "semiconductors", "it services", "information technology services", "computer hardware", "communication equipment", "software—infrastructure", "software—application"],
-    "it": ["technology", "information technology", "it services", "information technology services", "software", "software—infrastructure", "software—application"],
-    "communication_services": ["communication services", "media", "entertainment", "interactive media & services", "internet content & information", "telecom services", "telecommunication"],
-    "telecom": ["telecom services", "telecommunication", "telecommunications", "communication services"],
-    "retail": ["retail", "consumer cyclical", "internet retail", "discount stores", "home improvement retail", "specialty retail", "department stores", "luxury goods", "apparel retail"],
-    "fmcg": ["consumer defensive", "consumer staples", "household & personal products", "beverages—non-alcoholic", "packaged foods", "tobacco", "food products", "confectioners"],
-    "banking": ["banking", "banks", "banks—diversified", "banks—regional", "capital markets", "financial services", "financial"],
-    "pharma": ["healthcare", "health care", "pharmaceuticals", "drug manufacturers—general", "drug manufacturers—specialty & generic", "biotechnology"],
-    "energy": ["energy", "oil & gas integrated", "oil & gas e&p", "oil & gas refining & marketing", "oil & gas equipment & services", "utilities—regulated electric", "utilities", "utilities—independent power producers"],
-    "automobile": ["auto manufacturers", "automobiles", "auto parts", "automobile", "consumer cyclical"]
+    "technology": [
+      "technology",
+      "information technology",
+      "software",
+      "semiconductors",
+      "it services",
+      "information technology services",
+      "computer hardware",
+      "communication equipment",
+      "software—infrastructure",
+      "software—application"
+    ],
+    "it": [
+      "technology",
+      "information technology",
+      "it services",
+      "information technology services",
+      "software",
+      "software—infrastructure",
+      "software—application"
+    ],
+    "communication_services": [
+      "communication services",
+      "media",
+      "entertainment",
+      "interactive media & services",
+      "internet content & information",
+      "telecom services",
+      "telecommunication"
+    ],
+    "telecom": [
+      "telecom services",
+      "telecommunication",
+      "telecommunications",
+      "communication services"
+    ],
+    "retail": [
+      "retail",
+      "consumer cyclical",
+      "internet retail",
+      "discount stores",
+      "home improvement retail",
+      "specialty retail",
+      "department stores",
+      "luxury goods",
+      "apparel retail"
+    ],
+    "fmcg": [
+      "consumer defensive",
+      "consumer staples",
+      "household & personal products",
+      "beverages—non-alcoholic",
+      "packaged foods",
+      "tobacco",
+      "food products",
+      "confectioners"
+    ],
+    "banking": [
+      "banking",
+      "banks",
+      "banks—diversified",
+      "banks—regional",
+      "capital markets",
+      "financial services",
+      "financial"
+    ],
+    "pharma": [
+      "healthcare",
+      "health care",
+      "pharmaceuticals",
+      "drug manufacturers—general",
+      "drug manufacturers—specialty & generic",
+      "biotechnology"
+    ],
+    "energy": [
+      "energy",
+      "oil & gas integrated",
+      "oil & gas e&p",
+      "oil & gas refining & marketing",
+      "oil & gas equipment & services",
+      "utilities—regulated electric",
+      "utilities",
+      "utilities—independent power producers"
+    ],
+    "automobile": [
+      "auto manufacturers",
+      "automobiles",
+      "auto parts",
+      "automobile",
+      "consumer cyclical"
+    ]
   }
 }

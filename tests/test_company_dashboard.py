@@ -1,7 +1,7 @@
 """Company intelligence dashboard: read-only endpoints, history merge, and summary validation.
 
 API tests run against the locally running backend (see conftest). They only use GET
-routes and the summary POST without a key or with invalid input, so no Groq,
+routes and the summary POST without a key or with invalid input, so no AI,
 NewsData.io or SEC request can be made. Summary validation tests mock the model.
 """
 import hashlib
@@ -27,7 +27,7 @@ NEW_GET = [
 
 def _hashes(pattern):
     return {
-        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        p.relative_to(PROJECT_ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in sorted(PROJECT_ROOT.glob(pattern))
     }
 
@@ -48,9 +48,8 @@ def test_summary_post_requires_key(client):
 
 
 def test_invalid_inputs(client, auth):
-    assert client.get("/api/v1/companies/TSLA/overview", headers=auth).status_code == 404
-    # Research history covers any registered market company (TSLA may be one),
-    # so use a symbol that is never registered.
+    # Use a symbol that is never registered: the SEC universe grows over time.
+    assert client.get("/api/v1/companies/ZZZZ/overview", headers=auth).status_code == 404
     assert client.get("/api/v1/research/runs?ticker=ZZZZ", headers=auth).status_code == 404
     assert client.get("/api/v1/companies/META/reports/not-a-uuid", headers=auth).status_code == 422
     # A report is only served under its own company.
@@ -64,7 +63,7 @@ def test_invalid_inputs(client, auth):
 
 @pytest.mark.parametrize("ticker", TICKERS)
 def test_company_overview_all_companies(client, auth, ticker):
-    before = _hashes("data/forecast_cache_v1/*.json")
+    before = _hashes("data/forecast_cache_v*/*.json")
     r = client.get(f"/api/v1/companies/{ticker}/overview", headers=auth)
     assert r.status_code == 200
     body = r.json()
@@ -81,7 +80,7 @@ def test_company_overview_all_companies(client, auth, ticker):
     for article in body["news"]:
         assert article["source_url"] is None or article["source_url"].startswith("https://")
     # Opening a company never retrains or rewrites forecasts.
-    assert _hashes("data/forecast_cache_v1/*.json") == before
+    assert _hashes("data/forecast_cache_v*/*.json") == before
 
 
 def test_growth_only_for_valid_comparisons(client, auth):
@@ -128,7 +127,8 @@ def test_fiscal_labels_follow_company_calendars(client, auth):
 
 def test_companies_summary(client, auth):
     body = client.get("/api/v1/companies/summary", headers=auth).json()
-    assert [row["ticker"] for row in body["companies"]] == list(TICKERS)
+    tickers = [row["ticker"] for row in body["companies"]]
+    assert set(TICKERS) <= set(tickers) and tickers == sorted(tickers)
 
 
 # ------------------------------------------------------------- report history
@@ -217,11 +217,13 @@ def test_summary_generation_rejects_incomplete_response(tmp_path, monkeypatch):
     (tmp_path / "reports" / "research_runs").mkdir(parents=True)
     shutil.copy2(PROJECT_ROOT / "reports" / "research_runs" / f"{META_RUN}.json", tmp_path / "reports" / "research_runs")
 
-    def fake_call(messages):
-        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="length", message=SimpleNamespace(content="{}"))])
+    from research_v2_support import FakeAIClient, completion
 
-    monkeypatch.setattr(es, "call_groq", fake_call)
-    with pytest.raises(es.ExecutiveSummaryError, match="incomplete"):
-        es.generate_summary(tmp_path, META_RUN, ticker="META")
+    # Every context level reaches the output-token limit (incomplete response).
+    client = FakeAIClient(lambda kwargs, n: completion("", finish_reason="length"))
+    with pytest.raises(es.ExecutiveSummaryError, match="output limit"):
+        es.generate_summary(tmp_path, META_RUN, ticker="META", client=client)
     record = json.loads((tmp_path / "reports" / "research_runs" / "summaries" / f"{META_RUN}.json").read_text())
-    assert record["status"] == "unavailable" and record["failure_stage"] == "response_shape"
+    assert record["status"] == "unavailable" and record["failure_stage"] == "provider_request"
+    assert record["provider_failure_reason"] == "output_token_limit"
+    assert record["provider"] == "azure_openai"

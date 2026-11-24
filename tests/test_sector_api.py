@@ -1,7 +1,7 @@
 """
 Market ingestion, sector comparison, reports and API (offline, isolated DB).
 
-Provider clients are test-only fakes (tests/market_fixtures.py) and Groq is
+Provider clients are test-only fakes (tests/market_fixtures.py) and Azure OpenAI is
 the deterministic fake from research_v2_support. No network is used.
 """
 import io
@@ -13,7 +13,7 @@ import pytest
 
 from market_fixtures import US_TECH, us_clients
 from research_v2_support import (  # noqa: F401
-    FakeGroqClient,
+    FakeAIClient,
     completion,
     db_rows,
     isolated_runtime,
@@ -29,8 +29,8 @@ def seed_us_tech(clients=None):
     return clients
 
 
-def groq_narrative(kwargs, n, mutate=None):
-    payload = json.loads(kwargs["messages"][-1]["content"])["comparison"]
+def ai_narrative(kwargs, n, mutate=None):
+    payload = json.loads(kwargs["input"][-1]["content"])["comparison"]
     companies = []
     for c in payload["companies"]:
         metric = next(iter(c["metrics"]))
@@ -59,13 +59,12 @@ def groq_narrative(kwargs, n, mutate=None):
 
 
 @pytest.fixture
-def fake_groq(monkeypatch):
-    from app.services import groq_structured
+def fake_ai(monkeypatch):
+    from app.services import ai_provider
 
     holder = {"mutate": None}
-    client = FakeGroqClient(lambda kw, n: groq_narrative(kw, n, holder["mutate"]))
-    monkeypatch.setenv("GROQ_API_KEY", "gsk_TEST_ONLY")
-    monkeypatch.setattr(groq_structured, "default_client", lambda timeout: client)
+    client = FakeAIClient(lambda kw, n: ai_narrative(kw, n, holder["mutate"]))
+    monkeypatch.setattr(ai_provider, "default_client", lambda timeout=None: client)
     client.holder = holder
     return client
 
@@ -147,7 +146,7 @@ def test_comparison_metrics_are_computed_from_statements(isolated_runtime):
     assert inputs["fiscal_period_end"] == "2025-12-31" and inputs["roe_basis"] == "average equity"
 
 
-def test_build_comparison_ranks_explains_and_saves(isolated_runtime, fake_groq):
+def test_build_comparison_ranks_explains_and_saves(isolated_runtime, fake_ai):
     from app.services import sector_comparison
 
     seed_us_tech()
@@ -161,12 +160,12 @@ def test_build_comparison_ranks_explains_and_saves(isolated_runtime, fake_groq):
     assert unranked == {"ADBE", "CSCO"}
     assert snapshot["narrative"]["status"] == "completed", snapshot["narrative"]["withheld"]
     assert snapshot["narrative"]["companies"]["MSFT"]["source"] == "ai"
-    assert len(fake_groq.requests) == 1
+    assert len(fake_ai.requests) == 1
     path = isolated_runtime.root / "reports" / "sector_comparisons" / f"{snapshot['comparison_id']}.json"
     assert json.loads(path.read_text(encoding="utf-8"))["comparison_id"] == snapshot["comparison_id"]
 
 
-def test_invalid_ai_text_falls_back_per_company(isolated_runtime, fake_groq):
+def test_invalid_ai_text_falls_back_per_company(isolated_runtime, fake_ai):
     from app.services import sector_comparison
 
     def mutate(body):
@@ -176,7 +175,7 @@ def test_invalid_ai_text_falls_back_per_company(isolated_runtime, fake_groq):
         body["companies"].append({"symbol": "FAKE", "why_it_ranks": "x " * 20,
                                   "strengths": [], "weaknesses": []})
 
-    fake_groq.holder["mutate"] = mutate
+    fake_ai.holder["mutate"] = mutate
     seed_us_tech()
     snapshot = sector_comparison.build_comparison("US", "technology", refresh=False)
     narrative = snapshot["narrative"]
@@ -188,12 +187,11 @@ def test_invalid_ai_text_falls_back_per_company(isolated_runtime, fake_groq):
     assert narrative["companies"][first]["why_it_ranks"].startswith("Ranked 1")
 
 
-def test_groq_failure_gives_deterministic_comparison(isolated_runtime, monkeypatch):
-    from app.services import groq_structured, sector_comparison
+def test_ai_failure_gives_deterministic_comparison(isolated_runtime, monkeypatch):
+    from app.services import ai_provider, sector_comparison
 
-    client = FakeGroqClient(lambda kw, n: completion("{bad json"))
-    monkeypatch.setenv("GROQ_API_KEY", "gsk_TEST_ONLY")
-    monkeypatch.setattr(groq_structured, "default_client", lambda timeout: client)
+    client = FakeAIClient(lambda kw, n: completion("{bad json"))
+    monkeypatch.setattr(ai_provider, "default_client", lambda timeout=None: client)
     seed_us_tech()
     snapshot = sector_comparison.build_comparison("US", "technology", refresh=False)
     assert snapshot["narrative"]["status"] == "unavailable"
@@ -202,7 +200,7 @@ def test_groq_failure_gives_deterministic_comparison(isolated_runtime, monkeypat
     assert len(client.requests) == 2  # bounded: full + reduced profile
 
 
-def test_sector_without_data_is_rejected(isolated_runtime, fake_groq):
+def test_sector_without_data_is_rejected(isolated_runtime, fake_ai):
     from app.services import sector_comparison
 
     with pytest.raises(sector_comparison.ComparisonNoData):
@@ -274,7 +272,7 @@ def test_company_profile_endpoint(api):
     assert unknown.status_code == 404
 
 
-def test_comparison_endpoints_and_reports(api, fake_groq):
+def test_comparison_endpoints_and_reports(api, fake_ai):
     client, headers = api
     seed_us_tech()
     assert client.get("/api/v1/markets/US/sectors/technology/comparison", headers=headers).status_code == 404
@@ -285,8 +283,8 @@ def test_comparison_endpoints_and_reports(api, fake_groq):
     latest = client.get("/api/v1/markets/US/sectors/technology/comparison", headers=headers).json()
     assert latest["comparison_id"] == snapshot["comparison_id"]
 
-    # Reading and downloading never calls Groq again.
-    calls = len(fake_groq.requests)
+    # Reading and downloading never calls the AI provider again.
+    calls = len(fake_ai.requests)
     pdf = client.get(f"/api/v1/sector-comparisons/{snapshot['comparison_id']}/report?format=pdf",
                      headers=headers)
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
@@ -298,7 +296,7 @@ def test_comparison_endpoints_and_reports(api, fake_groq):
     with zipfile.ZipFile(io.BytesIO(docx.content)) as archive:
         xml = archive.read("word/document.xml").decode("utf-8")
     assert "Methodology" in xml and "MSFT" in xml
-    assert len(fake_groq.requests) == calls
+    assert len(fake_ai.requests) == calls
     assert client.get(f"/api/v1/sector-comparisons/{snapshot['comparison_id']}/report?format=xls",
                       headers=headers).status_code == 422
     missing = "00000000-0000-4000-8000-000000000000"
@@ -307,7 +305,7 @@ def test_comparison_endpoints_and_reports(api, fake_groq):
     assert history["comparisons"][0]["comparison_id"] == snapshot["comparison_id"]
 
 
-def test_comparison_without_data_returns_409(api, fake_groq):
+def test_comparison_without_data_returns_409(api, fake_ai):
     client, headers = api
     response = client.post("/api/v1/markets/IN/sectors/telecom/comparison",
                            json={"refresh": False}, headers=headers)
@@ -348,3 +346,174 @@ def test_rejected_finnhub_key_falls_back_to_fmp_quote(isolated_runtime):
     failed = refresh_company("US", "MSFT", ("quote",), clients={"finnhub": RejectingFinnhub()})
     assert failed["results"]["quote"]["status"] == "failed"
     assert "401" in failed["results"]["quote"]["message"]
+
+
+# ------------------------------------------- custom comparison (selected companies)
+
+def _custom(client, headers, companies, refresh=False, sector="technology"):
+    return client.post(f"/api/v1/markets/US/sectors/{sector}/comparison",
+                       json={"refresh": refresh, "companies": companies}, headers=headers)
+
+
+def test_custom_comparison_ranks_only_selected_companies(api, fake_ai):
+    client, headers = api
+    seed_us_tech()
+    response = _custom(client, headers, ["MSFT", "ORCL"])
+    assert response.status_code == 200, response.text
+    snapshot = response.json()
+    assert snapshot["comparison_type"] == "custom"
+    assert [c["symbol"] for c in snapshot["selected_companies"]] == ["MSFT", "ORCL"]
+    assert {c["symbol"] for c in snapshot["companies"]} == {"MSFT", "ORCL"}
+    ranking = snapshot["ranking"]
+    assert {c["symbol"] for c in ranking["companies"]} == {"MSFT", "ORCL"}
+    assert sorted(c["rank"] for c in ranking["companies"]) == [1, 2]
+    assert ranking["method"]["universe"] == "selected"
+    assert snapshot["relative_note"] == (
+        "Scores are relative to the selected companies and may differ from the full sector ranking."
+    )
+    assert ranking["method"]["relative_note"] == snapshot["relative_note"]
+    assert any("selected companies" in line for line in snapshot["methodology"])
+    # The AI prompt is told the scores compare only the selection.
+    prompt = json.loads(fake_ai.requests[-1]["input"][-1]["content"])
+    assert "selected by the user" in prompt["task"]
+    assert {c["symbol"] for c in prompt["comparison"]["companies"]} == {"MSFT", "ORCL"}
+
+
+def test_custom_scores_are_normalised_over_the_selection(isolated_runtime, fake_ai):
+    from app.services import sector_comparison
+
+    seed_us_tech()
+    full = sector_comparison.build_comparison("US", "technology", refresh=False)
+    custom = sector_comparison.build_comparison("US", "technology", refresh=False,
+                                                companies=["AAPL", "NVDA"])
+    full_scores = {c["symbol"]: c["score"] for c in full["ranking"]["companies"]}
+    custom_rows = {c["symbol"]: c for c in custom["ranking"]["companies"]}
+    # With two companies every used metric is 0 or 100 (or 50 when equal).
+    for row in custom_rows.values():
+        assert all(b["normalized_score"] in (0.0, 50.0, 100.0) for b in row["breakdown"])
+    assert any(custom_rows[s]["score"] != full_scores[s] for s in ("AAPL", "NVDA"))
+
+
+def test_custom_comparison_accepts_maximum_and_reports_duplicates(api, fake_ai):
+    client, headers = api
+    seed_us_tech()
+    six = ["AAPL", "MSFT", "NVDA", "ORCL", "ADBE", "CSCO"]
+    response = _custom(client, headers, six)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["selected_companies"]) == 6
+    # Members without stored data are listed and flagged, not ranked.
+    unranked = {c["symbol"] for c in body["ranking"]["companies"] if not c["ranked"]}
+    assert unranked == {"ADBE", "CSCO"}
+
+    dupes = _custom(client, headers, ["msft", " MSFT ", "AAPL", "AAPL"])
+    assert dupes.status_code == 200, dupes.text
+    assert [c["symbol"] for c in dupes.json()["selected_companies"]] == ["MSFT", "AAPL"]
+    assert dupes.json()["duplicates_removed"] == ["MSFT", "AAPL"]
+
+
+def test_custom_comparison_validation_errors(api, fake_ai, monkeypatch, isolated_runtime):
+    from app.core.config import get_settings
+
+    client, headers = api
+    seed_us_tech()
+    too_few = _custom(client, headers, ["MSFT"])
+    assert too_few.status_code == 400 and "at least 2" in too_few.json()["detail"]
+    # Duplicates of one company count once.
+    assert _custom(client, headers, ["MSFT", "msft"]).status_code == 400
+    assert _custom(client, headers, []).status_code == 400
+
+    outside = _custom(client, headers, ["MSFT", "JPM"])
+    assert outside.status_code == 400
+    assert "JPM" in outside.json()["detail"] and "Technology" in outside.json()["detail"]
+    seven = _custom(client, headers, ["AAPL", "MSFT", "NVDA", "ORCL", "ADBE", "CSCO", "GOOGL"])
+    assert seven.status_code == 400 and "GOOGL" in seven.json()["detail"]
+    invalid = _custom(client, headers, ["MSFT", "<script>"])
+    assert invalid.status_code == 400 and "Invalid company symbol" in invalid.json()["detail"]
+
+    monkeypatch.setattr(get_settings(), "custom_comparison_max_companies", 3)
+    too_many = _custom(client, headers, ["AAPL", "MSFT", "NVDA", "ORCL"])
+    assert too_many.status_code == 400 and "at most 3" in too_many.json()["detail"]
+    limits = client.get("/api/v1/markets/US/sectors", headers=headers).json()["custom_comparison"]
+    assert limits == {"min_companies": 2, "max_companies": 3}
+
+    # Malformed body is still a 422.
+    assert client.post("/api/v1/markets/US/sectors/technology/comparison",
+                       json={"companies": "MSFT"}, headers=headers).status_code == 422
+    # No snapshot was written for rejected selections.
+    saved = isolated_runtime.root / "reports" / "sector_comparisons"
+    assert not saved.is_dir() or not list(saved.glob("*.json"))
+
+
+def test_custom_comparison_refreshes_only_selected_companies(isolated_runtime, fake_ai):
+    from app.services import sector_comparison
+
+    clients = us_clients()
+    snapshot = sector_comparison.build_comparison("US", "technology", refresh=True, clients=clients,
+                                                  companies=["NVDA", "ORCL"])
+    touched = {call[1] for c in clients.values() for call in c.calls}
+    assert touched == {"NVDA", "ORCL"}
+    assert set(snapshot["refresh"]["outcomes"]) == {"NVDA", "ORCL"}
+    # No news calls: a comparison needs profile, quote and statements only.
+    assert not any(call[0] == "news" for call in clients["finnhub"].calls)
+
+
+def test_custom_comparison_via_api_refreshes_only_selection(api, fake_ai, monkeypatch):
+    from app.services import market_ingestion
+
+    client, headers = api
+    clients = us_clients()
+    monkeypatch.setattr(market_ingestion, "default_clients", lambda market: (clients, {}))
+    response = _custom(client, headers, ["AAPL", "MSFT"], refresh=True)
+    assert response.status_code == 200, response.text
+    assert {call[1] for c in clients.values() for call in c.calls} == {"AAPL", "MSFT"}
+
+
+def test_latest_sector_comparison_ignores_custom_snapshots(api, fake_ai):
+    client, headers = api
+    seed_us_tech()
+    sector = client.post("/api/v1/markets/US/sectors/technology/comparison",
+                         json={"refresh": False}, headers=headers).json()
+    custom = _custom(client, headers, ["MSFT", "ORCL"]).json()
+    latest = client.get("/api/v1/markets/US/sectors/technology/comparison", headers=headers).json()
+    assert latest["comparison_id"] == sector["comparison_id"]
+    assert latest["comparison_type"] == "sector"
+    history = client.get("/api/v1/markets/US/sectors/technology/comparisons", headers=headers).json()
+    types = {h["comparison_id"]: h["comparison_type"] for h in history["comparisons"]}
+    assert types == {sector["comparison_id"]: "sector", custom["comparison_id"]: "custom"}
+    entry = next(h for h in history["comparisons"] if h["comparison_type"] == "custom")
+    assert entry["selected_companies"] == ["MSFT", "ORCL"]
+    # The saved custom snapshot can be fetched by ID.
+    fetched = client.get(f"/api/v1/sector-comparisons/{custom['comparison_id']}", headers=headers).json()
+    assert fetched["comparison_type"] == "custom"
+
+
+def test_custom_comparison_reports(api, fake_ai):
+    client, headers = api
+    seed_us_tech()
+    custom = _custom(client, headers, ["MSFT", "ORCL", "NVDA"]).json()
+    base = f"/api/v1/sector-comparisons/{custom['comparison_id']}/report"
+    pdf = client.get(base + "?format=pdf", headers=headers)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    assert "_technology_custom_" in pdf.headers["content-disposition"]
+    docx = client.get(base + "?format=docx", headers=headers)
+    assert docx.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(docx.content)) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8")
+    assert "Custom comparison: Technology, 3 companies" in xml
+    assert "Selected companies:" in xml
+    for symbol in ("MSFT", "ORCL", "NVDA"):
+        assert symbol in xml
+    assert "Scores are relative to the selected companies and may differ from the full sector ranking." in xml
+    assert "AAPL" not in xml
+
+
+def test_old_snapshots_without_type_are_sector_comparisons(isolated_runtime, fake_ai):
+    from app.services import sector_comparison, sector_report
+
+    seed_us_tech()
+    snapshot = sector_comparison.build_comparison("US", "technology", refresh=False)
+    legacy = {k: v for k, v in snapshot.items() if k != "comparison_type"}
+    assert sector_comparison.snapshot_type(legacy) == "sector"
+    model = sector_report.report_model(legacy)
+    assert model["title"].startswith("Technology sector comparison") and not model["custom"]

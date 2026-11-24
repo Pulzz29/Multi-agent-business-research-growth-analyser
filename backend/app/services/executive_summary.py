@@ -1,18 +1,24 @@
 """
 Evidence-grounded executive summary for a saved research report.
 
-The summary is written by Groq from the saved report only (plus growth
-comparisons InsightIQ computes from the same stored SEC series), then
-validated before it is stored:
+The summary is written by the configured Azure OpenAI deployment from the
+saved report only (plus growth comparisons InsightIQ computes from the same
+stored SEC series), then validated before it is stored:
 
-* strict JSON schema and finish_reason == "stop";
+* strict JSON schema and a completed (not incomplete) response;
 * every cited evidence ID must exist in the report;
 * every number in the text must match a number present in the context;
 * causal, predictive-certainty and recommendation language is rejected.
 
+The same call also writes a longer "thorough research" (see the research
+brief section below), grounded in the report and the frozen per-report
+dataset that the charts and PDF use.
+
 The result is stored as a sidecar file
-reports/research_runs/summaries/{run_id}.json. The original report file
-is never modified, and a completed summary is never overwritten.
+reports/research_runs/summaries/{run_id}.json. The original report file is
+never modified. A completed brief is reused until its inputs change; a forced
+regeneration (the button) keeps up to three previous versions, and a failed
+attempt never removes the last successful one.
 """
 
 import hashlib
@@ -39,20 +45,22 @@ from app.services.report_history import (
     is_known_ticker,
 )
 
-MODEL = (os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
-MAX_COMPLETION_TOKENS = 2000
+from app.services.ai_provider import (  # noqa: E402
+    AICallFailed,
+    RequestProfile,
+    ResponseRejected,
+    ai_runtime_settings,
+    brief_diagnostics,
+    structured_completion,
+)
 
-
-def _summary_budget():
-    raw = os.getenv("INSIGHTIQ_SUMMARY_REQUEST_TOKEN_BUDGET", "").strip()
-    try:
-        value = int(raw) if raw else 8000
-    except ValueError:
-        value = 8000
-    return max(MAX_COMPLETION_TOKENS + 1000, min(value, 131072))
-
-
-REQUEST_TOKEN_BUDGET = _summary_budget()
+# Context levels, largest first; a level whose estimated input exceeds the
+# Azure input budget is skipped (the provider is never sent an oversize request).
+CONTEXT_LEVELS = (
+    ("full", True, True),
+    ("no_descriptions", False, True),
+    ("minimal", False, False),
+)
 MIN_WORDS = 60
 MAX_WORDS = 400  # hard ceiling; the prompt targets about 250 words via per-section budgets
 
@@ -64,7 +72,6 @@ SECTION_ORDER = (
     "evidence_limitations",
 )
 
-_GENERATION_LOCK = threading.Lock()
 logger = logging.getLogger("insightiq.executive_summary")
 
 # Phrases that would turn observations into causal, certain or advisory claims.
@@ -188,6 +195,14 @@ def build_context(report, include_descriptions=True, include_ai_findings=True):
         first = (item.get("predictions") or [None])[0]
         if not first:
             continue
+        if first.get("predicted_billion_usd") is None:
+            continue
+        quality = item.get("interval_quality") or {}
+        lower, upper = first.get("lower_95_billion_usd"), first.get("upper_95_billion_usd")
+        interval_allowed = (
+            lower is not None and upper is not None
+            and quality.get("display_allowed", quality.get("interval_display_allowed", True)) is not False
+        )
         forecasts.append({
             "evidence_id": f"FORECAST_{metric}",
             "metric": metric,
@@ -195,15 +210,32 @@ def build_context(report, include_descriptions=True, include_ai_findings=True):
             "model": item.get("model"),
             "last_reported_sec_period": item.get("last_reported_sec_period"),
             "next_quarter_estimate_billion_usd": round(first.get("predicted_billion_usd"), 2),
-            "next_quarter_95pct_interval_billion_usd": [
-                round(first.get("lower_95_billion_usd"), 2),
-                round(first.get("upper_95_billion_usd"), 2),
-            ],
-            "interval_quality": (item.get("interval_quality") or {}).get("status"),
+            # Intervals are only passed on when they exist and passed their quality gate.
+            "next_quarter_95pct_interval_billion_usd": (
+                [round(lower, 2), round(upper, 2)] if interval_allowed else None
+            ),
+            "interval_quality": quality.get("status"),
         })
 
+    # Approved articles are re-checked against the current company-relevance
+    # rules (publication age is not re-applied to a saved report).
     articles = []
+    dropped_news_ids = set()
+    relevance_identity = None
+    try:
+        from app.services.company_identity import identity_for, universe_identities
+        from app.services.news_relevance import assess_article
+
+        relevance_identity = identity_for(ticker)
+        relevance_others = universe_identities()
+    except Exception:
+        relevance_identity = None
     for article in news.get("approved_primary_articles") or []:
+        if relevance_identity is not None:
+            verdict = assess_article(article, relevance_identity, others=relevance_others, max_age_days=None)
+            if verdict["decision"] != "accept":
+                dropped_news_ids.add(article.get("evidence_id"))
+                continue
         entry = {
             "evidence_id": article.get("evidence_id"),
             "headline": article.get("title"),
@@ -223,6 +255,7 @@ def build_context(report, include_descriptions=True, include_ai_findings=True):
             "monitoring_question": p.get("monitoring_question"),
         }
         for p in strategic.get("research_priorities") or []
+        if p.get("evidence_id") not in dropped_news_ids
     ]
 
     limitations = [str(x) for x in (report.get("limitations") or [])][:6]
@@ -298,6 +331,10 @@ def allowed_evidence_ids(context):
     for key in ("validated_financial_findings", "validated_news_intelligence"):
         for item in context.get(key) or []:
             ids.update(e for e in item.get("evidence_ids") or [] if e)
+    # Computed figures from the frozen report dataset (research brief).
+    for item in context.get("computed_metrics") or []:
+        if item.get("evidence_id"):
+            ids.add(item["evidence_id"])
     return ids
 
 
@@ -370,6 +407,14 @@ def validate_summary(summary, context):
 
         if section.section != "evidence_limitations" and not section.evidence_ids:
             raise ExecutiveSummaryError("A summary section cited no evidence.")
+
+        from app.services.narrative_validation import foreign_companies
+
+        foreign = foreign_companies(text, context.get("ticker"), json.dumps(context, default=str))
+        if foreign:
+            raise ExecutiveSummaryError(
+                "The summary named another company that is not in the report evidence."
+            )
         unknown = [e for e in section.evidence_ids if e not in ids]
         if unknown:
             raise ExecutiveSummaryError("The summary cited an evidence ID that is not in the report.")
@@ -444,41 +489,12 @@ def build_messages(context):
     ]
 
 
-def response_format():
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "insightiq_executive_summary",
-            "strict": True,
-            "schema": ExecutiveSummary.model_json_schema(),
-        },
-    }
-
-
-def estimate_tokens(messages):
-    payload = json.dumps({"messages": messages, "response_format": response_format()},
-                         ensure_ascii=False)
-    return int(len(payload.encode("utf-8")) / 3.0) + 8 * len(messages)
-
-
-def fit_to_budget(report):
-    """Build messages under the request budget, dropping lower-priority context if needed (413 guard)."""
-    for include_descriptions, include_ai in ((True, True), (False, True), (False, False)):
-        context = build_context(
-            report,
-            include_descriptions=include_descriptions,
-            include_ai_findings=include_ai,
-        )
-        messages = build_messages(context)
-        estimated = estimate_tokens(messages)
-        if estimated + MAX_COMPLETION_TOKENS <= REQUEST_TOKEN_BUDGET:
-            return context, messages, {
-                "estimated_input_tokens": estimated,
-                "request_token_budget": REQUEST_TOKEN_BUDGET,
-                "article_descriptions_included": include_descriptions,
-                "validated_ai_findings_included": include_ai,
-            }
-    raise ExecutiveSummaryError("The report evidence is too large for a summary request.")
+def summary_profiles():
+    max_output = ai_runtime_settings()["max_output_summary"]
+    return [
+        RequestProfile(name, max_output, {"include_descriptions": d, "include_ai_findings": a})
+        for name, d, a in CONTEXT_LEVELS
+    ]
 
 
 # ------------------------------------------------------------ generation
@@ -509,138 +525,570 @@ def _write_sidecar(root, record):
     return path
 
 
-def call_groq(messages):
-    from groq import Groq
-
-    from app.services.groq_rate_limit import guarded_chat_completion
-
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise ExecutiveSummaryError("The Groq credential is not configured.")
-    client = Groq(api_key=api_key, timeout=45.0, max_retries=0)
-    return guarded_chat_completion(
-        client,
-        model=MODEL,
-        messages=messages,
-        response_format=response_format(),
-        temperature=0,
-        max_completion_tokens=MAX_COMPLETION_TOKENS,
-    )
-
-
-def _failure_record(run_id, ticker, report_sha, stage, reason, error_class=None, status_code=None):
+def _failure_record(run_id, ticker, report_sha, stage, reason, diagnostics=None):
+    d = diagnostics or {}
     return {
         "run_id": run_id,
         "ticker": ticker,
         "status": "unavailable",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "model": MODEL,
+        "provider": d.get("provider"),
+        "deployment": d.get("deployment"),
+        "model": d.get("model"),
         "source_report_sha256": report_sha,
         "failure_stage": stage,
         "reason": reason,
-        "provider_error_class": error_class,
-        "provider_status_code": status_code,
+        "provider_failure_reason": d.get("failure_reason"),
+        "provider_requests": d.get("provider_requests"),
     }
 
 
-def generate_summary(root, run_id, ticker=None, record_failure=True):
-    """Generate, validate and store a summary. Returns the stored (or existing) record.
+FAILURE_MESSAGES = {
+    "credential_missing": "The Azure OpenAI credential is not configured.",
+    "authentication_failed": "Azure OpenAI rejected the credential.",
+    "deployment_unavailable": (
+        "The configured Azure OpenAI deployment was not found. Check that AZURE_OPENAI_DEPLOYMENT "
+        "in .env matches the deployment name in Microsoft Foundry (Deployments), then restart the backend."
+    ),
+    "rate_limit_exhausted": "Azure OpenAI rate limits were reached; try again later.",
+    "deadline_exceeded": "The summary request did not finish within its time limit.",
+    "unexpected_model": "Azure OpenAI answered with a different model than configured.",
+    "cancelled": "The summary request was cancelled.",
+    "validation_rejected": "The generated summary failed evidence validation and was not stored.",
+    "output_token_limit": "The summary reached its output limit before completing.",
+    "skipped_over_budget": "The report evidence is too large for a summary request.",
+}
 
-    A completed summary is never overwritten. Failures are recorded as an
-    "unavailable" sidecar (replaceable by a later successful attempt) and logged,
-    without provider error messages or request payloads.
+
+def generate_summary(root, run_id, ticker=None, record_failure=True, client=None):
+    """Generate (or reuse) the AI summary and thorough research for a report.
+
+    Kept for existing callers; it is the non-forced form of generate_brief, so
+    the automatic path, the research job and the button share one
+    implementation.
     """
+    return generate_brief(root, run_id, ticker=ticker, force=False,
+                          record_failure=record_failure, client=client)
+
+
+# ------------------------------------------------------ research brief (v2)
+# One Azure OpenAI call writes both the short AI summary (the sections above,
+# validated exactly as before) and a longer "thorough research" made of the
+# sections below. Every number comes from the saved report or from the frozen
+# per-report dataset (report_insights), the same numbers the charts and the PDF
+# show. Research sections are validated one by one; a failing section is
+# withheld and labelled, and never blocks a valid summary.
+
+BRIEF_VERSION = 2
+PROMPT_VERSION = "brief-2026-11-24"
+MAX_PREVIOUS_VERSIONS = 3
+RESEARCH_SECTION_ORDER = (
+    "business_overview",
+    "financial_performance",
+    "growth_analysis",
+    "valuation_snapshot",
+    "recent_news",
+    "key_risks",
+    "outlook",
+)
+RESEARCH_SECTION_TITLES = {
+    "business_overview": "Business overview",
+    "financial_performance": "Financial performance",
+    "growth_analysis": "Growth analysis",
+    "valuation_snapshot": "Valuation snapshot",
+    "recent_news": "Recent news and sentiment",
+    "key_risks": "Key risks",
+    "outlook": "Outlook",
+}
+RESEARCH_WORD_LIMITS = (20, 220)
+
+
+class ResearchSection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    section: Literal[
+        "business_overview",
+        "financial_performance",
+        "growth_analysis",
+        "valuation_snapshot",
+        "recent_news",
+        "key_risks",
+        "outlook",
+    ]
+    text: str
+    evidence_ids: List[str]
+
+
+class ResearchBrief(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_sections: List[SummarySection]
+    research_sections: List[ResearchSection]
+
+
+def _b2(value):
+    try:
+        return str(_round(_billions(value), 2))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _p1(value):
+    return None if value is None else round(float(value), 1)
+
+
+def computed_metrics(insights):
+    """Compact computed figures from the frozen report dataset, each with an
+    evidence ID the research text can cite. Money in billions (2 decimals),
+    percentages to 1 decimal, exactly as the charts show them."""
+    currency = insights.get("currency")
+    growth = insights.get("growth") or {}
+    metrics = {}
+    for key, m in (growth.get("metrics") or {}).items():
+        metrics[key] = {
+            "label": m.get("label"),
+            "status": m.get("status"),
+            "value_pct": _p1(m.get("value_pct")) if m.get("status") == "ok" else None,
+            "reason": m.get("reason"),
+            "period": (m.get("current") or {}).get("period_end"),
+            "compared_with": (m.get("base") or {}).get("period_end"),
+        }
+    trend = growth.get("trend") or {}
+    fin = insights.get("revenue_net_income") or {}
+    margins = insights.get("margins") or {}
+
+    def money_rows(rows, n):
+        return [{"period_end": r["period_end"], "revenue_billion": _b2(r.get("revenue")),
+                 "net_income_billion": _b2(r.get("net_income"))} for r in (rows or [])[-n:]]
+
+    def margin_rows(rows, n):
+        return [{"period_end": r["period_end"], "gross_margin_pct": _p1(r.get("gross_margin_pct")),
+                 "operating_margin_pct": _p1(r.get("operating_margin_pct")),
+                 "net_margin_pct": _p1(r.get("net_margin_pct"))} for r in (rows or [])[-n:]]
+
+    ratios = insights.get("ratios") or {}
+    quote = (insights.get("price") or {}).get("latest_quote") or {}
+    return [
+        {
+            "evidence_id": "METRIC_FINANCIALS",
+            "description": f"Revenue and net income ({currency} billions) and margins computed by InsightIQ",
+            "currency": currency,
+            "recent_quarters": money_rows(fin.get("quarterly"), 4),
+            "recent_fiscal_years": money_rows(fin.get("annual"), 3),
+            "quarterly_margins": margin_rows(margins.get("quarterly"), 4),
+            "annual_margins": margin_rows(margins.get("annual"), 3),
+            "gross_margin_note": margins.get("gross_margin_reason"),
+        },
+        {
+            "evidence_id": "METRIC_GROWTH",
+            "description": "Growth analysis computed by InsightIQ (status other than ok means not available)",
+            "metrics": metrics,
+            "trend": {"label": trend.get("label"), "basis": trend.get("basis"),
+                      "latest_pct": _p1(trend.get("latest_pct")),
+                      "previous_average_pct": _p1(trend.get("previous_average_pct")),
+                      "difference_pp": _p1(trend.get("difference_pp")), "reason": trend.get("reason")},
+            "readout": growth.get("readout"),
+        },
+        {
+            "evidence_id": "METRIC_RATIOS",
+            "description": "Ratios versus the sector median, computed by InsightIQ",
+            "sector": ratios.get("sector"),
+            "basis": ratios.get("basis"),
+            "rows": [{"label": r["label"], "unit": r["unit"], "company": _p1(r.get("company")),
+                      "sector_median": _p1(r.get("sector_median")),
+                      "sector_companies": r.get("sector_companies")} for r in ratios.get("rows") or []],
+        },
+        {
+            "evidence_id": "METRIC_PRICE",
+            "description": "Latest stored quote; price history is not stored",
+            "price_history_available": False,
+            "latest_price": None if quote.get("price") is None else str(quote.get("price")),
+            "quote_currency": quote.get("currency"),
+            "quote_stored_at": str(quote.get("fetched_at") or "")[:10] or None,
+        },
+    ]
+
+
+def build_brief_context(report, insights, include_descriptions=True, include_ai_findings=True):
+    context = build_context(report, include_descriptions, include_ai_findings)
+    context["data_as_of"] = insights.get("data_as_of")
+    context["computed_metrics"] = computed_metrics(insights)
+    return context
+
+
+BRIEF_SYSTEM_PROMPT = SYSTEM_PROMPT + (
+    " computed_metrics hold figures InsightIQ computed from stored data (financial "
+    "tables, growth analysis, ratios versus the sector median, the latest quote). Use "
+    "them exactly as given with their periods, and cite their evidence_id (for example "
+    "METRIC_GROWTH). When a value is missing, null, or its status is not 'ok', write that "
+    "it is not available and give the stated reason; never estimate or invent it. Never "
+    "invent figures, dates, events or news."
+)
+
+
+def build_brief_messages(context):
+    task = (
+        "Write two things about this saved research report for a business reader. "
+        "(1) summary_sections: the executive summary, exactly as follows. Sections in order, "
+        "omitting news_developments, risks_and_opportunities or monitoring_priorities only if "
+        "there is no evidence for them: financial_position, news_developments, "
+        "risks_and_opportunities (framed as questions or possibilities), monitoring_priorities, "
+        "evidence_limitations. 150 to 250 words in total; per-section budgets: "
+        "financial_position at most 75, news_developments at most 55, risks_and_opportunities "
+        "at most 45, monitoring_priorities at most 40, evidence_limitations at most 35. "
+        "(2) research_sections: a longer structured analysis, sections in this order, each "
+        "40 to 180 words: business_overview (only what the evidence shows: data source, "
+        "reported scale, sector), financial_performance (METRIC_FINANCIALS and the reported "
+        "observations), growth_analysis (METRIC_GROWTH: the metrics, the trend label and why), "
+        "valuation_snapshot (METRIC_RATIOS and METRIC_PRICE; say plainly what is not "
+        "available, such as price history), recent_news (what the stored articles report, "
+        "attributed to their publishers; if there are none, say no verified company-specific "
+        "news is available), key_risks (areas the evidence suggests watching, as questions or "
+        "possibilities, not conclusions), outlook (what to monitor next and which data would "
+        "change the picture; no predictions). Omit a research section only when there is no "
+        "evidence for it. Every section must cite the evidence_id values it relies on. Mention "
+        "each figure once per section. Professional, specific, plain English."
+    )
+    return [
+        {"role": "system", "content": BRIEF_SYSTEM_PROMPT},
+        {"role": "user", "content": json.dumps(
+            {"task": task, "evidence": context}, ensure_ascii=False, allow_nan=False)},
+    ]
+
+
+def brief_profiles():
+    max_output = ai_runtime_settings()["max_output_research_brief"]
+    return [
+        RequestProfile(name, max_output, {"include_descriptions": d, "include_ai_findings": a})
+        for name, d, a in CONTEXT_LEVELS
+    ]
+
+
+def _research_problem(section, context, ids, numbers):
+    from app.services.narrative_validation import foreign_companies
+
+    text = section.text.strip()
+    words = len(text.split())
+    low, high = RESEARCH_WORD_LIMITS
+    if not low <= words <= high:
+        return f"length {words} words is outside {low}-{high}"
+    if not section.evidence_ids:
+        return "cited no evidence"
+    if [e for e in section.evidence_ids if e not in ids]:
+        return "cited an evidence ID that is not in the report"
+    if foreign_companies(text, context.get("ticker"), json.dumps(context, default=str)):
+        return "named another company that is not in the report evidence"
+    for token in NUMBER_RE.findall(text):
+        value = _normalize_number(token)
+        if value is not None and value not in numbers:
+            return f"contained a number ({token}) that is not in the evidence"
+    from app.services.narrative_validation import EXTRA_BANNED_PATTERNS
+
+    lowered = text.lower()
+    for pattern in (*BANNED_PATTERNS, *EXTRA_BANNED_PATTERNS):
+        match = re.search(pattern, lowered)
+        if match:
+            return f"used causal, predictive or advisory language (\"{match.group(0)}\")"
+    return None
+
+
+def validate_research(sections, context):
+    ids = allowed_evidence_ids(context)
+    numbers = allowed_numbers(context)
+    accepted, withheld, seen = [], [], set()
+    for section in sections:
+        if section.section in seen:
+            withheld.append({"section": section.section, "reason": "repeated section"})
+            continue
+        seen.add(section.section)
+        problem = _research_problem(section, context, ids, numbers)
+        if problem:
+            withheld.append({"section": section.section,
+                             "title": RESEARCH_SECTION_TITLES[section.section], "reason": problem})
+        else:
+            accepted.append({**section.model_dump(), "title": RESEARCH_SECTION_TITLES[section.section],
+                             "words": len(section.text.split())})
+    accepted.sort(key=lambda s: RESEARCH_SECTION_ORDER.index(s["section"]))
+    if not accepted:
+        status = "unavailable"
+    elif withheld or len(accepted) < 3:
+        status = "partial"
+    else:
+        status = "completed"
+    return {"status": status, "sections": accepted, "withheld": withheld,
+            "word_count": sum(s["words"] for s in accepted)}
+
+
+def validate_brief(parsed, context):
+    summary = ExecutiveSummary(sections=parsed.summary_sections)
+    sections, words = validate_summary(summary, context)  # raises: whole response rejected
+    return sections, words, validate_research(parsed.research_sections, context)
+
+
+# ----------------------------------------------------------- job registry
+# One in-process registry per report run, shared by the automatic path, the
+# button and the research job: a second request while one runs reuses it.
+
+_ACTIVE = {}
+_ACTIVE_GUARD = threading.Lock()
+
+
+def active_attempt(run_id):
+    with _ACTIVE_GUARD:
+        item = _ACTIVE.get(run_id)
+        return dict(item) if item else None
+
+
+def _claim(run_id, info):
+    with _ACTIVE_GUARD:
+        if run_id in _ACTIVE:
+            return False
+        _ACTIVE[run_id] = info
+        return True
+
+
+def _set_status(run_id, status):
+    with _ACTIVE_GUARD:
+        if run_id in _ACTIVE:
+            _ACTIVE[run_id]["status"] = status
+
+
+def _release(run_id):
+    with _ACTIVE_GUARD:
+        _ACTIVE.pop(run_id, None)
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _is_current(record, insights, report_sha):
+    if not record or record.get("status") != "completed":
+        return False
+    based = record.get("based_on") or {}
+    return (
+        record.get("brief_version") == BRIEF_VERSION
+        and (record.get("research") or {}).get("status") in ("completed", "partial")
+        and based.get("dataset_sha256") == insights.get("dataset_sha256")
+        and based.get("source_report_sha256") == report_sha
+        and based.get("prompt_version") == PROMPT_VERSION
+    )
+
+
+def is_current(root, run_id):
+    """True when the stored brief was built from this report's current data."""
+    from app.services import report_insights
+
+    root = Path(root).resolve()
+    report, report_sha = _load_report(root, run_id)
+    insights = report_insights.load_or_build(report, root)
+    return _is_current(read_summary(run_id, root), insights, report_sha)
+
+
+def _strip(record):
+    return {k: v for k, v in record.items() if k not in ("previous_versions", "attempt")}
+
+
+def generate_brief(root, run_id, ticker=None, *, force=False, record_failure=True, client=None,
+                   trigger="manual"):
+    """Generate, validate and store the AI summary plus thorough research.
+
+    Not forced: an existing brief built from the same report and dataset is
+    returned unchanged (no AI call). Forced (the button): always regenerates.
+    A failure never removes the last successful version; it is recorded in
+    ``attempt`` (or as an "unavailable" record when nothing succeeded yet).
+    """
+    from app.services import report_insights
+
     run_id = canonical_run_id(run_id)
     if run_id is None:
         raise ExecutiveSummaryError("Invalid research run ID.")
     root = Path(root).resolve()
+    report, report_sha = _load_report(root, run_id)
+    if ticker and report["ticker"] != ticker:
+        raise ExecutiveSummaryError("The saved report belongs to a different company.")
+    insights = report_insights.load_or_build(report, root)
+    existing = read_summary(run_id, root)
+    if not force and _is_current(existing, insights, report_sha):
+        return existing
 
-    with _GENERATION_LOCK:
-        existing = read_summary(run_id, root)
-        if existing and existing.get("status") == "completed":
-            return existing
+    started = _now()
+    contexts = {}
 
-        report, report_sha = _load_report(root, run_id)
-        if ticker and report["ticker"] != ticker:
-            raise ExecutiveSummaryError("The saved report belongs to a different company.")
+    def build(profile):
+        context = build_brief_context(
+            report, insights,
+            include_descriptions=profile.options["include_descriptions"],
+            include_ai_findings=profile.options["include_ai_findings"],
+        )
+        contexts[profile.name] = context
+        return build_brief_messages(context)
 
-        stage = "context"
+    def validate(parsed, profile):
         try:
-            context, messages, budget = fit_to_budget(report)
-            stage = "provider_request"
-            started = time.perf_counter()
-            response = call_groq(messages)
-            elapsed = time.perf_counter() - started
+            return validate_brief(parsed, contexts[profile.name])
+        except ExecutiveSummaryError as error:
+            raise ResponseRejected(str(error)) from None
 
-            stage = "response_shape"
-            if not getattr(response, "choices", None):
-                raise ExecutiveSummaryError("The model returned no summary.")
-            choice = response.choices[0]
-            if choice.finish_reason != "stop" or not choice.message.content:
-                raise ExecutiveSummaryError(
-                    f"The model response was incomplete (finish reason: {choice.finish_reason})."
-                )
+    try:
+        parsed, (sections, words, research), diagnostics = structured_completion(
+            agent="summary",
+            call_name="research_brief",
+            schema_name="insightiq_research_brief",
+            schema_model=ResearchBrief,
+            build_messages=build,
+            profiles=brief_profiles(),
+            validate=validate,
+            client=client,
+        )
+    except AICallFailed as failure:
+        reason = FAILURE_MESSAGES.get(failure.reason, "The summary service is unavailable.")
+        logger.warning("Research brief for %s failed: %s", run_id, failure.reason)
+        attempt = {"status": "failed", "started_at_utc": started, "finished_at_utc": _now(),
+                   "forced": bool(force), "trigger": trigger, "reason": reason,
+                   "provider_failure_reason": failure.reason,
+                   "diagnostics": brief_diagnostics(failure.diagnostics)}
+        if record_failure:
+            if existing and existing.get("status") == "completed":
+                # Keep the previous successful version visible.
+                _write_sidecar(root, {**existing, "attempt": attempt})
+            else:
+                _write_sidecar(root, {**_failure_record(
+                    run_id, report["ticker"], report_sha, "provider_request", reason, failure.diagnostics,
+                ), "attempt": attempt})
+        raise ExecutiveSummaryError(reason) from None
 
-            stage = "schema"
-            try:
-                parsed = ExecutiveSummary.model_validate_json(choice.message.content)
-            except ValueError:
-                raise ExecutiveSummaryError("The model response did not match the summary schema.")
+    level = diagnostics.get("profile_used")
+    options = {name: (d, a) for name, d, a in CONTEXT_LEVELS}[level]
+    previous = list((existing or {}).get("previous_versions") or [])
+    if existing and existing.get("status") == "completed":
+        previous.insert(0, _strip(existing))
+    record = {
+        "run_id": run_id,
+        "ticker": report["ticker"],
+        "status": "completed",
+        "brief_version": BRIEF_VERSION,
+        "generated_at_utc": _now(),
+        "data_as_of": insights.get("data_as_of"),
+        "provider": diagnostics.get("provider"),
+        "deployment": diagnostics.get("deployment"),
+        "model": diagnostics.get("model"),
+        "source_report_sha256": report_sha,
+        "based_on": {
+            "source_report_sha256": report_sha,
+            "dataset_sha256": insights.get("dataset_sha256"),
+            "data_as_of": insights.get("data_as_of"),
+            "prompt_version": PROMPT_VERSION,
+        },
+        "word_count": words,
+        "sections": sections,
+        "research": research,
+        "sources": insights.get("sources") or [],
+        "validation": {
+            "strict_schema": True,
+            "evidence_ids_in_report": True,
+            "numbers_grounded_in_report": True,
+            "causal_and_advisory_language_rejected": True,
+            "research_sections_validated_individually": True,
+        },
+        "diagnostics": {
+            **brief_diagnostics(diagnostics),
+            "estimated_input_tokens": diagnostics.get("estimated_input_tokens"),
+            "input_token_budget": diagnostics.get("input_token_budget"),
+            "context_level": level,
+            "article_descriptions_included": options[0],
+            "validated_ai_findings_included": options[1],
+        },
+        "attempt": {"status": "done", "started_at_utc": started, "finished_at_utc": _now(),
+                    "forced": bool(force), "trigger": trigger},
+        "previous_versions": previous[:MAX_PREVIOUS_VERSIONS],
+        "disclosure": (
+            "AI-generated from the saved report and InsightIQ's computed figures. Every figure "
+            "and evidence ID was checked against them; it adds no new facts and is not "
+            "investment advice."
+        ),
+    }
+    _write_sidecar(root, record)
+    return record
 
-            stage = "grounding_validation"
-            sections, words = validate_summary(parsed, context)
-            usage = getattr(response, "usage", None)
-            record = {
-                "run_id": run_id,
-                "ticker": report["ticker"],
-                "status": "completed",
-                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-                "model": MODEL,
-                "source_report_sha256": report_sha,
-                "word_count": words,
-                "sections": sections,
-                "validation": {
-                    "strict_schema": True,
-                    "evidence_ids_in_report": True,
-                    "numbers_grounded_in_report": True,
-                    "causal_and_advisory_language_rejected": True,
-                },
-                "diagnostics": {
-                    "response_id": getattr(response, "id", None),
-                    "finish_reason": choice.finish_reason,
-                    "elapsed_seconds": round(elapsed, 3),
-                    "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                    "completion_tokens": getattr(usage, "completion_tokens", None),
-                    "total_tokens": getattr(usage, "total_tokens", None),
-                    **budget,
-                },
-                "disclosure": (
-                    "AI-written summary of the saved report. Every figure and evidence ID was "
-                    "checked against the report; it adds no new facts and is not investment advice."
-                ),
-            }
-            _write_sidecar(root, record)
-            return record
 
-        except ExecutiveSummaryError as exc:
-            logger.warning("Executive summary for %s failed at %s: %s", run_id, stage, exc)
-            if record_failure:
-                _write_sidecar(root, _failure_record(run_id, report["ticker"], report_sha, stage, str(exc)))
-            raise
-        except Exception as exc:
-            # Provider messages can echo request content; record only the class and status.
-            error_class = type(exc).__name__
-            status_code = getattr(exc, "status_code", None)
-            reason = "The summary service is unavailable."
-            if status_code is not None:
-                reason = f"The AI provider rejected the summary request (HTTP {status_code})."
-            elif "Timeout" in error_class or "Connection" in error_class:
-                reason = "The AI provider could not be reached."
-            logger.warning(
-                "Executive summary for %s failed at %s: %s (status %s)", run_id, stage, error_class, status_code
-            )
-            if record_failure:
-                _write_sidecar(
-                    root, _failure_record(run_id, report["ticker"], report_sha, stage, reason, error_class, status_code)
-                )
-            raise ExecutiveSummaryError(reason) from None
+def start_brief(root, run_id, ticker, *, force=False, trigger="manual", client=None, background=True):
+    """Start a generation unless one is running (dedupe) or, when not forced,
+    a current brief exists. Returns (outcome, state): outcome is "started",
+    "running" (an existing attempt is reused) or "current" (nothing to do)."""
+    root = Path(root).resolve()
+    run_id = canonical_run_id(run_id)
+    if run_id is None:
+        raise ExecutiveSummaryError("Invalid research run ID.")
+    running = active_attempt(run_id)
+    if running:
+        return "running", running
+    if not force and is_current(root, run_id):
+        return "current", None
+    info = {"status": "pending", "started_at_utc": _now(), "forced": bool(force), "trigger": trigger}
+    if not _claim(run_id, info):
+        return "running", active_attempt(run_id)
+
+    def work():
+        try:
+            _set_status(run_id, "running")
+            generate_brief(root, run_id, ticker=ticker, force=force, client=client, trigger=trigger)
+        except ExecutiveSummaryError:
+            pass  # recorded in the sidecar with a safe reason
+        except Exception:
+            logger.exception("Research brief worker failed for %s", run_id)
+        finally:
+            _release(run_id)
+
+    if background:
+        threading.Thread(target=work, name=f"brief-{run_id[:8]}", daemon=True).start()
+    else:
+        work()
+    return "started", info
+
+
+def brief_state(root, run_id, ticker):
+    """Status for the API: legacy ``status`` (none/generating/completed/
+    unavailable) plus ``job_status`` (none/pending/running/done/failed)."""
+    record = read_summary(run_id, Path(root).resolve())
+    active = active_attempt(run_id)
+    attempt = (record or {}).get("attempt") or {}
+    if active:
+        job_status, error = active["status"], None
+    elif attempt.get("status") in ("pending", "running"):
+        job_status, error = "failed", "The previous generation was interrupted; try again."
+    elif attempt:
+        job_status = attempt["status"]
+        error = attempt.get("reason") if job_status == "failed" else None
+    elif record and record.get("status") == "completed":
+        job_status, error = "done", None
+    elif record and record.get("status") == "unavailable":
+        job_status, error = "failed", record.get("reason")
+    else:
+        job_status, error = "none", None
+    completed = record if record and record.get("status") == "completed" else None
+    if active:
+        status = "generating"
+    elif record and record.get("status") in ("completed", "unavailable"):
+        status = record["status"]
+    else:
+        status = "none"
+    try:
+        current = is_current(root, run_id) if completed else False
+    except Exception:
+        current = False
+    return {
+        "run_id": run_id,
+        "ticker": ticker,
+        "status": status,
+        "job_status": job_status,
+        "error": error,
+        "summary": record if status in ("completed", "unavailable", "generating") and record else None,
+        "research": (completed or {}).get("research"),
+        "sources": (completed or {}).get("sources") or [],
+        "generated_at_utc": (completed or {}).get("generated_at_utc"),
+        "data_as_of": (completed or {}).get("data_as_of"),
+        "is_current": current,
+        "previous_available": bool((record or {}).get("previous_versions")),
+        "active": active,
+    }

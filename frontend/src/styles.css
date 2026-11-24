@@ -2619,3 +2619,175 @@ a {
 .last-updated {
   margin: 6px 0 0;
 }
+
+/* Sector comparison: "Compare selected companies" */
+.selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.selection-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.selection-count.is-invalid {
+  color: var(--warning);
+}
+
+.select-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+}
+
+.select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.select-item:hover {
+  border-color: var(--border-strong);
+}
+
+.select-item.is-selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.select-item .result-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.page > .segmented {
+  align-self: flex-start;
+}
+
+/* ---------------------------------------------------------- growth analysis */
+.growth-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.growth-trend-detail {
+  margin: 6px 0 0;
+}
+.growth-readout {
+  margin: 10px 0;
+  line-height: 1.55;
+}
+.growth-table th[title] {
+  cursor: help;
+}
+.growth .notice {
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------ report chart extras */
+.chart-axis-title {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.chart-axis-x {
+  margin: 4px 0 0;
+  text-align: center;
+}
+.bar.tone-negative { fill: var(--negative); }
+.bar.tone-positive { fill: var(--positive); }
+.bar.tone-accent { fill: var(--accent); }
+.line.tone-accent { stroke: var(--accent); }
+.point.tone-accent,
+.point-active.tone-accent { fill: var(--accent); }
+.legend-swatch.tone-accent { background: var(--accent); }
+.legend-swatch.tone-negative { background: var(--negative); }
+.legend-swatch.tone-positive { background: var(--positive); }
+.report-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+}
+.chart-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.chart-panel h4 {
+  margin: 0 0 2px;
+  font-size: 0.95rem;
+}
+.chart-panel .chart-sub {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.ratio-rows {
+  display: grid;
+  gap: 10px;
+}
+.ratio-row-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+.ratio-bar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  margin-top: 3px;
+}
+.ratio-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 8px;
+  border-radius: 4px;
+}
+.ratio-bar.is-company { background: var(--primary); }
+.ratio-bar.is-median { background: var(--secondary); opacity: 0.75; }
+
+/* ------------------------------------------------------ research brief */
+.research-heading {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+}
+.research-body h4 {
+  margin: 0 0 4px;
+  font-size: 0.92rem;
+}
+.sources-list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}

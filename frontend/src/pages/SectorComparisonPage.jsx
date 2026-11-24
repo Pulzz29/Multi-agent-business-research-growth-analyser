@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, Layers, Search, Sparkles, Trophy } from "lucide-react";
+import { ArrowLeft, Download, Layers, ListChecks, Search, Sparkles, Trophy } from "lucide-react";
 import { BarChart, RadarChart } from "../components/charts.jsx";
 import { Badge, Card, EmptyState, ErrorState, EvidencePanel, Notice, Skeleton } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { formatDateTime } from "../lib/format.js";
+import { replaceHash } from "../lib/router.js";
 import { MARKET_LABELS, buildComparisonModel } from "../lib/sectorModel.js";
+import { filterCompanies, initialSelection, selectAll, selectionStatus, toggle } from "../lib/selection.js";
 import { MarketToggle } from "./MarketPage.jsx";
 
 /* ------------------------------------------------------------ sector list */
@@ -190,7 +192,11 @@ function ComparisonView({ model, token }) {
   return (
     <>
       <Card
-        title={`${model.sectorLabel} · ${model.marketLabel}`}
+        title={
+          model.isCustom
+            ? `Custom comparison: ${model.sectorLabel}, ${model.rows.length} companies · ${model.marketLabel}`
+            : `${model.sectorLabel} · ${model.marketLabel}`
+        }
         subtitle={`Generated ${formatDateTime(model.generatedAt)} · ${model.rankedCount} of ${model.rows.length} companies ranked · values in ${model.currency}`}
         action={
           <div className="btn-row">
@@ -204,6 +210,12 @@ function ComparisonView({ model, token }) {
         }
       >
         {download.error && <Notice tone="error">Download failed: {download.error}</Notice>}
+        {model.isCustom && (
+          <Notice tone="info" title={`Custom comparison of ${model.selectedCompanies.length} selected companies`}>
+            {model.relativeNote} Compared: {model.selectedCompanies.map((c) => `${c.name || c.symbol} (${c.symbol})`).join(", ")}.
+            {model.duplicatesRemoved.length > 0 ? ` Duplicates removed: ${model.duplicatesRemoved.join(", ")}.` : ""}
+          </Notice>
+        )}
         <p>{model.overview}</p>
         <p className="small muted">
           {model.overviewSource === "ai" ? model.narrativeLabel : "Deterministic overview from the scoring model."}
@@ -212,7 +224,9 @@ function ComparisonView({ model, token }) {
         {model.status !== "ranked" && (
           <Notice tone="warning" title="Ranking not possible">
             {model.status === "insufficient_companies"
-              ? "Fewer than two companies in this sector have enough data to be ranked."
+              ? model.isCustom
+                ? "Fewer than two of the selected companies have enough data to be ranked."
+                : "Fewer than two companies in this sector have enough data to be ranked."
               : "No metric has data for at least two companies."}
           </Notice>
         )}
@@ -248,7 +262,10 @@ function ComparisonView({ model, token }) {
         </div>
       </Card>
 
-      <Card title="Comparison table" subtitle="Raw values; * marks a missing value replaced by the sector median for scoring">
+      <Card
+        title="Comparison table"
+        subtitle={`Raw values; * marks a missing value replaced by the ${model.isCustom ? "median of the selected companies" : "sector median"} for scoring`}
+      >
         <div className="table-scroll">
           <table className="data-table">
             <thead>
@@ -316,11 +333,211 @@ function ComparisonView({ model, token }) {
   );
 }
 
-function SectorDetail({ token, market, sector, navigate, onAuthError }) {
+/* ------------------------------------------- custom comparison (selection) */
+
+function SelectionPanel({ label, members, limits, selected, setSelected, ignored, busy, onCompare, onRetry }) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => filterCompanies(members.list, query), [members.list, query]);
+  const status = limits ? selectionStatus(selected, limits) : null;
+  const names = useMemo(() => Object.fromEntries(members.list.map((c) => [c.symbol, c.name])), [members.list]);
+
+  return (
+    <Card
+      title="Select companies to compare"
+      subtitle={limits ? `Choose ${limits.min}–${limits.max} companies from ${label}; they are ranked against each other only` : `Companies in ${label}`}
+    >
+      {members.loading ? (
+        <Skeleton lines={4} />
+      ) : members.error ? (
+        <ErrorState message={members.error} onRetry={onRetry} />
+      ) : (
+        <>
+          {ignored.length > 0 && (
+            <Notice tone="warning">Not in this sector, so not selected: {ignored.join(", ")}.</Notice>
+          )}
+          {limits && members.list.length < limits.min && (
+            <Notice tone="warning">
+              This sector lists only {members.list.length} {members.list.length === 1 ? "company" : "companies"}; a custom comparison needs at least {limits.min}.
+            </Notice>
+          )}
+          <label className="search-field">
+            <Search size={16} aria-hidden="true" />
+            <span className="sr-only">Filter companies</span>
+            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by name or symbol" maxLength={60} />
+          </label>
+          <div className="selection-toolbar">
+            <span className={`selection-count ${status && !status.valid ? "is-invalid" : ""}`} aria-live="polite">
+              {status?.label}
+            </span>
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSelected((s) => selectAll(filtered, s, limits.max))}
+                disabled={!limits || !filtered.length || selected.length >= limits.max || busy}
+              >
+                {query.trim() ? "Select shown" : "Select all"}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected([])} disabled={!selected.length || busy}>
+                Clear
+              </button>
+            </div>
+          </div>
+          {!filtered.length ? (
+            <p className="muted small">No companies match “{query.trim()}”.</p>
+          ) : (
+            <ul className="select-list" aria-label={`Companies in ${label}`}>
+              {filtered.map((c) => {
+                const checked = selected.includes(c.symbol);
+                return (
+                  <li key={c.symbol}>
+                    <label className={`select-item ${checked ? "is-selected" : ""}`}>
+                      <input type="checkbox" checked={checked} disabled={busy} onChange={() => setSelected((s) => toggle(s, c.symbol))} />
+                      <span className="result-name">{c.name}</span>
+                      <span className="muted small">{c.symbol}</span>
+                      {c.in_universe === false && (
+                        <Badge tone="info" title="Added from a provider search; mapped to this sector">
+                          added
+                        </Badge>
+                      )}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {selected.length > 0 && (
+            <p className="small muted">Selected: {selected.map((s) => `${names[s] || s} (${s})`).join(", ")}</p>
+          )}
+          <div className="selection-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onCompare}
+              disabled={!status?.valid || busy}
+              aria-describedby={status && !status.valid ? "compare-reason" : undefined}
+            >
+              <ListChecks size={16} aria-hidden="true" />
+              {busy ? "Comparing companies…" : `Compare ${selected.length} selected`}
+            </button>
+            {status && !status.valid && (
+              <span id="compare-reason" className="small muted">
+                {status.reason}
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function ModeSwitch({ mode, onChange }) {
+  const options = [
+    ["sector", "Entire sector", Layers],
+    ["custom", "Selected companies", ListChecks],
+  ];
+  return (
+    <div className="segmented" role="tablist" aria-label="Comparison mode">
+      {options.map(([id, text, Icon]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={mode === id}
+          className={`segmented-item ${mode === id ? "is-active" : ""}`}
+          onClick={() => onChange(id)}
+        >
+          <Icon size={14} aria-hidden="true" /> {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SectorDetail({ token, market, sector, companies: requested, navigate, onAuthError }) {
+  const [mode, setMode] = useState(requested?.length ? "custom" : "sector");
   const [state, setState] = useState({ loading: true, error: "", status: 0, snapshot: null });
   const [generate, setGenerate] = useState({ busy: false, error: "" });
   const [reloadKey, setReloadKey] = useState(0);
   const busy = useRef(false);
+
+  // Custom comparison state lives here so it survives switching modes; the
+  // page is keyed by market and sector, so changing sector starts fresh.
+  const [members, setMembers] = useState({ loading: true, error: "", list: [], limits: null });
+  const [membersKey, setMembersKey] = useState(0);
+  const [selected, setSelected] = useState([]);
+  const [ignored, setIgnored] = useState([]);
+  const [custom, setCustom] = useState({ busy: false, error: "", snapshot: null });
+  const appliedRequest = useRef(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setMembers((m) => ({ ...m, loading: true, error: "" }));
+    api
+      .sectors(token, market, "", controller.signal)
+      .then((data) => {
+        const entry = (data.sectors || []).find((s) => s.key === sector);
+        const limits = data.custom_comparison
+          ? { min: data.custom_comparison.min_companies, max: data.custom_comparison.max_companies }
+          : null;
+        if (!entry) {
+          setMembers({ loading: false, error: "This sector is not available for this market.", list: [], limits });
+        } else if (!limits) {
+          setMembers({
+            loading: false,
+            error: "The backend does not support custom comparisons yet. Restart the backend (scripts\\run_backend.py) and reload this page.",
+            list: [],
+            limits: null,
+          });
+        } else {
+          setMembers({ loading: false, error: "", list: entry.companies || [], limits, label: entry.label });
+          if (!appliedRequest.current && requested?.length) {
+            appliedRequest.current = true;
+            const initial = initialSelection(requested, entry.companies || []);
+            setSelected(initial.selected);
+            setIgnored(initial.ignored);
+          }
+        }
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        if (err.status === 401) onAuthError?.();
+        setMembers({ loading: false, error: err.message, list: [], limits: null });
+      });
+    return () => controller.abort();
+    // `requested` is read once (appliedRequest); its identity must not re-trigger loads.
+  }, [token, market, sector, membersKey, onAuthError]);
+
+  const changeMode = useCallback(
+    (next) => {
+      setMode(next);
+      const shown = next === "custom" && custom.snapshot ? (custom.snapshot.selected_companies || []).map((c) => c.symbol) : [];
+      replaceHash({ page: "sectors", market, sector, companies: shown });
+    },
+    [custom.snapshot, market, sector]
+  );
+
+  const compare = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setCustom((c) => ({ ...c, busy: true, error: "" }));
+    try {
+      const snapshot = await api.generateComparison(token, market, sector, true, selected);
+      setCustom({ busy: false, error: "", snapshot });
+      replaceHash({ page: "sectors", market, sector, companies: (snapshot.selected_companies || []).map((c) => c.symbol) });
+    } catch (err) {
+      if (err.status === 401) onAuthError?.();
+      setCustom((c) => ({ ...c, busy: false, error: err.message }));
+    } finally {
+      busy.current = false;
+    }
+  }, [token, market, sector, selected, onAuthError]);
+
+  const customModel = useMemo(() => buildComparisonModel(custom.snapshot), [custom.snapshot]);
+  const resultSymbols = (custom.snapshot?.selected_companies || []).map((c) => c.symbol);
+  const selectionChanged =
+    customModel && (resultSymbols.length !== selected.length || resultSymbols.some((s) => !selected.includes(s)));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -338,14 +555,6 @@ function SectorDetail({ token, market, sector, navigate, onAuthError }) {
 
   const run = useCallback(async () => {
     if (busy.current) return;
-    const ok = window.confirm(
-      "Generate a new sector comparison?\n\n" +
-        "• Stale company data is refreshed from the market's data providers (bounded; may take a minute).\n" +
-        "• The ranking is computed deterministically.\n" +
-        "• One Groq request writes the explanation; every number is checked before it is shown.\n" +
-        "• The result is saved as a new comparison; earlier comparisons are kept."
-    );
-    if (!ok) return;
     busy.current = true;
     setGenerate({ busy: true, error: "" });
     try {
@@ -361,7 +570,7 @@ function SectorDetail({ token, market, sector, navigate, onAuthError }) {
   }, [token, market, sector, onAuthError]);
 
   const model = useMemo(() => buildComparisonModel(state.snapshot), [state.snapshot]);
-  const label = model?.sectorLabel || sector;
+  const label = model?.sectorLabel || members.label || sector;
 
   return (
     <div className="page">
@@ -373,11 +582,52 @@ function SectorDetail({ token, market, sector, navigate, onAuthError }) {
           <p className="eyebrow">Sector-wise comparison · {MARKET_LABELS[market]}</p>
           <h1>{label}</h1>
         </div>
-        <button type="button" className="btn btn-primary" onClick={run} disabled={generate.busy}>
-          <Trophy size={16} aria-hidden="true" />
-          {generate.busy ? "Comparing companies…" : state.snapshot ? "Generate new comparison" : "Generate comparison"}
-        </button>
+        {mode === "sector" && (
+          <button type="button" className="btn btn-primary" onClick={run} disabled={generate.busy}>
+            <Trophy size={16} aria-hidden="true" />
+            {generate.busy ? "Comparing companies…" : state.snapshot ? "Generate new comparison" : "Generate comparison"}
+          </button>
+        )}
       </header>
+      <p className="small muted">
+        {mode === "custom" ? "Compare" : "Generating a comparison"} refreshes stale company data from the market's providers and makes one Azure OpenAI
+        request for the explanation (every number is checked). The result is saved as a new comparison; earlier ones are kept.
+      </p>
+      <ModeSwitch mode={mode} onChange={changeMode} />
+      {mode === "custom" ? (
+        <>
+          <SelectionPanel
+            label={label}
+            members={members}
+            limits={members.limits}
+            selected={selected}
+            setSelected={setSelected}
+            ignored={ignored}
+            busy={custom.busy}
+            onCompare={compare}
+            onRetry={() => setMembersKey((k) => k + 1)}
+          />
+          {custom.busy && (
+            <Notice tone="info">Refreshing the selected companies' data, ranking them and writing the explanation. This can take a minute.</Notice>
+          )}
+          {custom.error && <Notice tone="error">The custom comparison could not be generated: {custom.error}</Notice>}
+          {customModel ? (
+            <>
+              {selectionChanged && (
+                <Notice tone="warning">The selection has changed since this comparison. Click Compare to update it.</Notice>
+              )}
+              <ComparisonView model={customModel} token={token} />
+            </>
+          ) : (
+            !custom.busy && (
+              <EmptyState title="No custom comparison yet" icon={ListChecks}>
+                Select between {members.limits?.min ?? "two"} and {members.limits?.max ?? "several"} companies above and click Compare. Scores are relative to the selected companies and may differ from the full sector ranking.
+              </EmptyState>
+            )
+          )}
+        </>
+      ) : (
+        <>
       {generate.busy && <Notice tone="info">Refreshing company data, ranking and writing the explanation. This can take a minute.</Notice>}
       {generate.error && <Notice tone="error">The comparison could not be generated: {generate.error}</Notice>}
       {state.loading ? (
@@ -395,11 +645,13 @@ function SectorDetail({ token, market, sector, navigate, onAuthError }) {
       ) : (
         <ErrorState message="This comparison could not be read." />
       )}
+        </>
+      )}
     </div>
   );
 }
 
-export function SectorComparisonPage({ token, market, sector, navigate, onAuthError }) {
+export function SectorComparisonPage({ token, market, sector, companies, navigate, onAuthError }) {
   if (!sector) return <SectorList token={token} market={market} navigate={navigate} onAuthError={onAuthError} />;
-  return <SectorDetail token={token} market={market} sector={sector} navigate={navigate} onAuthError={onAuthError} />;
+  return <SectorDetail token={token} market={market} sector={sector} companies={companies} navigate={navigate} onAuthError={onAuthError} />;
 }

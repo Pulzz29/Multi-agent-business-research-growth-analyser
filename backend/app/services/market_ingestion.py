@@ -130,25 +130,36 @@ def _apply_profile(market, symbol, profile, provider):
 
 
 def _store_news_articles(symbol, company, articles, provider):
-    """Store provider news (Finnhub) in news_articles with the existing dedupe rules."""
-    from app.services.news_ingestion import normalized_article_url, relevance_for_article
+    """
+    Store provider news (Finnhub) in news_articles. The same strict company
+    relevance rules as NewsData.io apply; rejected articles are counted by
+    reason in the log, never stored.
+    """
+    from app.services.company_identity import identity_for, universe_identities
+    from app.services.news_ingestion import normalized_article_url
+    from app.services.news_relevance import assess_article
     import json
 
-    terms = registry.news_terms_for(company)
+    identity = identity_for(symbol)
+    others = universe_identities()
+    max_age_days = get_settings().news_max_age_days
     inserted = 0
+    rejected = {}
     with transaction() as conn:
         for item in articles:
             canonical = normalized_article_url(item["article_url"])
             if not canonical or not item["article_url"].startswith("https://"):
+                rejected["invalid_url"] = rejected.get("invalid_url", 0) + 1
                 continue
-            score, reason = max(
-                (relevance_for_article(
-                    {"title": item["title"], "description": item.get("description") or ""},
-                    term, symbol) for term in terms),
-                key=lambda r: r[0],
+            verdict = assess_article(
+                {"title": item["title"], "description": item.get("description") or "",
+                 "published_at": item.get("published_at")},
+                identity, others=others, max_age_days=max_age_days,
             )
-            if score < 0.60:
+            if verdict["decision"] != "accept":
+                rejected[verdict["reason"]] = rejected.get(verdict["reason"], 0) + 1
                 continue
+            score, reason = verdict["score"], verdict["reason"]
             provider_id = item.get("provider_article_id") or f"url:{canonical}"
             existing = conn.execute(
                 """
@@ -173,9 +184,14 @@ def _store_news_articles(symbol, company, articles, provider):
                 (symbol, provider, provider_id, item["title"], item.get("description"),
                  item["article_url"], item.get("source_name"), item.get("published_at"),
                  storage.utc_now(), score, reason,
-                 json.dumps({"canonical_url": canonical, "provider": provider})),
+                 json.dumps({"canonical_url": canonical, "provider": provider,
+                             "relevance_version": verdict["relevance_version"],
+                             "event_type": verdict["event_type"],
+                             "primary_subject": verdict["primary_subject"]})),
             )
             inserted += cursor.rowcount == 1
+    if rejected:
+        logger.info("news_relevance %s/%s rejected=%s", provider, symbol, json.dumps(rejected, sort_keys=True))
     return inserted
 
 
@@ -246,7 +262,7 @@ def _run_source(market, symbol, kind, company, clients, missing):
 
             result = asyncio.run(refresh_news_company(
                 symbol, max_articles=30, max_pages=2, force_refresh=True,
-                search_terms=registry.news_terms_for(company), country="in",
+                country="in",
             ))
             return int(result.get("records_fetched") or 0), int(result.get("records_inserted") or 0)
     raise ValueError("Unknown source kind.")
@@ -360,31 +376,30 @@ def refresh_many(market, symbols, sources, force=False, clients=None, max_compan
     return {"outcomes": outcomes, "skipped_over_limit": skipped, "recovery_point": recovery}
 
 
-def stored_news(symbol, limit=30):
+def stored_news(symbol, limit=30, with_summary=False):
+    """Company news that passes the strict relevance rules (read-only)."""
+    from app.services.news_relevance import load_company_news
+
     with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, title, description, article_url, source_name, published_at,
-                   retrieved_at, relevance_score, relevance_reason, provider
-            FROM news_articles WHERE company_ticker = ?
-            ORDER BY published_at DESC, id DESC LIMIT ?
-            """,
-            (symbol, limit),
-        ).fetchall()
-    return [
+        rows, summary = load_company_news(conn, symbol, limit=limit)
+    items = [
         {
-            "evidence_id": f"NEWS_{symbol}_{r['id']}",
+            "evidence_id": f"NEWS_{registry.evidence_safe(symbol)}_{r['id']}",
+            "database_id": r["id"],
             "title": r["title"],
             "description": r["description"],
             "source_url": r["article_url"] if str(r["article_url"] or "").startswith("https://") else None,
             "publisher": r["source_name"],
             "published_at": r["published_at"],
             "retrieved_at": r["retrieved_at"],
-            "relevance_score": r["relevance_score"],
+            "relevance_score": r["relevance"]["score"],
+            "relevance_reason": r["relevance"]["reason"],
+            "event_type": r["relevance"]["event_type"],
             "provider": r["provider"],
         }
         for r in rows
     ]
+    return (items, summary) if with_summary else items
 
 
 def source_status(market, symbol):

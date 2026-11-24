@@ -13,14 +13,8 @@ from app.services.runtime_startup import (
 )
 
 
-SUPPORTED_COMPANIES = (
-    "AAPL",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "MSFT",
-    "NVDA",
-)
+# Companies on the validated SEC pipeline (live set; see sec_coverage.py).
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_COMPANIES  # noqa: E402
 
 
 class DashboardDataError(RuntimeError):

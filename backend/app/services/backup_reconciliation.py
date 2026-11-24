@@ -167,7 +167,7 @@ def reconcile_backups(
     """
     Inspect completed runs. Optional repair attempts
     create or verify a backup using the existing
-    backup coordinator; no Groq calls are made.
+    backup coordinator; no AI calls are made.
 
     Does not modify research job statuses.
     """

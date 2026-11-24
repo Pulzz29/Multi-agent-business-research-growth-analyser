@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { BarChart, LineChart } from "../components/charts.jsx";
+import { GrowthAnalysisCard } from "../components/GrowthAnalysis.jsx";
 import {
   Badge,
   Card,
@@ -300,13 +301,34 @@ function latest(series) {
 
 function growthSub(row) {
   if (!row) return null;
-  const qoq = row.qoq_change_pct === null ? "QoQ n/a" : `${formatPct(row.qoq_change_pct)} QoQ`;
+  const qoq =
+    row.qoq_change_pct === null || row.qoq_change_pct === undefined ? "QoQ n/a" : `${formatPct(row.qoq_change_pct)} QoQ`;
   return `${row.fiscal_label} · ${periodRange(row.period_start, row.period_end)} · ${qoq}`;
 }
 
+// Headline cards describe one common quarter (the latest one stored for every
+// metric), so revenue and cash flow are never compared across periods.
+function atCommonPeriod(series, commonEnd) {
+  if (!series?.length) return null;
+  if (commonEnd) return series.find((r) => r.period_end === commonEnd) || null;
+  return latest(series);
+}
+
+function yoyValue(row) {
+  if (!row) return "Unavailable";
+  if (row.yoy_change_pct === null || row.yoy_change_pct === undefined) return row.yoy_reason ? "n/a" : "Unavailable";
+  return formatPct(row.yoy_change_pct);
+}
+
+function yoySub(row) {
+  if (row?.yoy_reason) return row.yoy_reason;
+  return row?.yoy_basis ? `vs. quarter ending ${formatDate(row.yoy_basis)}` : "No comparable prior-year quarter";
+}
+
 function OverviewTab({ data, runs, navigate, ticker }) {
-  const rev = latest(data.financials.revenue);
-  const ocf = latest(data.financials.operating_cash_flow);
+  const commonEnd = data.freshness?.latest_common_period_end;
+  const rev = atCommonPeriod(data.financials.revenue, commonEnd);
+  const ocf = atCommonPeriod(data.financials.operating_cash_flow, commonEnd);
   const fRev = data.forecasts.revenue;
   const lastReport = runs?.runs?.find((r) => r.report_available);
 
@@ -326,22 +348,28 @@ function OverviewTab({ data, runs, navigate, ticker }) {
 
   return (
     <div className="tab-panel">
+      {data.freshness?.stale && (
+        <Notice tone="warning" title="Old financial data">
+          The latest quarter stored from SEC filings ended {formatDate(data.freshness.latest_financial_period_end)} (
+          {data.freshness.latest_period_age_days} days ago). The figures below describe that period, not the current one.
+        </Notice>
+      )}
       <div className="stats-row">
         <Stat label="Quarterly revenue" icon={TrendingUp} value={rev ? formatUsd(rev.value_usd) : "Unavailable"} title={rev ? exactUsd(rev.value_usd) : undefined} sub={growthSub(rev)} />
         <Stat label="Quarterly operating cash flow" icon={Wallet} value={ocf ? formatUsd(ocf.value_usd) : "Unavailable"} title={ocf ? exactUsd(ocf.value_usd) : undefined} sub={growthSub(ocf)} />
         <Stat
           label="Revenue growth (YoY)"
           icon={BarChart3}
-          value={rev?.yoy_change_pct === null || !rev ? "Unavailable" : formatPct(rev.yoy_change_pct)}
+          value={yoyValue(rev)}
           tone={trendTone(rev?.yoy_change_pct)}
-          sub={rev?.yoy_basis ? `vs. quarter ending ${formatDate(rev.yoy_basis)}` : "No comparable prior-year quarter"}
+          sub={yoySub(rev)}
         />
         <Stat
           label="Cash-flow growth (YoY)"
           icon={BarChart3}
-          value={ocf?.yoy_change_pct === null || !ocf ? "Unavailable" : formatPct(ocf.yoy_change_pct)}
+          value={yoyValue(ocf)}
           tone={trendTone(ocf?.yoy_change_pct)}
-          sub={ocf?.yoy_basis ? `vs. quarter ending ${formatDate(ocf.yoy_basis)}` : "No comparable prior-year quarter"}
+          sub={yoySub(ocf)}
         />
         <Stat
           label="Forecast horizon"
@@ -434,8 +462,16 @@ const RANGES = [
   { id: "all", label: "All", quarters: Infinity },
 ];
 
-function Delta({ value, basis, kind }) {
+function Delta({ value, basis, kind, reason }) {
   if (value === null || value === undefined) {
+    if (reason) {
+      // Not meaningful (zero or negative base): say so instead of a percentage.
+      return (
+        <span className="muted" title={reason}>
+          n/a
+        </span>
+      );
+    }
     return (
       <span className="muted" title={kind === "QoQ" ? "No contiguous previous quarter" : "No same fiscal quarter one year earlier"}>
         —
@@ -494,7 +530,7 @@ function FactSources({ evidence }) {
   );
 }
 
-function FinancialsTab({ data }) {
+function FinancialsTab({ data, token, ticker }) {
   const [range, setRange] = useState("5y");
   const quarters = RANGES.find((r) => r.id === range).quarters;
   const revenue = data.financials.revenue;
@@ -522,6 +558,7 @@ function FinancialsTab({ data }) {
 
   return (
     <div className="tab-panel">
+      <GrowthAnalysisCard token={token} ticker={ticker} />
       <Card
         title="Quarterly revenue and operating cash flow"
         subtitle="Standalone fiscal quarters from SEC filings, USD billions. Actual reported or derived results only."
@@ -586,19 +623,19 @@ function FinancialsTab({ data }) {
                       {r ? formatUsd(r.value_usd) : "—"}
                     </td>
                     <td className="num">
-                      <Delta value={r?.qoq_change_pct} basis={r?.qoq_basis} kind="QoQ" />
+                      <Delta value={r?.qoq_change_pct} basis={r?.qoq_basis} kind="QoQ" reason={r?.qoq_reason} />
                     </td>
                     <td className="num">
-                      <Delta value={r?.yoy_change_pct} basis={r?.yoy_basis} kind="YoY" />
+                      <Delta value={r?.yoy_change_pct} basis={r?.yoy_basis} kind="YoY" reason={r?.yoy_reason} />
                     </td>
                     <td className="num" title={o ? exactUsd(o.value_usd) : "Unavailable"}>
                       {o ? formatUsd(o.value_usd) : "—"}
                     </td>
                     <td className="num">
-                      <Delta value={o?.qoq_change_pct} basis={o?.qoq_basis} kind="QoQ" />
+                      <Delta value={o?.qoq_change_pct} basis={o?.qoq_basis} kind="QoQ" reason={o?.qoq_reason} />
                     </td>
                     <td className="num">
-                      <Delta value={o?.yoy_change_pct} basis={o?.yoy_basis} kind="YoY" />
+                      <Delta value={o?.yoy_change_pct} basis={o?.yoy_basis} kind="YoY" reason={o?.yoy_reason} />
                     </td>
                     <td>
                       <details className="row-evidence">
@@ -711,12 +748,17 @@ function ForecastSection({ metric, label, forecast, history }) {
     ...(last ? [{ x: last.period_end, y: toB(last.value_usd), note: "Last reported quarter" }] : []),
     ...forecast.predictions.map((p) => ({ x: p.approx_period_end, y: p.predicted_billion_usd, note: `Estimate, ${p.fiscal_quarter_ahead} quarter${p.fiscal_quarter_ahead > 1 ? "s" : ""} ahead` })),
   ];
-  const band = forecast.predictions.map((p) => ({ x: p.approx_period_end, lo: p.lower_95_billion_usd, hi: p.upper_95_billion_usd }));
+  const validation = forecast.validation || null;
+  // Intervals are drawn only when the backend's out-of-sample coverage gate
+  // allowed them and both bounds exist; otherwise the point estimate stands alone.
+  const intervalsAllowed = Boolean(validation?.interval_display_allowed);
+  const hasInterval = (p) => intervalsAllowed && Number.isFinite(p.lower_95_billion_usd) && Number.isFinite(p.upper_95_billion_usd);
+  const band = forecast.predictions.filter(hasInterval).map((p) => ({ x: p.approx_period_end, lo: p.lower_95_billion_usd, hi: p.upper_95_billion_usd }));
 
   const bt = forecast.backtesting || {};
-  const baseline = bt.seasonal_naive?.mean_mae_billion_usd;
-  const selected = bt[forecast.selected_model]?.mean_mae_billion_usd;
-  const improvement = baseline && selected ? (1 - selected / baseline) * 100 : null;
+  const baseline = validation?.baseline_mae_billion_usd ?? null;
+  const selected = validation?.selected_mae_billion_usd ?? null;
+  const improvement = baseline && selected != null && forecast.selected_model !== "seasonal_naive" ? (1 - selected / baseline) * 100 : null;
 
   return (
     <Card
@@ -732,7 +774,11 @@ function ForecastSection({ metric, label, forecast, history }) {
         yFormat={fmtAxisB}
         xFormat={(x) => (x === last?.period_end ? `${last.fiscal_label} · ${periodRange(last.period_start, last.period_end)}` : `≈ quarter ending ${formatDate(x)}`)}
         ariaLabel={`${label}: reported quarters and forecast`}
-        footnote="Forecast quarter-end dates are approximate. The shaded band is the model-based 95% interval, which has not been empirically calibrated."
+        footnote={
+          band.length
+            ? `Forecast quarter-end dates are approximate. The shaded band is the model's 95% interval; ${validation?.interval_warning || ""}`
+            : `Forecast quarter-end dates are approximate. ${validation?.interval_warning || "No validated prediction interval is available."}`
+        }
       />
 
       <div className="grid-2 tight">
@@ -754,7 +800,7 @@ function ForecastSection({ metric, label, forecast, history }) {
                   <td>{formatDate(p.approx_period_end)}</td>
                   <td className="num">{formatBillions(p.predicted_billion_usd)}</td>
                   <td className="num">
-                    {formatBillions(p.lower_95_billion_usd)} – {formatBillions(p.upper_95_billion_usd)}
+                    {hasInterval(p) ? `${formatBillions(p.lower_95_billion_usd)} – ${formatBillions(p.upper_95_billion_usd)}` : "Not validated"}
                   </td>
                 </tr>
               ))}
@@ -762,7 +808,7 @@ function ForecastSection({ metric, label, forecast, history }) {
           </table>
         </div>
         <div>
-          <h3 className="sub-title">Backtesting (rolling-origin, mean absolute error)</h3>
+          <h3 className="sub-title">Model selection (point-in-time folds, mean absolute error)</h3>
           <table className="mini-table">
             <thead>
               <tr>
@@ -786,11 +832,18 @@ function ForecastSection({ metric, label, forecast, history }) {
               ))}
             </tbody>
           </table>
-          {improvement !== null && (
-            <p className="small muted">
-              Selected model error is {Math.abs(improvement).toFixed(0)}% {improvement >= 0 ? "lower" : "higher"} than the seasonal-naive baseline
-              {improvement < 25 && improvement >= 0 ? " — a modest margin." : "."}
-            </p>
+          {validation ? (
+            validation.evaluation_available ? (
+              <p className="small muted">
+                Held-out evaluation (forecast from {formatDate(validation.evaluation_origin_period_end)}, {validation.holdout_quarters} quarters not used to choose the model):
+                selected model error {formatBillions(selected)} vs seasonal-naive baseline {formatBillions(baseline)}
+                {improvement !== null ? ` (${Math.abs(improvement).toFixed(0)}% ${improvement >= 0 ? "lower" : "higher"})` : ""}.
+              </p>
+            ) : (
+              <p className="small muted">Held-out evaluation unavailable: {validation.evaluation_unavailable_reason}</p>
+            )
+          ) : (
+            <p className="small muted">This forecast predates the held-out validation method; it is recomputed on the next research run.</p>
           )}
         </div>
       </div>
@@ -835,7 +888,11 @@ function ForecastsTab({ data }) {
 
 export function NewsList({ articles, compact }) {
   if (!articles?.length) {
-    return <EmptyState title="No stored news for this company">Use Refresh news to fetch recent articles from NewsData.io.</EmptyState>;
+    return (
+      <EmptyState title="No verified company-specific news is available for the selected period.">
+        Only articles in which this company is the subject of the headline are shown. Use Refresh news to check NewsData.io for new articles.
+      </EmptyState>
+    );
   }
   return (
     <ul className={`news-list ${compact ? "is-compact" : ""}`}>
@@ -913,9 +970,25 @@ export function AgentProgress({ job }) {
 
 export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, jobError, company, onSummaryChange }) {
   const [state, setState] = useState({ loading: false, error: "", doc: null });
+  const [cancel, setCancel] = useState({ busy: false, error: "", confirming: false });
   const selectedId = runId || runs?.latest_completed_run_id || null;
   const selectedRun = runs?.runs?.find((r) => r.run_id === selectedId);
   const jobForTicker = activeJob?.ticker === ticker ? activeJob : null;
+  const jobRunning = Boolean(jobForTicker && PENDING.includes(jobForTicker.status));
+  // While new research runs, the previous saved report is not shown under it
+  // (it stays one click away and is clearly labelled as the previous report).
+  const hidePrevious = jobRunning && !runId;
+
+  async function cancelRun() {
+    if (!jobForTicker?.run_id || cancel.busy) return;
+    setCancel({ busy: true, error: "", confirming: false });
+    try {
+      await api.cancelJob(token, jobForTicker.run_id);
+      setCancel({ busy: false, error: "", confirming: false });
+    } catch (error) {
+      setCancel({ busy: false, error: error.message, confirming: false });
+    }
+  }
 
   const load = useCallback(
     async (signal) => {
@@ -923,7 +996,8 @@ export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, j
         setState({ loading: false, error: "", doc: null });
         return;
       }
-      setState((s) => ({ ...s, loading: true, error: "" }));
+      // Never keep showing a different run's report while the selected one loads.
+      setState((s) => ({ loading: true, error: "", doc: s.doc?.report?.run_id === selectedId ? s.doc : null }));
       try {
         const doc = await api.companyReport(token, ticker, selectedId, signal);
         if (!signal?.aborted) setState({ loading: false, error: "", doc });
@@ -948,7 +1022,8 @@ export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, j
       tries += 1;
       try {
         const doc = await api.companyReport(token, ticker, selectedId);
-        if (doc.summary || tries >= 20) {
+        // The summary is one more AI request after the report; allow ~6 minutes.
+        if (doc.summary || tries >= 72) {
           window.clearInterval(timer);
           setState((s) => ({ ...s, doc }));
           if (doc.summary) onSummaryChange?.();
@@ -956,7 +1031,7 @@ export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, j
       } catch {
         window.clearInterval(timer);
       }
-    }, 4000);
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [state.doc, jobForTicker, selectedId, token, ticker, onSummaryChange]);
 
@@ -969,19 +1044,58 @@ export function ResearchTab({ token, ticker, runs, runId, navigate, activeJob, j
           action={<StatusBadge status={jobForTicker.status} />}
         >
           <AgentProgress job={jobForTicker} />
-          {jobForTicker.status === "failed" && (
+          {jobForTicker.status === "failed" && jobForTicker.error_code === "cancelled" && (
+            <Notice tone="info">This research run was cancelled. No report was saved and earlier reports are unchanged.</Notice>
+          )}
+          {jobForTicker.status === "failed" && jobForTicker.error_code !== "cancelled" && (
             <Notice tone="error">
               This research run failed{jobForTicker.error_code ? ` (${jobForTicker.error_code.replace(/_/g, " ")})` : ""}. No report was saved and earlier reports are unchanged. You can start another run.
             </Notice>
           )}
           {PENDING.includes(jobForTicker.status) && (
-            <p className="small muted">The report appears here automatically once it has been saved. You can keep browsing other pages meanwhile.</p>
+            <>
+              <p className="small muted">
+                This is a new research run (Azure OpenAI; each AI step can take a few minutes). The new report appears here
+                automatically once it has been saved. You can keep browsing other pages meanwhile.
+              </p>
+              {cancel.confirming ? (
+                <div className="badge-row" role="group" aria-label="Confirm cancelling the research run">
+                  <span className="small">No report will be saved, and any AI request in progress is cancelled.</span>
+                  <button type="button" className="btn btn-sm" onClick={cancelRun}>
+                    Confirm cancel
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCancel((c) => ({ ...c, confirming: false }))}>
+                    Keep running
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setCancel((c) => ({ ...c, confirming: true, error: "" }))}
+                  disabled={cancel.busy || !jobForTicker.run_id}
+                >
+                  {cancel.busy ? "Cancelling…" : "Cancel research"}
+                </button>
+              )}
+              {cancel.error && <Notice tone="error">Could not cancel: {cancel.error}</Notice>}
+            </>
           )}
         </Card>
       )}
       {jobError && <ErrorState message={jobError} />}
 
-      {!selectedId ? (
+      {hidePrevious && selectedId ? (
+        <Card>
+          <p className="small muted">
+            The previous saved report ({formatDateTime(selectedRun?.report_generated_at_utc || selectedRun?.created_at_utc) || selectedId.slice(0, 8)}) is not
+            shown while new research runs.{" "}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate({ page: "company", ticker, tab: "research", runId: selectedId })}>
+              Open previous report
+            </button>
+          </p>
+        </Card>
+      ) : !selectedId ? (
         <Card>
           <EmptyState title="No saved research report for this company" icon={FileText}>
             Start research to run the Financial, News and Strategic agents. Financial data, forecasts and news on the other tabs are available now.
@@ -1107,7 +1221,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
           navigate({ page: "company", ticker, tab: "research" });
         }}
         disabled={jobPending || startBusy}
-        title={jobPending ? `A research run for ${activeJob.ticker} is in progress` : "Run the Financial, News and Strategic agents (uses Groq quota)"}
+        title={jobPending ? `A research run for ${activeJob.ticker} is in progress` : "Run the Financial, News and Strategic agents (uses Azure OpenAI tokens; can take several minutes)"}
       >
         <PlayCircle size={16} aria-hidden="true" />
         {jobHere ? "Research running…" : jobPending ? "Another run in progress" : "Start research"}
@@ -1152,7 +1266,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
       ) : data ? (
         <>
           {tab === "overview" && <OverviewTab data={data} runs={runs} navigate={navigate} ticker={ticker} />}
-          {tab === "financials" && <FinancialsTab data={data} />}
+          {tab === "financials" && <FinancialsTab data={data} token={token} ticker={ticker} />}
           {tab === "forecasts" && <ForecastsTab data={data} />}
           {tab === "news" && <NewsTab data={data} />}
           {tab === "research" && (

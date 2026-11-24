@@ -32,12 +32,12 @@ from app.database.sqlite_manager import connect
 from app.services import evidence_package as packages
 from app.services import market_registry as registry
 from app.services import market_storage as storage
-from app.services.groq_structured import (
-    GroqCallFailed,
+from app.services.ai_provider import (
+    AICallFailed,
     RequestProfile,
     ResponseRejected,
-    configured_model,
-    groq_runtime_settings,
+    ai_runtime_settings,
+    brief_diagnostics,
     structured_completion,
 )
 from app.services.narrative_validation import VALIDATION_LABEL, build_item_allowance
@@ -172,7 +172,12 @@ def select_records(symbol):
 # --------------------------------------------------------------- forecasts
 
 def provider_forecast(symbol, metric):
-    """SARIMAX with the SEC path's building blocks, or an honest 'unavailable'."""
+    """
+    Provider statements (FMP / Yahoo Finance) carry no filing dates, so a
+    point-in-time backtest - required before any forecast or interval is
+    shown - cannot be built from them. Forecasts are therefore reported as
+    unavailable with the exact reason, never fitted without validation.
+    """
     from app.services import forecasting
 
     quarterly = storage.statement_values(symbol, "quarterly")
@@ -182,54 +187,16 @@ def provider_forecast(symbol, metric):
         for end, row, start, _ in _with_starts(rows, "quarterly")
     ]
     history = forecasting.contiguous_recent_history(history)
-    needed = forecasting.MIN_TRAIN + forecasting.HORIZON
+    needed = forecasting.MIN_HISTORY
     if len(history) < needed:
         return None, (
-            f"Only {len(history)} consecutive quarters are stored; the forecasting "
-            f"model needs at least {needed}."
+            f"Only {len(history)} consecutive quarters of provider statements are stored; "
+            f"a validated forecast needs at least {needed} quarters with filing dates."
         )
-    try:
-        values = forecasting.validate_history(history)
-        results = forecasting.backtest(values)
-        selected, specification = forecasting.choose_candidate(results)
-        intervals = None
-        if specification is not None:
-            fitted, _ = forecasting.fit_sarimax(values, specification)
-            predicted, intervals = forecasting.predict_sarimax(fitted, include_intervals=True)
-        else:
-            predicted = forecasting.seasonal_naive(values)
-        if metric == "revenue" and np.any(predicted < 0):
-            selected, intervals = "seasonal_naive", None
-            predicted = forecasting.seasonal_naive(values)
-    except Exception as exc:
-        return None, f"The forecasting model could not be fitted ({type(exc).__name__})."
-
-    predictions = []
-    for index, value in enumerate(predicted):
-        predictions.append({
-            "fiscal_quarter_ahead": index + 1,
-            "predicted_billion_usd": float(value),
-            "lower_95_billion_usd": None if intervals is None else float(intervals[index, 0]),
-            "upper_95_billion_usd": None if intervals is None else float(intervals[index, 1]),
-        })
-    return {
-        "source": "statistical_projection",
-        "cache_status": "not_cached",
-        "last_reported_sec_period": history[-1]["period_end"],
-        "last_reported_period": history[-1]["period_end"],
-        "model": selected,
-        "horizon_quarters": forecasting.HORIZON,
-        "predictions": predictions,
-        "backtesting": results,
-        "selection_reason": "Selected by the same rolling-origin backtest as the SEC forecasts.",
-        "amount_unit": "billions of the reporting currency",
-        "interval_quality": {
-            "status": "not_assessed",
-            "observed_holdout_coverage": None,
-            "display_allowed": intervals is not None,
-            "warning": "Interval quality has not been reviewed for provider-sourced data.",
-        },
-    }, None
+    return None, (
+        "Provider statements do not include filing dates, so the forecast cannot be "
+        "validated with a point-in-time backtest; no forecast is shown."
+    )
 
 
 # ----------------------------------------------------------------- package
@@ -389,7 +356,7 @@ def prompt_evidence(package, options):
     }
 
 
-# ---------------------------------------------------------------- Groq call
+# ------------------------------------------------------------------ AI call
 
 def system_prompt(currency):
     return (
@@ -481,20 +448,20 @@ def render_statements(claims):
 
 
 def profiles():
-    full = groq_runtime_settings()["financial_max_completion"]
+    full = ai_runtime_settings()["max_output_financial"]
     return [
         RequestProfile("full", full, {"periods_per_metric": 8, "forecast_quarters": 4,
                                       "findings_min": 3, "findings_max": 5}),
-        RequestProfile("reduced", max(1200, int(full * 0.75)),
+        RequestProfile("reduced", full,
                        {"periods_per_metric": 4, "forecast_quarters": 2,
                         "findings_min": 2, "findings_max": 3}),
     ]
 
 
-def analyze(symbol, package, records, client=None):
+def _analyze_unscoped(symbol, package, records, client=None):
     from app.agents.financial_agent import FinancialAnalysisResponse, evaluate_financial_findings
 
-    claims_selection, reason = "groq", None
+    claims_selection, reason = "ai", None
     try:
         parsed, verified, diagnostics = structured_completion(
             agent="financial", call_name="financial_analysis",
@@ -503,7 +470,7 @@ def analyze(symbol, package, records, client=None):
             validate=lambda parsed, p: validate_claims(parsed, records), client=client,
         )
         findings, withheld = evaluate_financial_findings(parsed.findings, package)
-    except GroqCallFailed as failure:
+    except AICallFailed as failure:
         diagnostics = failure.diagnostics
         verified, findings, withheld = deterministic_claims(records), [], []
         claims_selection = "deterministic_fallback"
@@ -516,20 +483,17 @@ def analyze(symbol, package, records, client=None):
     brief = {
         "ticker": symbol,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "model": configured_model(),
+        "model": diagnostics.get("model") or diagnostics.get("deployment"),
+        "provider": diagnostics.get("provider"),
+        "deployment": diagnostics.get("deployment"),
         "verified_claims": verified,
         "verified_statements": render_statements(verified),
         "diagnostics": {
-            "response_id": diagnostics.get("response_id"),
-            "finish_reason": diagnostics.get("finish_reason"),
-            "elapsed_seconds": diagnostics.get("elapsed_seconds"),
-            "prompt_tokens": diagnostics.get("prompt_tokens"),
-            "completion_tokens": diagnostics.get("completion_tokens"),
-            "total_tokens": diagnostics.get("total_tokens"),
+            **brief_diagnostics(diagnostics),
             "source_records_available": len(records),
             "claims_verified": len(verified),
             "claims_selection": claims_selection,
-            "strict_schema_validation": claims_selection == "groq",
+            "strict_schema_validation": claims_selection == "ai",
             "exact_amount_validation": True,
             "exact_reporting_period_validation": True,
             "provider_evidence_id_validation": True,
@@ -601,7 +565,18 @@ def provider_financial_agent_node(state, client=None):
         "forecast_quality_provenance": None,
         "financial_analysis": analysis,
         "evidence_package": package,
-        "groq_call": diagnostics,
+        "ai_call": diagnostics,
         "disclosures": disclosures,
         "elapsed_seconds": round(time.perf_counter() - started, 3),
     }
+
+
+def analyze(symbol, package, records, client=None):
+    """Runs the AI step with company-scope validation bound (see narrative_validation)."""
+    import json as _json
+
+    from app.services.narrative_validation import company_scope
+
+    evidence_text = _json.dumps(package, default=str, ensure_ascii=False)
+    with company_scope(symbol, evidence_text):
+        return _analyze_unscoped(symbol, package, records, client=client)

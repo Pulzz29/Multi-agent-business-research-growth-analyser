@@ -59,9 +59,13 @@ def main():
             "Server API credential is unavailable."
         )
 
-    if not os.getenv("GROQ_API_KEY"):
+    missing_ai = [
+        name for name in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT")
+        if not os.getenv(name, "").strip()
+    ]
+    if missing_ai:
         raise RuntimeError(
-            "Server Groq credential is unavailable."
+            "Azure OpenAI configuration is incomplete: " + ", ".join(missing_ai)
         )
 
     # The per-session temp folder can change between Windows logins;

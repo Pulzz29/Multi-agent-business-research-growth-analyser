@@ -4,7 +4,7 @@ InsightIQ is a full-stack business research application built with FastAPI, Reac
 
 ## Features
 
-- SEC financial data for AAPL, AMZN, GOOGL, META, MSFT, and NVDA
+- SEC financial data, reconciled to 10-K filings, for 44 of the 47 US universe companies (WFC, GS and XOM are not reconcilable from their SEC data)
 - Company news collection
 - Quarterly financial normalization and forecasting
 - Financial, News, and Strategic research agents
@@ -43,10 +43,10 @@ After connecting with the access key, use **Markets → United States / India** 
 - **Company page.** Shows the provider profile, quote, key ratios computed by InsightIQ, annual statements, stored news and data freshness. **Refresh data** reloads stale sources.
 - **Sector-wise comparison.**
   - Pick a sector; the list comes from the backend and can be searched.
-  - **Generate comparison** refreshes stale company data, ranks the sector with a deterministic weighted model, and asks Groq to write the explanation. Every number in that text is checked against the comparison, and any company's text that fails validation falls back to a template explanation.
+  - **Generate comparison** refreshes stale company data, ranks the sector with a deterministic weighted model, and asks Azure OpenAI (GPT-5.4-Pro) to write the explanation. Every number in that text is checked against the comparison, and any company's text that fails validation falls back to a template explanation.
   - The page shows a ranking-score bar chart, a radar chart, a key-metric chart, ranked cards with strengths, weaknesses and a per-metric breakdown, the comparison table and the methodology.
   - **Download PDF / DOCX** renders the saved comparison.
-- **Saved comparisons are immutable.** Each one is written to `reports/sector_comparisons/<id>.json`; reopening it or downloading its report makes no provider or Groq calls.
+- **Saved comparisons are immutable.** Each one is written to `reports/sector_comparisons/<id>.json`; reopening it or downloading its report makes no provider or AI calls.
 
 ### Data sources
 
@@ -78,6 +78,34 @@ After connecting with the access key, use **Markets → United States / India** 
 
 The LLM never computes or changes a score or a rank.
 
+### Compare selected companies (custom comparison)
+
+On a sector page, switch from **Entire sector** to **Selected companies** to compare a hand-picked subset of that sector.
+
+**Using it**
+- Filter the sector's companies by name or symbol, tick the ones you want, or use **Select all** (capped at the maximum) and **Clear**.
+- A live counter shows the selection ("3 selected (min 2, max 6)"). **Compare** stays disabled, with the reason shown, until the count is within the limits.
+- Your selection is kept when you switch modes and cleared when you change sector.
+- After a comparison, the address bar holds the selection (for example `#/markets/US/sectors/technology?companies=AAPL,MSFT,NVDA`). Opening that link starts in this mode with those companies ticked; it does not run a comparison by itself.
+
+**What is different from a whole-sector comparison**
+- Only the selected companies are ranked, and scores are normalised **over the selection**: min–max, medians for missing values, and ranks are computed among those companies only. The sector's weights are still used.
+- The result and the report carry the note: *"Scores are relative to the selected companies and may differ from the full sector ranking."*
+- Only the selected companies' data is refreshed, with the same sources and freshness rules as a normal comparison (profile, quote and statements; no news). The rest of the sector is never fetched.
+- The snapshot is saved with `comparison_type: "custom"`, plus `selected_companies` and `duplicates_removed`. It never replaces the sector's latest comparison; the history lists both kinds.
+- The PDF/DOCX is titled **"Custom comparison: \<Sector\>, N companies"**, lists the selected companies and repeats the note. The file name ends in `_custom_<date>`.
+
+**Limits and validation**
+- `INSIGHTIQ_CUSTOM_COMPARISON_MIN_COMPANIES` (default 2) and `INSIGHTIQ_CUSTOM_COMPARISON_MAX_COMPANIES` (default 6) are the only place the limits are set. The frontend reads them from `GET /api/v1/markets/{market}/sectors` (`custom_comparison`).
+- API: `POST /api/v1/markets/{market}/sectors/{sector}/comparison` with `{"refresh": true, "companies": ["AAPL", "MSFT"]}`. Without `companies`, the whole sector is compared as before.
+- Symbols are trimmed, upper-cased and de-duplicated. The server answers **400** with a clear message when:
+  - a symbol is invalid or not in the sector;
+  - fewer than the minimum distinct companies remain;
+  - there are more than the maximum.
+- Companies without stored data are listed and flagged, not ranked. If fewer than two of them can be ranked, the status is `insufficient_companies`.
+
+**Companies from other sectors.** These cannot be added. Weights are set per sector (Banking, for example, scores price-to-book instead of leverage), so ranking a company from another sector against these peers would be misleading. A company found through provider search *is* selectable when its provider sector maps to this sector, because it then appears in the sector's list (marked "added").
+
 ### AI research for any company (Phase B)
 
 Open a company from the market page. After its data is loaded, click **Research this company** to run the same Financial, News and Strategic agents. The summary agent then writes the executive summary sidecar.
@@ -96,7 +124,7 @@ Open a company from the market page. After its data is loaded, click **Research 
 
 **Quote fallback:** if Finnhub rejects a quote (for example an invalid key), the US quote falls back to FMP's company profile, labelled as FMP.
 
-**Tests:** `tests	est_provider_research.py`.
+**Tests:** `tests\test_provider_research.py`.
 
 ### Automatic company data refresh
 
@@ -124,7 +152,7 @@ Opening a company page (or picking a company from search) sends one request to `
 3. Set `DATA_REFRESH_TTL_HOURS=0.0167` in `.env`, restart the backend, wait about 1 minute and reopen → automatic refresh.
 4. Click Refresh data twice quickly → one refresh, then the cooldown message.
 
-**Tests:** `tests	est_company_data_refresh.py` and `frontend	estsreshness.test.mjs`.
+**Tests:** `tests\test_company_data_refresh.py` and `frontend\tests\freshness.test.mjs`.
 
 ### Run and test
 
@@ -135,10 +163,77 @@ cd frontend; npm run dev                               # dashboard at http://127
 cd frontend; npm test
 ```
 
-The new tests run fully offline. They use test-only fake providers and a fake Groq client on an isolated copy of the database.
+The new tests run fully offline. They use test-only fake providers and a fake Azure OpenAI Responses client on an isolated copy of the database.
+
+## Research report features
+
+Every saved research report (`#/companies/<TICKER>/reports/<run_id>`) now has charts, a growth analysis, an AI summary with thorough research, and a PDF download. One frozen dataset per report feeds all four, so they always show the same numbers.
+
+**Per-report dataset.** `GET /api/v1/companies/{ticker}/reports/{run_id}/insights` computes it once, point-in-time (SEC facts filed and provider rows stored by the report's generation time), and saves it to `reports/research_runs/insights/{run_id}.json`. It makes no external or AI calls.
+
+**Charts** (custom SVG, `frontend/src/components/ReportCharts.jsx`). When there is not enough data, a chart shows "Not enough data to chart" with the reason.
+
+| Chart | Notes |
+|---|---|
+| Revenue and net income | Quarterly or annual toggle |
+| Margin trends | Gross, operating and net; gross is omitted with a reason when gross profit is not stored |
+| Growth rates | Year-over-year revenue and net profit growth |
+| Key ratios vs sector median | P/E, ROE, margins and debt-to-equity; the median covers the sector's stored companies, with N shown |
+| Price history | Always an empty state with the latest stored quote: InsightIQ stores no price history, and fetching one would be a new external call |
+
+**Growth analysis** (`backend/app/services/growth_analysis.py`; also `GET /api/v1/companies/{ticker}/growth` and the company pages).
+
+| Metric | Definition |
+|---|---|
+| Revenue QoQ | Against the adjacent quarter |
+| Revenue YoY, net profit YoY, EPS YoY | Against the same fiscal quarter one year earlier |
+| Annual YoY | Against the prior fiscal year |
+| CAGR 3Y / 5Y | Needs fiscal years exactly N years apart |
+
+- **Base of zero or a loss:** gives "n/a" with the reason, never NaN or Infinity.
+- **Short history:** shows "Insufficient history (need N, have M)". Quarterly YoY needs 5 quarters; CAGR over N years needs N+1 fiscal years.
+- **Trend label:** accelerating, stable or decelerating, by a ±2 percentage-point rule comparing the latest YoY rate with the average of the previous two.
+- **Data age:** stale data is flagged.
+- **EPS:** stored from existing SEC and provider responses at each company's next refresh.
+
+**AI summary and thorough research** (`executive_summary.generate_brief`). One Azure OpenAI call returns two parts:
+- the 150–250 word summary;
+- research sections: business overview, financial performance, growth analysis, valuation snapshot, recent news, key risks, outlook.
+
+The model receives InsightIQ's computed figures and must use them as given, say "not available" when something is missing, and cite evidence IDs. Numbers, evidence IDs, language and company scope are validated; a failing research section is withheld individually.
+
+How generation runs:
+- **Automatic:** starts in the background when the **latest** report is opened.
+- **Button:** "Generate summary" / "Regenerate" forces a new version.
+- **Research job:** a new research run generates it on completion.
+- **Shared:** all three use the same code and a per-report registry, so a second request reuses the running one.
+
+A cached result is reused while the report and its dataset are unchanged. A failure keeps the previous version visible, with Retry, and up to three earlier versions are kept. The panel shows "Generated on … · based on data as of …", a Sources list and an "AI-generated, not investment advice" note.
+
+**PDF.** The **Download report** button calls `GET /api/v1/companies/{ticker}/reports/{run_id}/pdf` and saves `<Company>_Research_Report_<YYYY-MM-DD>.pdf`.
+- Contents: company and dates, AI summary and research, charts, the growth and ratio tables, news sources and a disclaimer.
+- Charts are drawn server-side with reportlab vector graphics from the same dataset, so no browser is needed and the output is consistent. Pages are numbered.
+- If the AI summary is not generated yet, the PDF says so; download again later.
+
+**Try it:** open `#/companies/MSFT/financials` for the growth card, or the latest MSFT report for the charts, summary and download. Tests: `tests/test_growth_analysis.py`, `tests/test_report_insights_pdf.py`, `tests/test_research_brief.py` and `frontend/tests/{growthModel,reportCharts,briefModel}.test.mjs`.
+
+## AI provider: Azure OpenAI GPT-5.4-Pro
+
+All AI text (financial, news, strategic, executive summary, sector narrative) is generated by an Azure OpenAI GPT-5.4-Pro deployment through the Responses API, from the backend only. Configure it in `.env`:
+
+```
+AZURE_OPENAI_API_KEY=<key from Microsoft Foundry>
+AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/openai/v1/
+AZURE_OPENAI_DEPLOYMENT=<your deployment name, e.g. gpt-6.2-sol>
+INSIGHTIQ_AZURE_REASONING_EFFORT=low   # minimal | low | medium | high | xhigh, as the model supports
+```
+
+Responses must come from the model named by the deployment; if the deployment name differs from the model name, also set `INSIGHTIQ_AZURE_EXPECTED_MODEL_PREFIX`. Restart the backend after editing `.env`.
+
+Actions that use AI or providers (Generate summary, sector comparison, Load market data) run on click with no browser confirmation dialog; what each one costs is shown as a small note beside the button, and failures appear inline on the page.
+
+Optional tuning (`INSIGHTIQ_AZURE_*`) is documented in `.env.example`. `scripts\verify_azure.py` makes one small live call to check the configuration. Details: `docs/AZURE_MIGRATION_REPORT.md`.
 
 ## Current status
 
-The local application has passed backend, API, agent, data-integrity, integration, and isolated database-recovery tests.
-
-Full financial accuracy certification, remaining visual checks, and production deployment are still pending.
+See `docs/FINAL_READINESS_REPORT.md` for the latest validation results, known limitations and external blockers, and `docs/DEMO_RUNBOOK.md` for running a demo.

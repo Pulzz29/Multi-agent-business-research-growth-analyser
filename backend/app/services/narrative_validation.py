@@ -403,6 +403,54 @@ def text_number_allowance(text):
     return numbers, pcts, dates
 
 
+# ------------------------------------------------------------- company scope
+# While AI text for one company is validated, the company and the evidence
+# text sent to the model are bound to the current thread. Any other company
+# from the InsightIQ universe that the text names must also be named in that
+# evidence; otherwise the text is rejected as cross-company contamination.
+
+import contextlib as _contextlib
+import threading as _threading
+
+_SCOPE = _threading.local()
+
+
+@_contextlib.contextmanager
+def company_scope(ticker, evidence_text):
+    previous = getattr(_SCOPE, "value", None)
+    _SCOPE.value = (str(ticker).upper(), str(evidence_text or ""))
+    try:
+        yield
+    finally:
+        _SCOPE.value = previous
+
+
+def foreign_companies(text, ticker, evidence_text=""):
+    """Universe companies (other than ``ticker``) named in text but not in evidence."""
+    from app.services.company_identity import universe_identities
+    from app.services.news_relevance import find_mentions
+
+    found = []
+    for other in universe_identities():
+        if other.ticker == ticker:
+            continue
+        if find_mentions(text, other, strong_only=True) and not find_mentions(evidence_text, other):
+            found.append(other.ticker)
+    return found
+
+
+def check_company_scope(text, field):
+    scope = getattr(_SCOPE, "value", None)
+    if not scope:
+        return
+    ticker, evidence_text = scope
+    foreign = foreign_companies(text, ticker, evidence_text)
+    if foreign:
+        raise NarrativeRejected(
+            f"{field}: names another company not present in the cited evidence ({', '.join(foreign[:3])})"
+        )
+
+
 def check_prose_field(
     text, field, allowance, allowed_ids, *,
     min_words=0, max_words=None, max_sentences=None,
@@ -415,6 +463,7 @@ def check_prose_field(
     check_evidence_tokens(text, field, allowed_ids)
     check_numbers(text, field, allowance.numbers, allowance.percentages, allowance.dates)
     check_periods(text, field, allowance.fiscal_years, allowance.quarter_years)
+    check_company_scope(text, field)
     if contiguous is not None:
         check_trend_language(text, field, contiguous)
 

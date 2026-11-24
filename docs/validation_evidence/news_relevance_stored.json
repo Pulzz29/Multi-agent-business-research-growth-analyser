@@ -1,0 +1,2849 @@
+{
+  "generated_at_utc": "2026-11-24T11:59:04.429366+00:00",
+  "relevance_version": "2026-11-24.3",
+  "companies": {
+    "AAPL": {
+      "stored": 8,
+      "accepted": 4,
+      "hidden": 4,
+      "hidden_by_reason": {
+        "company_not_in_headline": 1,
+        "another_company_is_subject": 2,
+        "company_not_mentioned": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 106,
+          "title": "Apple Store With All-New Design Opening in UK Next Month",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 107,
+          "title": "Apple Product (Red) to return on HomePod mini 2, AirPods Max 2: report",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 108,
+          "title": "Apple renews Ted Lasso for season 5",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 20,
+          "title": "Apple Maps launches revamped features in India with 3D landmarks and Look Around",
+          "event_type": "product",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 21,
+          "title": "iOS privacy policy generator — what to use, and what App Review asks of it",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 19,
+          "title": "Days after telling Apple CEO, 'great doing business with you', Meta’s AI chief Alexandr Wang takes a dig - The Times of India",
+          "reason": "another_company_is_subject"
+        },
+        {
+          "id": 18,
+          "title": "Days after telling Apple CEO, 'great doing business with you', Meta’s AI chief Alexandr Wang takes a dig at iPhone maker; says: Yet another...",
+          "reason": "another_company_is_subject"
+        },
+        {
+          "id": 105,
+          "title": "Ted Lasso Season 5 Officially Confirmed At Apple TV Following Season 4 Cliffhanger",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "ABBV": {
+      "stored": 9,
+      "accepted": 4,
+      "hidden": 5,
+      "hidden_by_reason": {
+        "duplicate_event": 5
+      },
+      "accepted_examples": [
+        {
+          "id": 315,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "event_type": "regulatory",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 316,
+          "title": "AbbVie investing $200M in Puerto Rico expansion",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 317,
+          "title": "AbbVie is looking beyond immunology’s treatment ceiling",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 318,
+          "title": "AbbVie Inc. $ABBV Holdings Cut by Lifeworks Advisors LLC",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 310,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 311,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 312,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 313,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 314,
+          "title": "AbbVie wins FDA approval for vitiligo treatment RINVOQ",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "ADBE": {
+      "stored": 5,
+      "accepted": 4,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "watchlist_or_listicle": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 131,
+          "title": "How to Play Adobe Stock Before 2027 as Michael Burry Loads Up on More Shares",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 132,
+          "title": "New York State of Health website a boon for software giant Adobe Systems",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 133,
+          "title": "Westerkirk Capital Inc. Sells 3,023 Shares of Adobe Inc. $ADBE",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 134,
+          "title": "Adobe Inc. $ADBE Holdings Cut by Rothschild Investment LLC",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 135,
+          "title": "Adobe (ADBE) Stock Price Prediction: Bearish trend holds, but short-term dip buyers are still showing up",
+          "reason": "watchlist_or_listicle"
+        }
+      ]
+    },
+    "AMZN": {
+      "stored": 7,
+      "accepted": 4,
+      "hidden": 3,
+      "hidden_by_reason": {
+        "company_not_mentioned": 3
+      },
+      "accepted_examples": [
+        {
+          "id": 191,
+          "title": "Amazon says giving drivers drop-off instructions can reduce package theft",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 192,
+          "title": "Amazon buys Israeli startup Decart AI's tech for estimated 7.5 bln USD",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 193,
+          "title": "Amazon scoops up AI accelerator tech to keep chips busy at all times",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 22,
+          "title": "Amazon, BigBasket Face FDA Action In Pune Over Food Safety, Hygiene Violations",
+          "event_type": "regulatory",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 24,
+          "title": "Silent 200s and Phantom Side Effects: Auditing “Accepted” Webhooks That Never Finished Downstream",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 23,
+          "title": "‘I Left a US Tech Career To Turn My Father’s Surplus Amla Into 25+ Products for 4000 Customers’",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 87,
+          "title": "PUMA Men’s Sock 8-Pack Just $7.99 Shipped on Amazon (Reg. $20)",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "AXISBANK.NS": {
+      "stored": 2,
+      "accepted": 2,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 402,
+          "title": "Axis Bank Expands MSME Support for Women-Led Enterprises",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 403,
+          "title": "Axis Bank assistant manager found dead in Cuttack; family alleges murder",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "BAC": {
+      "stored": 7,
+      "accepted": 6,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 269,
+          "title": "GTA 6 Online Could Be Bigger Than Fortnite, Bank Of America Stock Analyst Says",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 270,
+          "title": "What Does Bank Of America Corporation’s 4.76% Stock Drop Mean for Investors? The Law Offices of Howard G. Smith Outlines Securities Fraud Class Action Lead Plaintiff Deadline",
+          "event_type": "legal",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 272,
+          "title": "Bank of America Has Lowered Expectations for BJ's Wholesale Club (NYSE:BJ) Stock Price",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 273,
+          "title": "Take-Two Interactive Software (NASDAQ:TTWO) Given New $350.00 Price Target at Bank of America",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 274,
+          "title": "Take-Two Interactive Software (NASDAQ:TTWO) Stock Price Expected to Rise, Bank of America Analyst Says",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 271,
+          "title": "Bank of America Has Lowered Expectations for BJ’s Wholesale Club (NYSE:BJ) Stock Price",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "BAJAJ-AUTO.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 421,
+          "title": "Vedanta, HindZinc, Bajaj Auto, Eicher Motors, Maruti, Voltas: Impact of global metal price crash",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "BHARTIARTL.NS": {
+      "stored": 9,
+      "accepted": 5,
+      "hidden": 4,
+      "hidden_by_reason": {
+        "duplicate_event": 4
+      },
+      "accepted_examples": [
+        {
+          "id": 435,
+          "title": "Airtel Emerges as India’s Most Valuable Brand in Kantar BrandZ 2026 Rankings",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 437,
+          "title": "Airtel Overtakes HDFC Bank as India’s Most Valuable Brand in Kantar BrandZ Rankings",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 439,
+          "title": "Airtel Foundation Grants 55 Engineering Scholarships to Chandigarh University Students, Totaling Rs 7.7 Crore",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 441,
+          "title": "Top Telecom Operator Airtel's Bharti Airtel Foundation Grants 55 Scholarships to Chandigarh University's Engineering Students",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 442,
+          "title": "Stock Radar: Bharti Airtel rallies 14% in a month; multi-month triangle breakout signals further upside",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 440,
+          "title": "Top Telecom Operator Airtel's Bharti Airtel Foundation Grants 55 Scholarships to Chandigarh University's Engineering Students",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 438,
+          "title": "Top Telecom Operator Airtel's Bharti Airtel Foundation Grants 55 Scholarships to Chandigarh University's Engineering Students",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 436,
+          "title": "Top Telecom Operator Airtel's Bharti Airtel Foundation Grants 55 Scholarships to Chandigarh University's Engineering Students",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 434,
+          "title": "Airtel Emerges as India’s Most Valuable Brand in Kantar BrandZ 2026 Rankings",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "BMY": {
+      "stored": 8,
+      "accepted": 4,
+      "hidden": 4,
+      "hidden_by_reason": {
+        "duplicate_event": 4
+      },
+      "accepted_examples": [
+        {
+          "id": 321,
+          "title": "Bristol Myers Squibb Announces Planned Chief Financial Officer Transition",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 322,
+          "title": "Bristol Myers Squibb vs. Johnson & Johnson: Which Healthcare Giant's Stock Is a Better Buy for 2027?",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 323,
+          "title": "U.S. Benzathine Penicillin G Market Is Going to Boom |• Bristol Myers Squibb • Pfizer • Sandoz",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 326,
+          "title": "Bristol Myers Squibb vs. Novo Nordisk: Which Healthcare Stock Is a Better Buy for 2027?",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 325,
+          "title": "Bristol Myers Squibb vs. Novo Nordisk: Which Healthcare Stock Is a Better Buy for 2027?",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 324,
+          "title": "Bristol Myers Squibb vs. Novo Nordisk: Which Healthcare Stock Is a Better Buy for 2027?",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 319,
+          "title": "Bristol Myers Squibb Announces Planned Chief Financial Officer Transition",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 320,
+          "title": "Bristol Myers Squibb Announces Planned Chief Financial Officer Transition",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "BPCL.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 455,
+          "title": "BPCL Names Mohan B Mate as Chief General Manager I/C of Kochi Refinery",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 456,
+          "title": "Bharat Petroleum, Air Force register wins in Surjit Hockey tournament",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 457,
+          "title": "Hardeep Singh Puri Visits BPCL Outlet on Indore-Ujjain Highway",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "C": {
+      "stored": 10,
+      "accepted": 7,
+      "hidden": 3,
+      "hidden_by_reason": {
+        "duplicate_event": 3
+      },
+      "accepted_examples": [
+        {
+          "id": 277,
+          "title": "Mamdani Quotes Charli xcx’s “360” to Announce Fare Cap on Citi E-bike Rides Under 45 Minutes",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 278,
+          "title": "Citi Just Slashed Its Price Target on Salesforce Stock. Here's Why",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 280,
+          "title": "Larimar Therapeutics to Participate in the Citi 2026 Global Healthcare Conference",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 282,
+          "title": "Ovintiv (NYSE:OVV) Given a $74.00 Price Target at Citigroup",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 283,
+          "title": "Citi AAdvantage Executive Card Review: Better Lounges And More Status Credit",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 281,
+          "title": "Ovintiv (NYSE:OVV) Given a $74.00 Price Target at Citigroup",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 279,
+          "title": "Larimar Therapeutics to Participate in the Citi 2026 Global Healthcare Conference",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 276,
+          "title": "Citi Just Slashed Its Price Target on Salesforce Stock. Here's Why",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "CL": {
+      "stored": 7,
+      "accepted": 6,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 245,
+          "title": "Colgate-Palmolive Is Up More Than 25% This Year, but $1,000 From Five Years Ago Is Worth Only About $1,440",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 246,
+          "title": "Colgate-Palmolive (NYSE:CL) Shares Gap Down - Should You Sell?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 248,
+          "title": "Argus upgrades Colgate-Palmolive stock rating on volume growth",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 249,
+          "title": "Colgate-Palmolive (NYSE:CL) Stock Bumped Up to \"Buy\" by Argus",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 250,
+          "title": "Colgate-Palmolive Company $CL Stock Holdings Boosted by Te Ahumairangi Investment Management Ltd",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 247,
+          "title": "Argus upgrades Colgate-Palmolive stock rating on volume growth",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "COP": {
+      "stored": 9,
+      "accepted": 9,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 329,
+          "title": "ConocoPhillips to Exit Norway in $4.43 Billion Deal with Vaar Energi",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 330,
+          "title": "ConocoPhillips to Exit Norway in $4.43 Billion Deal with Vaar Energi - Crude Oil Prices Today | OilPrice.com",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 331,
+          "title": "Conocophillips To Sell Norway Assets In $3.9 Billion Deal",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 332,
+          "title": "ConocoPhillips $4.4B Sale of Norway O&G Business",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 333,
+          "title": "Var Energi Buys ConocoPhillips' Norway Assets, UK Terminal",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "COST": {
+      "stored": 7,
+      "accepted": 5,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 204,
+          "title": "4 Costco Kirkland Signature Items With Price Cuts In November 2026",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 205,
+          "title": "Northwest Las Vegas Could Land Seventh Costco Near Skye Canyon Interchange",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 206,
+          "title": "After infested Costco plant sales, California probes statewide pest program",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 209,
+          "title": "Costco Sells This Bugatti Electric Scooter For Under $1,000",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 210,
+          "title": "New Costco planned for Las Vegas",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 207,
+          "title": "After infested Costco plant sales, California probes statewide pest program",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 208,
+          "title": "After infested Costco plant sales, California probes statewide pest program",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "CSCO": {
+      "stored": 10,
+      "accepted": 6,
+      "hidden": 4,
+      "hidden_by_reason": {
+        "duplicate_event": 4
+      },
+      "accepted_examples": [
+        {
+          "id": 136,
+          "title": "Cisco Systems, Inc.: Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "event_type": "product",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 138,
+          "title": "Cisco and OpenAI launch Shirudo open-source infrastructure shield to prevent AI-driven cyberattacks",
+          "event_type": "product",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 142,
+          "title": "OpenAI And Cisco Want Cybersecurity Systems To Fix Themselves",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 143,
+          "title": "Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "event_type": "product",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 144,
+          "title": "CISA warns critical Cisco Expressway flaw is under attack",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 139,
+          "title": "Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 140,
+          "title": "Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 141,
+          "title": "Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 137,
+          "title": "Cisco and OpenAI Launch Shirudo, A New Project to Safeguard Agentic AI",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "CVX": {
+      "stored": 2,
+      "accepted": 2,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 327,
+          "title": "Egypt presses Chevron and Eni to speed up Nargis gas field development",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 328,
+          "title": "Chevron Corporation $CVX Stake Raised by Bleakley Financial Group LLC",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "DABUR.NS": {
+      "stored": 2,
+      "accepted": 2,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 407,
+          "title": "Dabur Honitus Teams Up with Himesh Reshammiya for Fun-Filled ‘Khansi Ka Kaam Tamaam’ Campaign",
+          "event_type": "partnership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 408,
+          "title": "Dabur Honitus gets Himesh Reshammiya to tackle seasonal coughs",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "DIS": {
+      "stored": 4,
+      "accepted": 2,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "company_not_mentioned": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 170,
+          "title": "Walt Disney CFO transition: Woodford retires, Haskett to take over",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 172,
+          "title": "Disney is Bringing Super Bowl LXI to IMAX Theaters",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 173,
+          "title": "IMAX to Show Super Bowl LXI in Theaters Through Partnership With Disney, the NFL",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 171,
+          "title": "The NFL, Imax, and Disney sign a deal to air the 2027 Super Bowl live on hundreds of Imax screens in the US and in countries including Australia and Brazil (Thomas Buckley/Bloomberg)",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "DMART.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 427,
+          "title": "DMart Walk-in Drive in Chennai for Guest Delight Officer | Hotel Management Freshers",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "EICHERMOT.NS": {
+      "stored": 5,
+      "accepted": 5,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 422,
+          "title": "Royal Enfield Plans Affordable 250cc Bikes with Hybrid Technology",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 423,
+          "title": "Triumph Bonneville T40 vs Royal Enfield Classic 350 vs Honda CB350 vs Jawa 350: Which One Should You Buy? - GaadiFy",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 424,
+          "title": "Eicher Motors hits all-time high; here's why stock rallied 17% in one month",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 425,
+          "title": "Royal Enfield Himalayan 750 India Launch In Motoverse: Gets 743cc Engine, Cruise Control, And More",
+          "event_type": "product",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 426,
+          "title": "Viral Video: Pune Biker's Royal Enfield Himalayan Skids After Front Wheel Wobbles! (WATCH)",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "EOG": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 338,
+          "title": "Zacks Research Expects Increased Earnings for EOG Resources",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 339,
+          "title": "Zacks Research Forecasts Stronger Earnings for EOG Resources",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 340,
+          "title": "EOG Resources, Inc. $EOG Stock Position Increased by Private Wealth Asset Management LLC",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "ETERNAL.NS": {
+      "stored": 10,
+      "accepted": 0,
+      "hidden": 10,
+      "hidden_by_reason": {
+        "personal_or_lifestyle_story": 6,
+        "company_not_in_headline": 3,
+        "company_not_mentioned": 1
+      },
+      "accepted_examples": [],
+      "hidden_examples": [
+        {
+          "id": 433,
+          "title": "Blinkit delivery partner in Chandigarh earns Rs 39,000 in first month, shares reality: 'Working 12 hours...'",
+          "reason": "personal_or_lifestyle_story"
+        },
+        {
+          "id": 432,
+          "title": "Chandigarh Man Shares First-Month Blinkit Earnings Of ₹39,000, Offers Advice To Aspiring Delivery Partners",
+          "reason": "personal_or_lifestyle_story"
+        },
+        {
+          "id": 431,
+          "title": "Blinkit Delivery Partner Earns Rs 39,000 In First Month, Reveals What Makes Chandigarh Deliveries Easier",
+          "reason": "personal_or_lifestyle_story"
+        },
+        {
+          "id": 430,
+          "title": "Chandigarh man shares first-month Blinkit earnings of ₹39,000, offers advice to aspiring delivery partners",
+          "reason": "personal_or_lifestyle_story"
+        },
+        {
+          "id": 97,
+          "title": "Eternal-SBI credit card opens applications to all: Fees, cashback and discount limits explained",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 96,
+          "title": "Blinkit Delivery Partner Earns Rs 39,000 In First Month In Chandigarh; Shares His Experience Of Working With The Quick-Commerce Giant, Here’s How He Made It Happen",
+          "reason": "personal_or_lifestyle_story"
+        }
+      ]
+    },
+    "GM": {
+      "stored": 10,
+      "accepted": 4,
+      "hidden": 6,
+      "hidden_by_reason": {
+        "duplicate_event": 6
+      },
+      "accepted_examples": [
+        {
+          "id": 362,
+          "title": "General Motors Fell More Than 8% in a Week, but $1,000 From Three Years Ago Has Nearly Tripled to About $2,900",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 365,
+          "title": "UBS reiterates General Motors stock rating on defense growth outlook",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 367,
+          "title": "Erste Group Bank Comments on General Motors FY2027 Earnings",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 368,
+          "title": "Form 4 General Motors For: 22 November",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 369,
+          "title": "Form 4 General Motors For: 22 November",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 370,
+          "title": "Form 4 General Motors For: 22 November",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 366,
+          "title": "Erste Group Bank Comments on General Motors FY2027 Earnings",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 363,
+          "title": "UBS reiterates General Motors stock rating on defense growth outlook",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 364,
+          "title": "UBS reiterates General Motors stock rating on defense growth outlook",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 361,
+          "title": "General Motors Fell More Than 8% in a Week, but $1,000 From Three Years Ago Has Nearly Tripled to About $2,900",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "GOOGL": {
+      "stored": 19,
+      "accepted": 9,
+      "hidden": 10,
+      "hidden_by_reason": {
+        "another_company_is_subject": 1,
+        "watchlist_or_listicle": 1,
+        "company_not_in_headline": 4,
+        "company_not_mentioned": 1,
+        "comparison_article": 2,
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 146,
+          "title": "Motorcyclists spot Google Maps on Android Auto showing routes for two-wheeled vehicles",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 147,
+          "title": "Gemini 4 Carbon is now available in Google Antigravity for AI Pro",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 148,
+          "title": "Kaplan Fox Urges Alphabet Inc. (NASDAQ: GOOGL, GOOG) Investors to Contact the Firm Before the Deadline on December 1, 2026",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 149,
+          "title": "OpenRouter says users spent more on Google models than OpenAI’s last week",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 150,
+          "title": "Judge rules Botetourt County Google data center deal violated law, halts construction",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 35,
+          "title": "Nvidia Market Cap Drop 35 Percent: Share Slide Knocks Chipmaker Below Alphabet Valuation To Fourth Most Valuable US Company",
+          "reason": "another_company_is_subject"
+        },
+        {
+          "id": 34,
+          "title": "Value Stocks To Consider - November 21st",
+          "reason": "watchlist_or_listicle"
+        },
+        {
+          "id": 33,
+          "title": "Prediction: This Will Be Nvidia’s Stock Price in 2027 After Its Phenomenal Q3 Results - The Motley Fool",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 30,
+          "title": "Global AI Investment To Reach $1.4 Tn In 2027, Returns Remain Key Test: Report",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 29,
+          "title": "India does not have FANGs or MANGOes, but has WITCH companies, says PPFAS Mutual Fund’s Rajeev Thakkar",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 28,
+          "title": "Why Canadian billionaire Kevin O’Leary thinks Anthropic could be the next Amazon",
+          "reason": "company_not_in_headline"
+        }
+      ]
+    },
+    "HD": {
+      "stored": 9,
+      "accepted": 8,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 211,
+          "title": "Bradenton man pleads guilty to $100K Home Depot refund fraud scheme: DOJ",
+          "event_type": "regulatory",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 212,
+          "title": "I tested Home Depot storage bins and shelves, and these Black Friday deals are worth it",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 213,
+          "title": "Workers light into Home Depot over higher insurance costs for smokers",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 214,
+          "title": "Home Depot (NYSE:HD) Given New $400.00 Price Target at Guggenheim",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 216,
+          "title": "How Home Depot built the missing logistics piece for its Pro business",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 215,
+          "title": "Home Depot (NYSE:HD) Stock Price Target Lowered at Guggenheim",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "HDFCBANK.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 396,
+          "title": "HDFC Bank Shareholders Approve Lily Vadera Re-appointment",
+          "event_type": "regulatory",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "INDUSINDBK.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 404,
+          "title": "IndusInd Bank shares down 3% as lender terminates former MD & CEO's employment",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 405,
+          "title": "IndusInd Bank down 1% after terminating ex-CEO Kathpalia, invoking clawback",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 406,
+          "title": "IndusInd Bank Stock Watch: Live Price Action and Market Pulse",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "INFY.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 381,
+          "title": "Wipro techie found dead at Pune PG, live-in partner working with Infosys arrested",
+          "event_type": "partnership",
+          "reason": "company_party_to_material_event"
+        },
+        {
+          "id": 382,
+          "title": "Meet Riddhipratim Basu: The Indian mathematician who solved a decades-old puzzle and won Infosys Prize 2026",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 383,
+          "title": "Why Infosys Is Suddenly Looking Like the Calmest Bet in a Nervous Market",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "IOC.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 418,
+          "title": "Indian Oil Enters Surjit Hockey Tournament Quarter-Finals; Punjab Police, Punjab & Sind Bank Register Wins",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 419,
+          "title": "Indian Oil steps up nuclear push, scouts for land across states",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 420,
+          "title": "Indian Oil RTA KFin Technologies New Office Address from Dec 1",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "IREDA.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 104,
+          "title": "IREDA High-Volume Breakout From an Descending Channel",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "ITC.NS": {
+      "stored": 4,
+      "accepted": 1,
+      "hidden": 3,
+      "hidden_by_reason": {
+        "company_not_mentioned": 2,
+        "company_not_in_headline": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 101,
+          "title": "ITC Share Price Movements: Tracking the Conglomerate Today",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 103,
+          "title": "CBIC Proposes GST Law Changes To Protect Genuine Buyers From ITC Denial",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 102,
+          "title": "CBIC draft GST proposal to shield buyers from ITC loss",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 100,
+          "title": "Anirudh Ravichander, Kavya Maran Reception Buzz in Chennai",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "JNJ": {
+      "stored": 5,
+      "accepted": 4,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 299,
+          "title": "Johnson & Johnson Sees Unusually High Options Volume (NYSE:JNJ)",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 300,
+          "title": "Traders Buy High Volume of Johnson & Johnson Call Options (NYSE:JNJ)",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 302,
+          "title": "3,101 Shares of Johnson & Johnson $JNJ Acquired by Edgestream Partners L.P.",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 303,
+          "title": "Essex Financial Services Inc. Buys 3,433 Shares of Johnson & Johnson $JNJ",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 301,
+          "title": "3,101 Shares of Johnson & Johnson $JNJ Acquired by Edgestream Partners L.P.",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "JPL.NS": {
+      "stored": 2,
+      "accepted": 0,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "company_not_in_headline": 1,
+        "watchlist_or_listicle": 1
+      },
+      "accepted_examples": [],
+      "hidden_examples": [
+        {
+          "id": 99,
+          "title": "Top sectors that witnessed high levels of buying by mutual funds in October 2026",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 98,
+          "title": "Jio Platforms, ITC and BSE among 15 stocks added by MFs in October 2026",
+          "reason": "watchlist_or_listicle"
+        }
+      ]
+    },
+    "JPM": {
+      "stored": 6,
+      "accepted": 4,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 265,
+          "title": "Hudbay Minerals (TSE:HBM) Given a C$44.00 Price Target at JPMorgan Chase & Co.",
+          "event_type": "analyst_rating",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 266,
+          "title": "J.P. Morgan Asset Management to Transfer JPMorgan Active Bond ETF to NYSE Arca from NYSE",
+          "event_type": "financing",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 267,
+          "title": "JPMorgan and Hyundai Card are testing AI agents that can pay without humans",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 268,
+          "title": "Mirum Pharmaceuticals (NASDAQ:MIRM) Stock Price Expected to Rise, JPMorgan Chase & Co. Analyst Says",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 263,
+          "title": "J.P. Morgan Asset Management to Transfer JPMorgan Active Bond ETF (JBND) to NYSE Arca from NYSE",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 264,
+          "title": "J.P. Morgan Asset Management to Transfer JPMorgan Active Bond ETF (JBND) to NYSE Arca from NYSE",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "KMB": {
+      "stored": 6,
+      "accepted": 6,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 252,
+          "title": "Final Trades: Anthropic, Kimberly-Clark, Amgen and the CIBR",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 253,
+          "title": "Is Kimberly-Clark (KMB) Positioned for Earnings Expansion?",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 254,
+          "title": "State Street Corp Sells 384,192 Shares of Kimberly-Clark Corporation $KMB",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 255,
+          "title": "Kimberly-Clark Corporation $KMB Shares Newly Purchased by Edgestream Partners L.P.",
+          "event_type": "partnership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 256,
+          "title": "10,259 Shares of Kimberly-Clark Corporation $KMB Acquired by Edgestream Partners L.P.",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "KO": {
+      "stored": 10,
+      "accepted": 8,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 231,
+          "title": "The Coca-Cola Company Names David Elkins as Incoming Chief Financial Officer",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 233,
+          "title": "Coca-Cola returns to sponsor AFCON 2027 after nearly 30-year absence",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 234,
+          "title": "Coca-Cola Holiday Caravan will bring free family activities to Kissimmee",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 235,
+          "title": "Coca-Cola United Breaks Ground on $20M Dublin Distribution Hub, Dozens of Jobs Coming",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 236,
+          "title": "Reuters: EU opens antitrust probe into Coca-Cola bottler CCEP",
+          "event_type": "regulatory",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 232,
+          "title": "The Coca-Cola Company Names David Elkins as Incoming Chief Financial Officer",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 230,
+          "title": "The Coca-Cola Company Names David Elkins as Incoming Chief Financial Officer",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "KOTAKBANK.NS": {
+      "stored": 2,
+      "accepted": 2,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 400,
+          "title": "Kotak Mahindra Bank Ltd. Vs. Maulin Niranjan Patel – Bombay High Court",
+          "event_type": "legal",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 401,
+          "title": "Nikita Fernandes joins Kotak Mahindra Bank as VP of Marketing",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "LCID": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 380,
+          "title": "Lucid Group (NASDAQ:LCID) Stock Falls 10.4% – What’s Next?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "LLY": {
+      "stored": 8,
+      "accepted": 3,
+      "hidden": 5,
+      "hidden_by_reason": {
+        "duplicate_event": 5
+      },
+      "accepted_examples": [
+        {
+          "id": 291,
+          "title": "Lilly highlights strength of breast cancer portfolio with new data across validated drivers of hormone receptor-positive disease at the 2026 San Antonio Breast Cancer Symposium",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 293,
+          "title": "LoQus23 chooses Lilly buyout as Huntington’s program moves toward clinic",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 298,
+          "title": "Lilly executive calls oncology the key growth area after obesity",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 294,
+          "title": "Lilly executive calls oncology the key growth area after obesity",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 295,
+          "title": "Lilly executive calls oncology the key growth area after obesity",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 296,
+          "title": "Lilly executive calls oncology the key growth area after obesity",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 297,
+          "title": "Lilly executive calls oncology the key growth area after obesity",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 292,
+          "title": "Lilly highlights strength of breast cancer portfolio with new data across validated drivers of hormone receptor-positive disease at the 2026 San Antonio Breast Cancer Symposium",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "LOW": {
+      "stored": 2,
+      "accepted": 1,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "company_not_mentioned": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 222,
+          "title": "Bakersfield police arrest 3 tied to string of thefts at Columbus Street Lowe's store",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 223,
+          "title": "Seattle man arrested after credit card skimmer found at Lowe's near Tampa: HCSO",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "LTIM.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 395,
+          "title": "LTIMindtree Crosses 100-Day SMA: Is the Tech Major Turning a Corner?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "LUPIN.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 409,
+          "title": "Lupin gets USFDA nod for generic drug to treat anaemia, high phosphorus in kidney patients",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "MARUTI.NS": {
+      "stored": 6,
+      "accepted": 6,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 458,
+          "title": "Maruti Suzuki price increase applies to selected models",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 459,
+          "title": "Maruti Suzuki hikes car prices for the fourth time in 2026",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 460,
+          "title": "Maruti Suzuki Raises Prices of Select Models by About 0.31% Effective 22 November 2026",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 461,
+          "title": "Maruti Suzuki hikes select model prices amid cost pressures",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 462,
+          "title": "Maruti Suzuki gains 2% on price hike; stock up 14% in one week",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "MDLZ": {
+      "stored": 5,
+      "accepted": 4,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 258,
+          "title": "Mondelez International, Inc. (NASDAQ:MDLZ) Stock Now Rated “Moderate Buy” by Sell-Side Analysts",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 260,
+          "title": "N.F.U. MUTUAL UNIT MANAGERS Ltd Makes New Investment in Mondelez International, Inc. $MDLZ",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 261,
+          "title": "State Street Corp Purchases 555,020 Shares of Mondelez International, Inc. $MDLZ",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 262,
+          "title": "Mondelez International, Inc. $MDLZ Stake Trimmed by Whittier Trust Co.",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 259,
+          "title": "State Street Corp Purchases 555,020 Shares of Mondelez International, Inc. $MDLZ",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "META": {
+      "stored": 22,
+      "accepted": 7,
+      "hidden": 15,
+      "hidden_by_reason": {
+        "company_not_mentioned": 10,
+        "comparison_article": 2,
+        "company_not_in_headline": 1,
+        "watchlist_or_listicle": 1,
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 154,
+          "title": "'The path forward is complex': Meta set to rethink its 2030 goal to go net zero as AI data center demands continue to rise",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 156,
+          "title": "Meta AI chief warns next year will be crucial as superintelligence approaches",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 158,
+          "title": "Meta Chief Alexander Wang Warns Superintelligence Is Arriving Urging Regulation",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 159,
+          "title": "Meta AI Chief Makes Dire Warning Over Impact of Superintelligence on Humans",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 36,
+          "title": "Days after telling Apple CEO, 'great doing business with you', Meta’s AI chief Alexandr Wang takes a dig at iPhone maker; says: Yet another...",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 51,
+          "title": "Tiruvannamalai Deepam | கார்த்திகை தீபத் திருவிழா மகா தேரோட்டம் - விண்ணை முட்டிய அரோகரா கோஷம்",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 50,
+          "title": "Analyzing WEBTOON Entertainment (NASDAQ:WBTN) & Meta Platforms (NASDAQ:META)",
+          "reason": "comparison_article"
+        },
+        {
+          "id": 49,
+          "title": "Contrasting WEBTOON Entertainment (NASDAQ:WBTN) and Meta Platforms (NASDAQ:META)",
+          "reason": "comparison_article"
+        },
+        {
+          "id": 48,
+          "title": "Anirudh & Kavya Maran | அனிருத் - காவியா மாறன் வரவேற்பு நிகழ்ச்சி.. கலந்துகொண்ட பிரபலங்கள்",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 47,
+          "title": "DMK Ex Minister Duraimurugan| கொளத்தூரில் மீண்டும் ஸ்டாலின்! - துரைமுருகன் சொன்ன பதிலால் அதிர்ச்சி!",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 46,
+          "title": "I built a $5 social media scheduler with an MCP server. Here's how it compares to Postiz, Buffer and Post Bridge",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "MRK": {
+      "stored": 3,
+      "accepted": 2,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 304,
+          "title": "Te Ahumairangi Investment Management Ltd Sells 6,240 Shares of Merck & Co., Inc. $MRK",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 306,
+          "title": "Merck & Co., Inc. $MRK Stock Holdings Trimmed by Westerkirk Capital Inc.",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 305,
+          "title": "Te Ahumairangi Investment Management Ltd Sells 6,240 Shares of Merck & Co., Inc. $MRK",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "MS": {
+      "stored": 5,
+      "accepted": 3,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "company_not_mentioned": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 286,
+          "title": "Morgan Stanley turns most bullish since April, calls stock rout a buying opportunity",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 287,
+          "title": "Morgan Stanley says this is a big buying opportunity: ‘We’re not going to miss it’",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 289,
+          "title": "Morgan Stanley Issues Positive Forecast for Duke Energy (NYSE:DUK) Stock Price",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 290,
+          "title": "DTE Energy (NYSE:DTE) Given New $150.00 Price Target at Morgan Stanley",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 288,
+          "title": "DTE Energy (NYSE:DTE) Given New $150.00 Price Target at Morgan Stanley",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "MSFT": {
+      "stored": 44,
+      "accepted": 12,
+      "hidden": 32,
+      "hidden_by_reason": {
+        "company_not_in_headline": 13,
+        "another_company_is_subject": 1,
+        "company_not_mentioned": 2,
+        "personal_or_lifestyle_story": 2,
+        "routine_fund_holding_change": 7,
+        "watchlist_or_listicle": 5,
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 110,
+          "title": "Pinterest announces partnership with Microsoft Ads",
+          "event_type": "partnership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 116,
+          "title": "Microsoft Outage Delays ZBA Hearing",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 117,
+          "title": "Microsoft Azure flaw exploited to steal customers' API credentials",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 118,
+          "title": "Microsoft establishes Israeli AI team to defend encryption against quantum threats",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 80,
+          "title": "Microsoft Stock Gave Back 8% Within 2 Weeks of Its Record. Here's How Past Quick Pullbacks Like This Played Out.",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 17,
+          "title": "Hackers breach FBI and US Agriculture Department in second attack in 3 months",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 15,
+          "title": "As NASA's Voyager 1 reaches one light-day from Earth, Microsoft AI CEO Mustafa Suleyman says: Built with 1970s tech, still calling …",
+          "reason": "another_company_is_subject"
+        },
+        {
+          "id": 14,
+          "title": "What's behind the barrage of tech outages?",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 13,
+          "title": "Illinois Reveals Attempted Dam Cyberattack Days After DNI Swore \"This Is Not A Cyberattack\"",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 12,
+          "title": "Tech outages are only the beginning. AI will bring more disruptions",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 8,
+          "title": "Indian Man Gets 800 Crore Salary in AI: Is This The New History?",
+          "reason": "company_not_in_headline"
+        }
+      ]
+    },
+    "NFLX": {
+      "stored": 10,
+      "accepted": 9,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 160,
+          "title": "Tyson Fury Reveals Schizophrenia Diagnosis in Netflix Documentary Years After Historic 2015 World Title Win",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 161,
+          "title": "Stranger Things Returns to Netflix in 2028 With a New Series That Leaves Its Original Cast Behind",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 162,
+          "title": "‘Malibu’ Puts Sadie Sandler in a Netflix Horror Movie",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 163,
+          "title": "‘I’m just disgusted’: John O’Keefe’s niece opens up about Karen Read in new Netflix doc",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 165,
+          "title": "Stream It Or Skip It: ‘The Trials Of Karen Read’ on Netflix, a docuseries examining the Massachusetts murder case",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 164,
+          "title": "Karen Read Case: Biggest Revelations in New Netflix Documentary",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "NTPC.NS": {
+      "stored": 7,
+      "accepted": 5,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 411,
+          "title": "NTPC November 1 examination cancelled over ‘administrative reasons’",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 414,
+          "title": "Sikkim CM attends NTPC archery tournament",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 415,
+          "title": "RRB NTPC Graduate Cut Off 2026: Check Zone-Wise & Category-Wise Expected Marks Here",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 416,
+          "title": "NTPC Scraps Corporate Communication Recruitment, Leaves Aspirants In Limbo",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 417,
+          "title": "NTPC cancels Assistant Officer exam held on November 1, leaves candidates distressed over uncertainty",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 413,
+          "title": "Sikkim CM attends NTPC archery tournament",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 412,
+          "title": "Sikkim CM attends NTPC archery tournament",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "NVDA": {
+      "stored": 27,
+      "accepted": 15,
+      "hidden": 12,
+      "hidden_by_reason": {
+        "company_not_in_headline": 5,
+        "company_not_mentioned": 2,
+        "personal_or_lifestyle_story": 1,
+        "another_company_is_subject": 3,
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 119,
+          "title": "A comeback for the ages: Trump's influence on Huang's return to Nvidia",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 120,
+          "title": "Nvidia board reinstates Jensen Huang as CEO just days after rejecting his offer to return",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 121,
+          "title": "Trump Forces Nvidia To Reinstate Jensen Huang",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 123,
+          "title": "Sen. Elizabeth Warren: Jensen Huang’s reinstatement as Nvidia CEO is ‘shocking’",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 124,
+          "title": "Nvidia Boss Is Back To Massive Applause As Trump Posts Image With Red Bra & Huang",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 69,
+          "title": "Inkling 2 Mini: How a Looped Transformer Squeezes 26B Parameters Into 20GB",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 66,
+          "title": "Wall Street sell-off: Is the worst over? Goldman Sachs warns of fresh selling wave, flags 3 recovery triggers",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 62,
+          "title": "Jensen Huang: Three affair claims, a multibillion fortune and a potential divorce – Jeremy Sutton",
+          "reason": "personal_or_lifestyle_story"
+        },
+        {
+          "id": 63,
+          "title": "Anthropic’s record IPO is a vote of confidence in AI, but not a verdict on its future – Anish Lal",
+          "reason": "company_not_mentioned"
+        },
+        {
+          "id": 61,
+          "title": "Anthropic stock slides with rest of market after big-ticker IPO",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 60,
+          "title": "3 Top AI Stocks With At Least 14% ROE",
+          "reason": "company_not_in_headline"
+        }
+      ]
+    },
+    "NYKAA.NS": {
+      "stored": 5,
+      "accepted": 0,
+      "hidden": 5,
+      "hidden_by_reason": {
+        "watchlist_or_listicle": 1,
+        "company_not_in_headline": 4
+      },
+      "accepted_examples": [],
+      "hidden_examples": [
+        {
+          "id": 92,
+          "title": "Nifty breakout, Bank Nifty warning and 2 stocks to buy: Vatsal Bhuva’s weekly strategy",
+          "reason": "watchlist_or_listicle"
+        },
+        {
+          "id": 91,
+          "title": "Jewellery brand Zavya raises Rs 22.6 Cr in pre-Series A round",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 90,
+          "title": "Databricks names former Google Cloud executive Sandeep Cashyap to lead India digital natives business",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 89,
+          "title": "Gurugram-based silver jewellery brand Zavya raises Rs 22.6 crore in funding",
+          "reason": "company_not_in_headline"
+        },
+        {
+          "id": 88,
+          "title": "Databricks Strengthens India Leadership With Sandeep Cashyap",
+          "reason": "company_not_in_headline"
+        }
+      ]
+    },
+    "ONGC.NS": {
+      "stored": 4,
+      "accepted": 4,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 449,
+          "title": "HyOrc Corporation Highlights Prospective ONGC Geothermal Opportunity in Ladakh While Reporting Q3 2026 Loss",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 450,
+          "title": "Mint Explainer | What Sakhalin-1 tax relief means for ONGC Videsh’s Russian investment",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 451,
+          "title": "Govt. to acquire 23 acres for ONGC onshore operations in Konaseema",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 452,
+          "title": "ONGC Scholarship 2026: Last Date for Eligibility and Apply Online",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "ORCL": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 128,
+          "title": "Oracle Stock Snaps Losing Streak. Funding for Data-Center Buildout Is in Place.",
+          "event_type": "financing",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 129,
+          "title": "Why Oracle Stock Is Rising Today",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 130,
+          "title": "Why Oracle shares are up 13% on Monday?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "OXY": {
+      "stored": 7,
+      "accepted": 6,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 345,
+          "title": "Chevron vs. Occidental Petroleum: Which Energy Stock Is a Better Buy for 2027?",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 346,
+          "title": "Classic cars, scenic routes highlight Tour de Cebu 2026 in Negros Occidental",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 347,
+          "title": "Edgestream Partners L.P. Buys 11,075 Shares of Occidental Petroleum Corporation $OXY",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 348,
+          "title": "Occidental Petroleum Corporation $OXY Shares Newly Purchased by Edgestream Partners L.P.",
+          "event_type": "partnership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 349,
+          "title": "Occidental Petroleum Corporation (NYSE:OXY) Stock Has Consensus Target Price of $67.71 According to Analysts",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 344,
+          "title": "Chevron vs. Occidental Petroleum: Which Energy Stock Is a Better Buy for 2027?",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "PEP": {
+      "stored": 5,
+      "accepted": 4,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 240,
+          "title": "PepsiCo Brand Promotion Platform (PCP) is accelerating the localization of its workforce in India.",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 241,
+          "title": "Bisleri, PepsiCo and Red Bull under FSSAI scanner: What has put India's beverage giants in the spotlight?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 242,
+          "title": "PepsiCo sharpens Middle East beverage strategy through product and brand innovation",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 244,
+          "title": "PepsiCo vs. Starbucks: Which Consumer Goods Stock Is a Better Buy for 2027?",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 243,
+          "title": "PepsiCo vs. Starbucks: Which Consumer Goods Stock Is a Better Buy for 2027?",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "PFE": {
+      "stored": 3,
+      "accepted": 2,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "company_not_mentioned": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 308,
+          "title": "Pfizer signs US$2.6B Starna deal to expand in vivo CAR-T pipeline in China",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 309,
+          "title": "Pfizer Stock Earnings Estimates Lifted by Erste Group Bank",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 307,
+          "title": "EUROCONTROL again blocks ROMATSA funds over Pfizer dispute with Romanian state",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "PG": {
+      "stored": 6,
+      "accepted": 5,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 224,
+          "title": "Procter & Gamble employees hold food drive for Grundy County families",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 226,
+          "title": "Procter & Gamble (NYSE:PG) Stock Price Expected to Rise, Bank of America Analyst Says",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 227,
+          "title": "Procter & Gamble (NYSE:PG) Stock Price Expected to Rise, Morgan Stanley Analyst Says",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 228,
+          "title": "Procter & Gamble cutting up to 30% of supply chain jobs",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 229,
+          "title": "Procter & Gamble to increase factory shifts without humans to cut costs",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 225,
+          "title": "Procter & Gamble (NYSE:PG) Stock Price Expected to Rise, Bank of America Analyst Says",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "POWERGRID.NS": {
+      "stored": 2,
+      "accepted": 2,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 453,
+          "title": "Trade Spotlight: How should you trade Power Grid Corporation, Federal Bank, EIH, Bajaj Holdings, Indian... - Moneycontrol.com",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 454,
+          "title": "Trade Spotlight: How should you trade Power Grid Corporation, Federal Bank, EIH, Bajaj Holdings, Indian Hotels, and others on November 23?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "RELIANCE.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 410,
+          "title": "Reliance Industries promoter group buys 14.27 lakh shares worth ₹194 crore",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "RIVN": {
+      "stored": 9,
+      "accepted": 7,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "watchlist_or_listicle": 1,
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 372,
+          "title": "Ex-Volkswagen Engineer Admits to Insider Trading on Rivian Deal",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 373,
+          "title": "Rivian Starts 2026.41 Rollout With Night Theme, Sports Scores, R2 Fixes",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 374,
+          "title": "Rivian spinoff Also pauses e-bike deliveries over battery and software bugs",
+          "event_type": "mergers_acquisitions",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 375,
+          "title": "Ex-Volkswagen Engineer Cops To Trading On Rivian Deal",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 377,
+          "title": "Autonomous & Self-Driving Vehicle News: Mercedes-Benz, TIER IV, AEye, Rivian, Sonatus, Forvia & Hella",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 376,
+          "title": "Rivian Automotive (RIVN) Stock Price Prediction: Bearish trend persists as Rivian sits below key averages",
+          "reason": "watchlist_or_listicle"
+        },
+        {
+          "id": 371,
+          "title": "Ex-Volkswagen Engineer Admits to Insider Trading on Rivian Deal",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "SBIN.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 397,
+          "title": "Ashish Kacholia portfolio stock already up 36% in 2026, SBI Securities sees 15% more returns - Check target price",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 398,
+          "title": "SBI offers up to ₹1.6 crore CTC for Chief AI Officer: Who can apply and what are the roles?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 399,
+          "title": "ITAT Delhi Deletes INR 15.67 Lakh Addition Over Wife’s SBI Credit Card Expenses",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "SLB": {
+      "stored": 3,
+      "accepted": 2,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 341,
+          "title": "U.S. Fracking Water Treatment Market Is Going to Boom |• Veolia Water Technologies • Aqua America • Schlumberger",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 343,
+          "title": "Island Offshore inks 6-years contract extension with SLB",
+          "event_type": "operations",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 342,
+          "title": "Island Offshore inks 6-years contract extension with SLB",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "SUNPHARMA.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 448,
+          "title": "Organon earnings on deck as Sun Pharma deal looms",
+          "event_type": "earnings",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "TCS.NS": {
+      "stored": 6,
+      "accepted": 4,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "watchlist_or_listicle": 1,
+        "personal_or_lifestyle_story": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 445,
+          "title": "TCS and Microsoft Expand Hyderabad Office Space Amid Growing GCC Demand",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 446,
+          "title": "TCS gains 4% as Nvidia-led tech sell-off sparks buying in Indian IT stocks",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 447,
+          "title": "TCS, Tech Mahindra Surge Up To 5% As Global Anti AI Trade Lifts Indian IT Stocks",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 464,
+          "title": "Pratapgarh Student Saksham Singh Ranks 4th in TCS Rural IT Quiz Finals",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 444,
+          "title": "Adani Green Energy, TCS and HCL Tech among 15 stocks trimmed by mutual funds in October 2026",
+          "reason": "watchlist_or_listicle"
+        },
+        {
+          "id": 443,
+          "title": "She worked at TCS and Accenture, then started a business from home with ₹11,000. Now the Gurugram woman earns ₹11 lakhs a month",
+          "reason": "personal_or_lifestyle_story"
+        }
+      ]
+    },
+    "TECHM.NS": {
+      "stored": 8,
+      "accepted": 8,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 387,
+          "title": "We will plough back margin gains into AI and growth: Mohit Joshi of Tech Mahindra",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 388,
+          "title": "Tech Mahindra bonus issue record date out! Get 1 extra share for every share held- Check eligibility, ratio, returns",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 389,
+          "title": "Tech Mahindra Rings Bell at BSE, Marks 40 Years of Innovation and Growth",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 390,
+          "title": "Tech Mahindra shares end higher after board fixes record date for bonus issue",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 391,
+          "title": "Tech Mahindra fixes record date for 1:1 bonus issue: What 7 lakh retail shareholders need to know",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "TGT": {
+      "stored": 2,
+      "accepted": 1,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "company_not_mentioned": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 220,
+          "title": "Target (TGT) Price Forecast: Bullish Breakout Sets Sights on $184",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 221,
+          "title": "Best Buy and Target sent U.S. jobs to India before Kroger",
+          "reason": "company_not_mentioned"
+        }
+      ]
+    },
+    "TITAN.NS": {
+      "stored": 1,
+      "accepted": 1,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 428,
+          "title": "Titan to expand premium watch business, target 500 Helios stores in three years",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "TMUS": {
+      "stored": 7,
+      "accepted": 7,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 174,
+          "title": "T-Mobile US slices Las Vegas Grand Prix support, extols enterprise enthusiasm",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 175,
+          "title": "3 ways to get an iPhone 18 Pro on T-Mobile",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 176,
+          "title": "T-Mobile Has Raised Its Dividend 80% Since 2023. Here’s What Comes Next",
+          "event_type": "financing",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 177,
+          "title": "SpaceX Wants to Challenge AT&T and T-Mobile. Can It Succeed?",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 178,
+          "title": "Focus Advisor Solutions LLC Purchases New Holdings in T-Mobile US, Inc. $TMUS",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "TSLA": {
+      "stored": 19,
+      "accepted": 17,
+      "hidden": 2,
+      "hidden_by_reason": {
+        "duplicate_event": 2
+      },
+      "accepted_examples": [
+        {
+          "id": 465,
+          "title": "Tesla shares surge as Musk promises wide FSD v15 rollout next month",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 466,
+          "title": "Tesla (NASDAQ:TSLA) Stock Price Up 11.5% – Here’s What Happened",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 467,
+          "title": "Tesla (NASDAQ:TSLA) Stock Price Up 11.5% - Here's Why",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 351,
+          "title": "Clever Jamestown Exploits Lucy Legacy, Clueless Niagara Falls Ignores Tesla",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 352,
+          "title": "Hamilton, Ontario renames Street, School to Tout Tesla, while Niagara Falls Neglects Nikola",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 468,
+          "title": "You can't use your $29,990 Tesla Cybercab without paying the $299 monthly fee",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 469,
+          "title": "You can't use your $29,990 Tesla Cybercab without paying the $299 monthly fee",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "VZ": {
+      "stored": 10,
+      "accepted": 5,
+      "hidden": 5,
+      "hidden_by_reason": {
+        "duplicate_event": 5
+      },
+      "accepted_examples": [
+        {
+          "id": 183,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 187,
+          "title": "Northern Tier lawmakers raise concerns over Verizon landline proposal",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 188,
+          "title": "PA lawmakers encourage residents to comment on Verizon landline plans",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 189,
+          "title": "Lawmakers urge residents to comment on Verizon landline service proposal",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 190,
+          "title": "The best Black Friday phone deals at Verizon — huge discounts on iPhone 18 Pro, Galaxy Z Fold 8, Pixel 11 Pro and more",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 184,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 185,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 186,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 181,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "reason": "duplicate_event"
+        },
+        {
+          "id": 182,
+          "title": "Verizon sale reported by Jennifer McClellan",
+          "reason": "duplicate_event"
+        }
+      ]
+    },
+    "WIPRO.NS": {
+      "stored": 3,
+      "accepted": 3,
+      "hidden": 0,
+      "hidden_by_reason": {},
+      "accepted_examples": [
+        {
+          "id": 384,
+          "title": "Wipro techie found dead at Pune PG, live-in partner working with Infosys arrested",
+          "event_type": "partnership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 385,
+          "title": "VS Raghavendra Rao appointed MD of Wipro GE Healthcare and President & CEO, GE HealthCare South Asia",
+          "event_type": "leadership",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 386,
+          "title": "Wipro Chat Walk-in Drive in Pune | International Non-Voice Chat | 12th Pass and Graduates",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": []
+    },
+    "WMT": {
+      "stored": 10,
+      "accepted": 9,
+      "hidden": 1,
+      "hidden_by_reason": {
+        "duplicate_event": 1
+      },
+      "accepted_examples": [
+        {
+          "id": 194,
+          "title": "Snellville Walmart Reopens With In-Store Sushi, Cake Studio After Rapid Remodel",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 195,
+          "title": "The Curator: The best Walmart Canada early Black Friday deals you can shop now",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 196,
+          "title": "THE ACTION: Shocking Find at Niagara Falls Walmart, Pre-Ripped & Pre-Stained Shorts",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 197,
+          "title": "Walmart is selling a $169 lab-grown diamond solitaire pendant for 44% off",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        },
+        {
+          "id": 198,
+          "title": "Grab This Huge Vizio TV For $200 Off With This Early Black Friday Deal at Walmart",
+          "event_type": "company_news",
+          "reason": "company_is_headline_subject"
+        }
+      ],
+      "hidden_examples": [
+        {
+          "id": 199,
+          "title": "Why Walmart and Other Defensive Stocks Are Losing Their Luster",
+          "reason": "duplicate_event"
+        }
+      ]
+    }
+  },
+  "totals": {
+    "stored": 473,
+    "accepted": 307,
+    "hidden": 166,
+    "hidden:company_not_in_headline": 33,
+    "hidden:another_company_is_subject": 7,
+    "hidden:company_not_mentioned": 29,
+    "hidden:duplicate_event": 64,
+    "hidden:watchlist_or_listicle": 12,
+    "hidden:personal_or_lifestyle_story": 10,
+    "hidden:comparison_article": 4,
+    "hidden:routine_fund_holding_change": 7
+  }
+}

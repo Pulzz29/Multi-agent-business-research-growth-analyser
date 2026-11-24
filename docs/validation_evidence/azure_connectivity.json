@@ -1,0 +1,58 @@
+{
+  "check": "azure_openai_connectivity",
+  "started_at_utc": "2026-11-24T05:47:29.891273+00:00",
+  "endpoint_host_suffix": "openai.azure.com",
+  "endpoint_path": "/openai/v1/",
+  "deployment": "gpt-5.4-pro",
+  "expected_model_prefix": "gpt-5.4-pro",
+  "reasoning_effort": "medium",
+  "api": "Responses API, background mode with polling",
+  "outcome": "success",
+  "parsed_output": {
+    "status": "ok",
+    "sum_of_numbers": 42
+  },
+  "structured_output_correct": true,
+  "diagnostics": {
+    "provider": "azure_openai",
+    "agent": "connectivity",
+    "call": "azure_connectivity_probe",
+    "deployment": "gpt-5.4-pro",
+    "model": "gpt-5.4-pro",
+    "status": "completed",
+    "started_at_utc": "2026-11-24T05:47:29.891311+00:00",
+    "input_token_budget": 24000,
+    "reasoning_effort": "medium",
+    "profile_used": "probe",
+    "attempts": [
+      {
+        "profile": "probe",
+        "outcome": "success",
+        "status_code": null,
+        "response_id": "resp_0946556276c74638006b0524f5537c81908cd588717a296a8e",
+        "estimated_input_tokens": 190,
+        "max_output_tokens": 4000,
+        "elapsed_seconds": 16.234,
+        "response_status": "completed",
+        "model": "gpt-5.4-pro"
+      }
+    ],
+    "provider_requests": 1,
+    "input_tokens": 87,
+    "output_tokens": 57,
+    "reasoning_tokens": 16,
+    "cached_input_tokens": 0,
+    "total_tokens": 144,
+    "token_usage_reported_by_provider": true,
+    "estimated_input_tokens": 190,
+    "max_output_tokens": 4000,
+    "response_id": "resp_0946556276c74638006b0524f5537c81908cd588717a296a8e",
+    "response_status": "completed",
+    "incomplete_reason": null,
+    "elapsed_seconds": 16.235,
+    "rate_limit_retries": 0,
+    "fallback_reason": null,
+    "failure_reason": null
+  },
+  "finished_at_utc": "2026-11-24T05:47:47.921379+00:00"
+}

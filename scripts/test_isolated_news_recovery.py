@@ -132,7 +132,7 @@ def run_scenario(scenario, base):
     env = {k: v for k, v in os.environ.items() if not k.startswith("INSIGHTIQ_")}
     env.update({
         "INSIGHTIQ_PROJECT_ROOT": str(root), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
-        "API_ACCESS_KEY": "isolated-test-access-key", "GROQ_API_KEY": "isolated-test-placeholder",
+        "API_ACCESS_KEY": "isolated-test-access-key", "AZURE_OPENAI_API_KEY": "isolated-test-placeholder", "AZURE_OPENAI_ENDPOINT": "https://isolated-test.openai.azure.com/", "AZURE_OPENAI_DEPLOYMENT": "isolated-test-deployment",
         "NEWSDATA_API_KEY": "isolated-test-placeholder", "SEC_USER_AGENT": "InsightIQ-isolated-test test@example.invalid",
         # The copy lives at a different root: paths stored by the real project are rebased,
         # exactly as for a moved project folder (see BUG_REPORT B11). Legacy roots already
@@ -166,7 +166,8 @@ def main():
         if "--keep" not in sys.argv:
             shutil.rmtree(base, ignore_errors=True)
 
-    out = PROJECT_ROOT / "migration_reports" / "artifacts" / "isolated_news_recovery_test.json"
+    out_arg = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--out=")), None)
+    out = Path(out_arg) if out_arg else PROJECT_ROOT / "migration_reports" / "artifacts" / "isolated_news_recovery_test.json"
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     for scenario, steps in report.items():
         print(f"== {scenario}")

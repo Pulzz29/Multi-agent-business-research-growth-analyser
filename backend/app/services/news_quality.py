@@ -2,52 +2,29 @@ import re
 from urllib.parse import urlparse
 
 
-COMPANY_NAMES = {
-    "AAPL": ("Apple",),
-    "AMZN": ("Amazon",),
-    "GOOGL": ("Google", "Alphabet"),
-    "META": ("Meta", "Facebook"),
-    "MSFT": ("Microsoft",),
-    "NVDA": ("Nvidia",),
-}
-
-
 class NewsQualityError(ValueError):
     pass
 
 
-def company_names(ticker):
-    """Fixed names for the six SEC companies; registry names for others."""
-    if ticker in COMPANY_NAMES:
-        return COMPANY_NAMES[ticker]
-    try:
-        from app.services.market_registry import company_display_names, is_research_ticker
+def company_identity(ticker):
+    """Verified identity used for headline attribution (see company_identity.py)."""
+    from app.services.company_identity import identity_for
 
-        if is_research_ticker(ticker):
-            names = company_display_names(ticker)
-            if names:
-                return names
+    try:
+        return identity_for(ticker)
     except Exception:
-        pass
-    raise NewsQualityError("Unsupported company ticker.")
+        raise NewsQualityError("Unsupported company ticker.") from None
+
+
+def company_names(ticker):
+    return tuple(n.text for n in company_identity(ticker).names)
 
 
 def explicit_company_mention(text, ticker):
-    terms = company_names(ticker)
+    """True when ``text`` names the company under the strict matching rules."""
+    from app.services.news_relevance import mentions_company
 
-    text = str(text or "")
-
-    for term in terms:
-        pattern = (
-            r"(?<![A-Za-z0-9])"
-            + re.escape(term)
-            + r"(?![A-Za-z0-9])"
-        )
-
-        if re.search(pattern, text, flags=re.IGNORECASE):
-            return True
-
-    return False
+    return mentions_company(text, company_identity(ticker))
 
 
 def validate_article_source(article, available_by_id, ticker):

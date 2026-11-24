@@ -14,8 +14,18 @@ class Settings(BaseSettings):
 
     project_root: Path = str(__import__("pathlib").Path(__file__).resolve().parents[3])
 
-    groq_api_key: SecretStr = Field(
-        validation_alias="GROQ_API_KEY"
+    # ---- Azure OpenAI (all AI research writing) -------------------
+    # The deployment name is the name chosen in Microsoft Foundry; it is not
+    # assumed to equal the model name. The model actually serving each
+    # request is read from the response and recorded.
+    azure_openai_api_key: SecretStr = Field(
+        validation_alias="AZURE_OPENAI_API_KEY"
+    )
+    azure_openai_endpoint: str = Field(
+        validation_alias="AZURE_OPENAI_ENDPOINT"
+    )
+    azure_openai_deployment: str = Field(
+        validation_alias="AZURE_OPENAI_DEPLOYMENT"
     )
 
     newsdata_api_key: SecretStr = Field(
@@ -28,11 +38,6 @@ class Settings(BaseSettings):
 
     api_access_key: SecretStr = Field(
         validation_alias="API_ACCESS_KEY"
-    )
-
-    groq_model: str = Field(
-        default="openai/gpt-oss-120b",
-        validation_alias="GROQ_MODEL",
     )
 
     sec_base_url: str = "https://data.sec.gov"
@@ -84,45 +89,42 @@ class Settings(BaseSettings):
         le=24 * 366,
     )
 
-    # ---- Groq request budgets (research-writing calls) -------------
-    # Conservative *estimated* tokens (input + max completion) per
-    # request. The estimator over-counts (~3 bytes/token), so 7000
-    # stays below an 8,000 tokens-per-minute account limit.
-    groq_request_token_budget: int = Field(
-        default=7000,
-        ge=2000,
-        le=131072,
-    )
+    # ---- Azure OpenAI request limits -------------------------------
+    # Supported efforts depend on the deployed model; Azure rejects an
+    # unsupported one with HTTP 400. Reasoning tokens count toward
+    # max_output_tokens; the caps below are upper bounds, not targets.
+    azure_reasoning_effort: str = Field(default="medium")
 
-    groq_financial_max_completion: int = Field(
-        default=2800,
-        ge=500,
-        le=32768,
-    )
+    # Upper bound on the estimated *input* tokens of one request. Evidence
+    # packages are trimmed by request profiles to stay below it.
+    azure_input_token_budget: int = Field(default=24000, ge=2000, le=400000)
 
-    groq_news_analysis_max_completion: int = Field(
-        default=2400,
-        ge=500,
-        le=32768,
-    )
+    azure_max_output_tokens_financial: int = Field(default=20000, ge=1000, le=128000)
+    azure_max_output_tokens_news_selection: int = Field(default=8000, ge=1000, le=128000)
+    azure_max_output_tokens_news_analysis: int = Field(default=16000, ge=1000, le=128000)
+    azure_max_output_tokens_strategic: int = Field(default=20000, ge=1000, le=128000)
+    azure_max_output_tokens_summary: int = Field(default=16000, ge=1000, le=128000)
+    # AI summary plus thorough research (one call; reasoning tokens count too).
+    azure_max_output_tokens_research_brief: int = Field(default=32000, ge=1000, le=128000)
+    azure_max_output_tokens_sector: int = Field(default=20000, ge=1000, le=128000)
 
-    groq_strategic_max_completion: int = Field(
-        default=2800,
-        ge=500,
-        le=32768,
-    )
+    # Background responses are polled until they finish or the deadline
+    # passes; on deadline (or job cancellation) the response is cancelled.
+    azure_call_deadline_seconds: int = Field(default=900, ge=30, le=3600)
+    azure_poll_interval_seconds: float = Field(default=3.0, ge=0.2, le=60)
+    # Timeout of each individual HTTP request (create / retrieve / cancel).
+    azure_http_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    azure_max_concurrent_calls: int = Field(default=2, ge=1, le=16)
+    # The model reported by Azure for every response must start with this; a
+    # response from any other model is rejected, never used silently. Unset,
+    # it defaults to the deployment name (set it when the two differ).
+    azure_expected_model_prefix: str | None = Field(default=None, min_length=1, max_length=64)
 
-    # gpt-oss reasoning tokens count against max_completion_tokens.
-    # "" leaves the provider default.
-    groq_reasoning_effort: str = Field(
-        default="low",
-    )
+    # A research job that runs longer than this is stopped and marked failed.
+    research_job_deadline_seconds: int = Field(default=3600, ge=300, le=6 * 3600)
 
-    groq_request_timeout_seconds: float = Field(
-        default=45.0,
-        gt=0,
-        le=180,
-    )
+    # Company news older than this is not used as company-specific evidence.
+    news_max_age_days: int = Field(default=45, ge=1, le=3650)
 
     # ---- Market data providers (sector comparison, any-company data) ----
     # Optional: features that need a missing key report it clearly.
@@ -143,6 +145,11 @@ class Settings(BaseSettings):
     fmp_daily_request_budget: int = Field(default=240, ge=1, le=100000)
     yfinance_requests_per_minute: int = Field(default=30, ge=1, le=600)
     sector_refresh_max_companies: int = Field(default=8, ge=1, le=50)
+    # Sector comparison "Compare selected companies" mode: allowed selection size.
+    # The frontend reads these from GET /markets/{m}/sectors; they are not
+    # duplicated anywhere else.
+    custom_comparison_min_companies: int = Field(default=2, ge=2, le=20)
+    custom_comparison_max_companies: int = Field(default=6, ge=2, le=20)
 
     # Company pages: data older than this is refreshed automatically when a
     # company is opened (strictly greater than the TTL). Hours; fractions allowed.
@@ -156,17 +163,33 @@ class Settings(BaseSettings):
     # Minimum gap between two manual (forced) refreshes of the same company.
     force_refresh_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
 
-    @field_validator("groq_reasoning_effort")
+    @field_validator("azure_reasoning_effort")
     @classmethod
     def validate_reasoning_effort(cls, value: str) -> str:
         cleaned = (value or "").strip().lower()
 
-        if cleaned not in {"", "low", "medium", "high"}:
+        if cleaned not in {"minimal", "low", "medium", "high", "xhigh"}:
             raise ValueError(
-                "INSIGHTIQ_GROQ_REASONING_EFFORT must be low, "
-                "medium, high or empty."
+                "INSIGHTIQ_AZURE_REASONING_EFFORT must be minimal, low, medium, high or xhigh."
             )
 
+        return cleaned
+
+    @field_validator("azure_openai_endpoint")
+    @classmethod
+    def validate_azure_endpoint(cls, value: str) -> str:
+        from app.services.ai_endpoint import normalise_endpoint
+
+        return normalise_endpoint(value)
+
+    @field_validator("azure_openai_deployment")
+    @classmethod
+    def validate_azure_deployment(cls, value: str) -> str:
+        import re
+
+        cleaned = (value or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", cleaned):
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT must be the deployment name from Microsoft Foundry.")
         return cleaned
 
     @field_validator("sec_user_agent")
@@ -189,6 +212,12 @@ class Settings(BaseSettings):
         if not root.is_dir():
             raise ValueError(
                 "Configured project directory does not exist."
+            )
+
+        if self.custom_comparison_min_companies > self.custom_comparison_max_companies:
+            raise ValueError(
+                "INSIGHTIQ_CUSTOM_COMPARISON_MIN_COMPANIES must not exceed "
+                "INSIGHTIQ_CUSTOM_COMPARISON_MAX_COMPANIES."
             )
 
         return self

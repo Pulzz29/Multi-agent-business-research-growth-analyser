@@ -1,0 +1,7 @@
+# Development and validation tools (not needed to run InsightIQ).
+-r backend/requirements.txt
+pytest==8.4.2
+pytest-asyncio==1.5.0
+# Browser end-to-end tests drive the installed Microsoft Edge (channel="msedge");
+# no browser download is required.
+playwright==1.65.2

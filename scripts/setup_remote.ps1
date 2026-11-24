@@ -5,8 +5,8 @@
 # 2. Installs frontend packages from the lockfile (npm ci).
 # 3. Creates .env from .env.example (if missing) with a new random API_ACCESS_KEY and the
 #    INSIGHTIQ_LEGACY_PROJECT_ROOTS entry needed for paths recorded on the source PC.
-# 4. If GROQ/NEWSDATA/SEC values are filled in, prepares the local runtime database.
-# Makes no Groq or NewsData.io calls.
+# 4. If AZURE/NEWSDATA/SEC values are filled in, prepares the local runtime database.
+# Makes no Azure OpenAI or NewsData.io calls.
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -44,14 +44,14 @@ if (-not (Test-Path $envPath)) {
 }
 
 # 4. Runtime database (needs real keys because settings validation requires them)
-$values = & $venvPython -c "from dotenv import dotenv_values as d; v=d('.env'); print(all((v.get(k) or '').strip() for k in ('GROQ_API_KEY','NEWSDATA_API_KEY','SEC_USER_AGENT')))"
+$values = & $venvPython -c "from dotenv import dotenv_values as d; v=d('.env'); print(all((v.get(k) or '').strip() for k in ('AZURE_OPENAI_API_KEY','AZURE_OPENAI_ENDPOINT','AZURE_OPENAI_DEPLOYMENT','NEWSDATA_API_KEY','SEC_USER_AGENT')))"
 if ($values -eq "True") {
     & $venvPython scripts\prepare_local_runtime.py
     Write-Host ""
     Write-Host "Setup complete. Start InsightIQ with:  .\scripts\start_all.ps1"
 } else {
     Write-Host ""
-    Write-Host "Next: open .env, fill GROQ_API_KEY, NEWSDATA_API_KEY and SEC_USER_AGENT, save, then run:"
+    Write-Host "Next: open .env, fill AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, NEWSDATA_API_KEY and SEC_USER_AGENT, save, then run:"
     Write-Host "  .\.venv\Scripts\python.exe scripts\prepare_local_runtime.py"
     Write-Host "  .\scripts\start_all.ps1"
 }

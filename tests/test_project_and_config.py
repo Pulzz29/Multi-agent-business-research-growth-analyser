@@ -1,5 +1,4 @@
 """A. Project, dependency, configuration and path-portability checks."""
-import compileall
 import importlib
 import json
 import os
@@ -21,7 +20,8 @@ MODULES = sorted(
 
 
 def test_python_syntax_compiles():
-    assert compileall.compile_dir(str(APP), quiet=1, force=True)
+    for path in APP.rglob("*.py"):
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
 
 
 @pytest.mark.parametrize("module", [m for m in MODULES if m != "app.server_entrypoint"])
@@ -62,7 +62,23 @@ def test_settings_load_and_project_root():
 
     settings = get_settings()
     assert Path(settings.project_root).resolve() == PROJECT_ROOT
-    assert settings.groq_model == "openai/gpt-oss-120b"
+    assert settings.azure_openai_deployment == "gpt-5.4-pro"
+    assert settings.azure_openai_endpoint.endswith("/openai/v1/")
+    assert settings.azure_reasoning_effort in {"minimal", "low", "medium", "high", "xhigh"}
+
+
+def test_groq_is_fully_removed():
+    """No runtime code, dependency or setting refers to Groq any more."""
+    import importlib.util
+
+    assert importlib.util.find_spec("groq") is None
+    offenders = [
+        str(path.relative_to(APP)) for path in APP.rglob("*.py")
+        if re.search(r"groq", path.read_text(encoding="utf-8"), re.I)
+    ]
+    assert not offenders
+    requirements = (PROJECT_ROOT / "backend" / "requirements.txt").read_text(encoding="utf-8")
+    assert "groq" not in requirements.lower() and "openai" in requirements.lower()
 
 
 def test_no_colab_or_posix_only_code_left():
@@ -87,7 +103,8 @@ def test_missing_credentials_are_rejected(tmp_path):
     empty_env = tmp_path / "empty.env"
     empty_env.write_text("", encoding="utf-8")
     clean = {k: v for k, v in os.environ.items()
-             if k not in ("API_ACCESS_KEY", "GROQ_API_KEY", "NEWSDATA_API_KEY", "SEC_USER_AGENT")}
+             if k not in ("API_ACCESS_KEY", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT",
+                          "AZURE_OPENAI_DEPLOYMENT", "NEWSDATA_API_KEY", "SEC_USER_AGENT")}
     result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "scripts" / "run_backend.py"), "--env-file", str(empty_env)],
         capture_output=True, text=True, env=clean, timeout=60)
@@ -100,7 +117,7 @@ def test_invalid_sec_user_agent_rejected():
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
-        Settings(SEC_USER_AGENT="bad", GROQ_API_KEY="x", NEWSDATA_API_KEY="x", API_ACCESS_KEY="x")
+        Settings(SEC_USER_AGENT="bad", NEWSDATA_API_KEY="x", API_ACCESS_KEY="x")
 
 
 def test_localize_stored_path():

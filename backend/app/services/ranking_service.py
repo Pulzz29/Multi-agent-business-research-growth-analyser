@@ -18,6 +18,11 @@ Method (all parameters live in core/ranking_weights.json):
 6. Rank: standard competition ranking on the score rounded to
    ``tie_decimals`` (1, 1, 3); ties are reported explicitly.
 
+Universe: normalisation, medians and ranks are always computed over the
+companies passed in. ``universe="sector"`` (default) means they are the whole
+sector; ``universe="selected"`` means a user-chosen subset, so scores are
+relative to that subset and the output carries ``RELATIVE_NOTE``.
+
 No randomness, no I/O, no LLM. The same inputs always give the same output.
 """
 
@@ -28,6 +33,19 @@ from statistics import median
 
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "core" / "ranking_weights.json"
+
+UNIVERSES = ("sector", "selected")
+RELATIVE_NOTE = (
+    "Scores are relative to the selected companies and may differ from the full sector ranking."
+)
+# Wording that names the comparison set, per universe.
+_SCOPE = {
+    "sector": {"within": "within sector", "median": "sector median", "group": "in this sector",
+               "middle": "the sector middle", "strengths": "within the sector"},
+    "selected": {"within": "within the selected companies", "median": "median of the selected companies",
+                 "group": "among the selected companies", "middle": "the middle of the selected companies",
+                 "strengths": "within the selected companies"},
+}
 
 
 class RankingConfigError(ValueError):
@@ -105,11 +123,17 @@ def competition_ranks(scores):
     return ranks
 
 
-def rank_companies(companies, sector_key, config=None):
+def rank_companies(companies, sector_key, config=None, universe="sector"):
     """
     companies: [{"symbol", "name", "metrics": {metric: value or None}}]
+    universe: "sector" (the companies are the whole sector) or "selected"
+    (a user-chosen subset). The arithmetic is identical; normalisation is
+    always over ``companies``. The universe is recorded in ``method``.
     Returns a JSON-serialisable result with per-metric breakdowns.
     """
+    if universe not in UNIVERSES:
+        raise ValueError(f"universe must be one of {UNIVERSES}.")
+    scope = _SCOPE[universe]
     config = config or load_ranking_config()
     specs = config["metrics"]
     decimals = int(config.get("tie_decimals", 2))
@@ -131,7 +155,7 @@ def rank_companies(companies, sector_key, config=None):
             continue
         available = [values[s][metric] for s in symbols if values[s][metric] is not None]
         if not available:
-            dropped.append({"metric": metric, "reason": "no data for any company in this sector"})
+            dropped.append({"metric": metric, "reason": f"no data for any company {scope['group']}"})
         elif len(available) < 2:
             dropped.append({"metric": metric, "reason": "data for fewer than two companies"})
         else:
@@ -141,8 +165,8 @@ def rank_companies(companies, sector_key, config=None):
     applied = {m: requested[m] / total for m in used} if total > 0 else {}
 
     method = {
-        "normalization": "min-max within sector, 0-100; inverted for lower-is-better metrics; 50 when all values are equal",
-        "missing_values": "sector median imputation, flagged as imputed",
+        "normalization": f"min-max {scope['within']}, 0-100; inverted for lower-is-better metrics; 50 when all values are equal",
+        "missing_values": f"{scope['median']} imputation, flagged as imputed",
         "min_weight_coverage": min_coverage,
         "tie_rule": f"scores rounded to {decimals} decimals; equal scores share a rank (1, 1, 3)",
         "weights_requested": requested,
@@ -150,7 +174,10 @@ def rank_companies(companies, sector_key, config=None):
         "metrics_used": used,
         "metrics_dropped": dropped,
         "sector_key": sector_key,
+        "universe": universe,
     }
+    if universe == "selected":
+        method["relative_note"] = RELATIVE_NOTE
 
     if len(companies) < 2 or not used:
         status = "insufficient_companies" if len(companies) < 2 else "no_comparable_metrics"
@@ -165,7 +192,7 @@ def rank_companies(companies, sector_key, config=None):
                     "score": None,
                     "ranked": False,
                     "not_ranked_reason": (
-                        "fewer than two companies in this sector"
+                        f"fewer than two companies {scope['group']}"
                         if status == "insufficient_companies"
                         else "no metric has data for at least two companies"
                     ),
@@ -260,7 +287,7 @@ def rank_companies(companies, sector_key, config=None):
 
     total_ranked = len(ranks)
     for item in out:
-        item["explanation"] = deterministic_explanation(item, total_ranked, specs)
+        item["explanation"] = deterministic_explanation(item, total_ranked, specs, universe)
 
     out.sort(key=lambda c: (c["rank"] is None, c["rank"] or 0, c["symbol"]))
 
@@ -286,8 +313,9 @@ def _format_value(item):
     return f"{value:g}"
 
 
-def deterministic_explanation(item, total_ranked, specs):
+def deterministic_explanation(item, total_ranked, specs, universe="sector"):
     """Template explanation built only from the score breakdown."""
+    scope = _SCOPE[universe]
     by_metric = {b["metric"]: b for b in item["breakdown"]}
 
     def describe(metrics):
@@ -305,12 +333,12 @@ def deterministic_explanation(item, total_ranked, specs):
         )
     parts = [lead]
     if item["strengths"]:
-        parts.append(f"Relative strengths within the sector: {describe(item['strengths'])}.")
+        parts.append(f"Relative strengths {scope['strengths']}: {describe(item['strengths'])}.")
     if item["weaknesses"]:
         parts.append(f"Relative weaknesses: {describe(item['weaknesses'])}.")
     if not item["strengths"] and not item["weaknesses"] and item["breakdown"]:
-        parts.append("Its metrics sit close to the sector middle on every measure.")
+        parts.append(f"Its metrics sit close to {scope['middle']} on every measure.")
     if item["imputed_metrics"]:
         labels = ", ".join(specs[m]["label"] for m in item["imputed_metrics"])
-        parts.append(f"Missing data replaced by the sector median for: {labels}.")
+        parts.append(f"Missing data replaced by the {scope['median']} for: {labels}.")
     return " ".join(parts)

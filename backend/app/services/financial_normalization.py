@@ -96,9 +96,17 @@ def exact_fact(rows, concept, start, end, allowed_forms):
     ])
 
 
-def load_financial_rows(ticker):
-    concepts = (*REVENUE_CONCEPTS, OCF_CONCEPT)
+def load_financial_rows(ticker, as_of=None, extra_concepts=(), unit="USD", concepts=None):
+    """
+    SEC facts for revenue and operating cash flow (plus ``extra_concepts``).
+    With ``as_of`` (ISO date), only facts filed on or before that date are
+    used: the series exactly as it could have been built at that time
+    (point-in-time, no later restatements).
+    """
+    concepts = tuple(concepts) if concepts else (*REVENUE_CONCEPTS, OCF_CONCEPT, *extra_concepts)
     placeholders = ",".join("?" for _ in concepts)
+    as_of_clause = "AND filed_at <= ?" if as_of else ""
+    params = (ticker, unit, *concepts, *((str(as_of)[:10],) if as_of else ()))
 
     with connect() as conn:
         records = conn.execute(
@@ -106,11 +114,12 @@ def load_financial_rows(ticker):
             SELECT *
             FROM sec_facts
             WHERE company_ticker = ?
-              AND unit = 'USD'
+              AND unit = ?
               AND concept IN ({placeholders})
+              {as_of_clause}
             ORDER BY period_end, filed_at
             """,
-            (ticker, *concepts),
+            params,
         ).fetchall()
 
     return [dict(row) for row in records]
@@ -451,8 +460,8 @@ def normalize_metric_year(
     return quarters, diagnostics
 
 
-def normalized_quarterly_financials(ticker):
-    rows = load_financial_rows(ticker)
+def normalized_quarterly_financials(ticker, as_of=None):
+    rows = load_financial_rows(ticker, as_of=as_of)
 
     if not rows:
         return {
@@ -530,3 +539,121 @@ def normalized_quarterly_financials(ticker):
         "warnings": warnings,
         "diagnostics": diagnostics,
     }
+
+
+# ------------------------------------------------- growth and margin metrics
+# Net income, operating income and gross profit use the same year-to-date
+# derivation and annual reconciliation as revenue. They feed growth analysis and
+# margin charts only; forecasting and SEC validation use revenue and operating
+# cash flow as before.
+
+EXTENDED_CONCEPTS = {
+    "net_income": ("NetIncomeLoss",),
+    "operating_income": ("OperatingIncomeLoss",),
+    "gross_profit": ("GrossProfit",),
+    "cost_of_revenue": ("CostOfRevenue", "CostOfGoodsAndServicesSold"),
+}
+EPS_CONCEPTS = ("EarningsPerShareDiluted", "EarningsPerShareBasic")
+
+
+def _choose_concept(rows, candidates, fiscal_start, fiscal_end, ends):
+    for concept in candidates:
+        if any(exact_fact(rows, concept, fiscal_start, end, QUARTERLY_FORMS) for end in ends.values()):
+            return concept
+        if fiscal_end and exact_fact(rows, concept, fiscal_start, fiscal_end, ANNUAL_FORMS):
+            return concept
+    return None
+
+
+def _normalize_or_skip(ticker, rows, start, end, ends, metric, concept, diagnostics):
+    try:
+        quarters, issues = normalize_metric_year(ticker, rows, start, end, ends, metric, concept)
+    except FinancialNormalizationError:
+        diagnostics.append({"fiscal_start": start, "code": "annual_reconciliation_failed", "metric": metric})
+        return []
+    diagnostics.extend({"fiscal_start": start, **issue} for issue in issues)
+    return quarters
+
+
+def normalized_extended_quarterly(ticker, as_of=None):
+    """Standalone quarters for net income, operating income and gross profit.
+
+    Gross profit uses the reported GrossProfit fact, or revenue minus cost of
+    revenue for the same quarter when only the cost is reported (labelled by
+    its method).
+    """
+    extra = sorted({c for concepts in EXTENDED_CONCEPTS.values() for c in concepts})
+    rows = load_financial_rows(ticker, as_of=as_of, extra_concepts=extra)
+    out = {"net_income": [], "operating_income": [], "gross_profit": [], "diagnostics": []}
+    diagnostics = out["diagnostics"]
+    if not rows:
+        return out
+
+    for anchor in fiscal_year_anchors(rows):
+        start, end = anchor["start"], anchor["end"]
+        try:
+            ends = quarter_ends_for_year(rows, start, end)
+        except FinancialNormalizationError:
+            diagnostics.append({"fiscal_start": start, "code": "invalid_quarter_sequence"})
+            continue
+        if not ends:
+            continue
+
+        for metric in ("net_income", "operating_income", "gross_profit"):
+            concept = _choose_concept(rows, EXTENDED_CONCEPTS[metric], start, end, ends)
+            if concept is not None:
+                out[metric].extend(_normalize_or_skip(ticker, rows, start, end, ends, metric, concept, diagnostics))
+                continue
+            if metric != "gross_profit":
+                diagnostics.append({"fiscal_start": start, "code": "concept_unavailable", "metric": metric})
+                continue
+            cost_concept = _choose_concept(rows, EXTENDED_CONCEPTS["cost_of_revenue"], start, end, ends)
+            revenue_concept = choose_revenue_concept(rows, start, end, ends)
+            if not cost_concept or not revenue_concept:
+                diagnostics.append({"fiscal_start": start, "code": "concept_unavailable", "metric": metric})
+                continue
+            costs = {q["period_end"]: q for q in _normalize_or_skip(
+                ticker, rows, start, end, ends, "cost_of_revenue", cost_concept, diagnostics)}
+            for rev in _normalize_or_skip(ticker, rows, start, end, ends, "revenue", revenue_concept, diagnostics):
+                cost = costs.get(rev["period_end"])
+                if cost is None or cost["period_start"] != rev["period_start"]:
+                    continue
+                out["gross_profit"].append(make_quarter(
+                    ticker, "gross_profit", start, rev["fiscal_quarter"], rev["period_start"],
+                    rev["period_end"], Decimal(rev["value"]) - Decimal(cost["value"]),
+                    f"{revenue_concept} - {cost_concept}", "revenue_minus_cost_of_revenue",
+                    rev["evidence"] + cost["evidence"],
+                ))
+
+    for metric in ("net_income", "operating_income", "gross_profit"):
+        out[metric].sort(key=lambda q: q["period_end"])
+    return out
+
+
+def sec_eps_series(ticker, as_of=None):
+    """Reported diluted EPS (basic when diluted is absent).
+
+    Discrete quarters are 80-100 day periods and fiscal years 350-380 days.
+    Fourth-quarter EPS is used only when reported as its own period and is
+    never derived: share counts differ between periods, so annual EPS minus
+    nine-month EPS is not a valid quarter.
+    """
+    rows = load_financial_rows(ticker, as_of=as_of, unit="USD/shares", concepts=EPS_CONCEPTS)
+    concept = next((c for c in EPS_CONCEPTS if any(r["concept"] == c for r in rows)), None)
+    if concept is None:
+        return {"quarterly": [], "annual": [], "concept": None}
+
+    def pick(min_days, max_days):
+        groups = defaultdict(list)
+        for row in rows:
+            if row["concept"] == concept and min_days <= (duration(row) or 0) <= max_days:
+                groups[(row["period_start"], row["period_end"])].append(row)
+        points = []
+        for (start, end), candidates in groups.items():
+            chosen = select_latest_filing(candidates)
+            if chosen:
+                points.append({"period_start": start, "period_end": end, "value": str(decimal_value(chosen)),
+                               "accession": chosen["accession"], "filed_at": chosen["filed_at"]})
+        return sorted(points, key=lambda p: p["period_end"])
+
+    return {"quarterly": pick(80, 100), "annual": pick(350, 380), "concept": concept}

@@ -1,0 +1,59 @@
+{
+  "kind": "live_sector_comparison_narrative",
+  "request": "POST /api/v1/markets/US/sectors/technology/comparison {refresh: false}",
+  "http": "HTTP 200 in 250.112224s",
+  "comparison_id": "ae54e1f7-03fc-4f13-824f-b9fe23e5f39a",
+  "comparison_type": "sector",
+  "generated_at_utc": "2026-11-24T11:06:52.697031+00:00",
+  "companies_ranked": 0,
+  "companies": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "ORCL",
+    "ADBE",
+    "CSCO"
+  ],
+  "narrative": {
+    "status": "partial",
+    "status_reason": "Some AI-written text failed validation; deterministic explanations are shown for those items.",
+    "overview_source": "deterministic",
+    "company_text_sources": {
+      "NVDA": "ai",
+      "MSFT": "ai",
+      "AAPL": "ai",
+      "ADBE": "ai",
+      "CSCO": "ai",
+      "ORCL": "deterministic"
+    },
+    "withheld_by_validation": [
+      {
+        "item": "overview",
+        "reason": "overview: percentage 14 not in cited comparisons"
+      },
+      {
+        "item": "ORCL",
+        "reason": "why_it_ranks: causal, certain or advisory language"
+      }
+    ]
+  },
+  "azure": {
+    "provider": "azure_openai",
+    "deployment": "gpt-5.4-pro",
+    "model": "gpt-5.4-pro",
+    "status": "completed",
+    "response_id": "resp_0aa4200a8e2e8186006b056ed68b48819094664a6e05cfdb5f",
+    "reasoning_effort": "medium",
+    "input_tokens": 1410,
+    "output_tokens": 9216,
+    "reasoning_tokens": 3905,
+    "cached_input_tokens": 1280,
+    "total_tokens": 10626,
+    "elapsed_seconds": 246.71,
+    "provider_requests": 1,
+    "rate_limit_retries": 0,
+    "failure_reason": null
+  },
+  "snapshot_file": "reports/sector_comparisons/ae54e1f7-03fc-4f13-824f-b9fe23e5f39a.json",
+  "provider_calls_for_data": "none (refresh=false: stored provider data only)"
+}

@@ -59,7 +59,7 @@ with httpx.Client(base_url=BASE, timeout=30.0, trust_env=False) as client:
         report = client.get(f"/api/v1/reports/{run_id}", headers=headers)
         print("report:", report.status_code)
         doc = report.json()
-        news_diag = doc["news"].get("groq_diagnostics", {})
+        news_diag = (doc["news"].get("ai_diagnostics") or doc["news"].get("groq_diagnostics") or {})
         summary = {
             "agent_statuses": doc["agent_statuses"],
             "agent_timings_seconds": doc.get("agent_timings_seconds"),
@@ -77,4 +77,4 @@ with httpx.Client(base_url=BASE, timeout=30.0, trust_env=False) as client:
         }
         print("report summary:", json.dumps(summary, indent=1))
     elif job["status"] == "failed":
-        print("Job failed; see logs/backend_live.log for sanitized diagnostics (groq_request_too_large if 413).")
+        print("Job failed; see logs/backend_live.log for sanitized diagnostics (ai_call entries).")

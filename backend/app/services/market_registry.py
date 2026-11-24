@@ -25,8 +25,8 @@ LEGAL_SUFFIXES = re.compile(
     re.IGNORECASE,
 )
 
-# The six companies with the validated SEC research pipeline.
-SEC_VALIDATED = frozenset({"AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA"})
+# Companies on the validated SEC research pipeline (live set; see sec_coverage.py).
+from app.services.sec_coverage import SEC_VALIDATED  # noqa: E402
 
 
 class RegistryError(ValueError):
@@ -133,11 +133,11 @@ def _number(text):
         return None
 
 
-def sector_members(market, sector_key):
+def sector_members(market, sector_key, stored=None):
     """Universe companies plus registered companies mapped to the sector."""
     key, sector = sector_config(market, sector_key)
     members = {c["symbol"]: {**c, "in_universe": True} for c in sector["companies"]}
-    for stored in _stored_companies(market):
+    for stored in (stored if stored is not None else _stored_companies(market)):
         if stored.get("sector_key") == key and stored["symbol"] not in members:
             members[stored["symbol"]] = {
                 "symbol": stored["symbol"], "name": stored["name"], "in_universe": False,
@@ -149,15 +149,19 @@ def sectors(market, search=None):
     market = require_market(market)
     query = str(search or "").strip().lower()
     out = []
+    stored = _stored_companies(market)
     for key, sector in market_config(market)["sectors"].items():
         if query and query not in sector["label"].lower() and query not in key:
             continue
-        _, _, members = sector_members(market, key)
+        _, _, members = sector_members(market, key, stored=stored)
         out.append({
             "key": key,
             "label": sector["label"],
             "company_count": len(members),
-            "companies": [{"symbol": m["symbol"], "name": m["name"]} for m in members],
+            "companies": [
+                {"symbol": m["symbol"], "name": m["name"], "in_universe": m.get("in_universe", False)}
+                for m in members
+            ],
         })
     return out
 

@@ -5,8 +5,8 @@ Test-only support for the research-intelligence (report schema v2) tests.
   working database (seeded through a read-only backup of the stored
   snapshot), so no test writes to the real runtime database, reports or
   forecast cache.
-* ``FakeGroqClient`` and the ``respond_*`` helpers are deterministic stand-ins
-  for Groq used ONLY inside tests. They write content derived from the
+* ``FakeAIClient`` and the ``respond_*`` helpers are deterministic stand-ins
+  for Azure OpenAI used ONLY inside tests. They write content derived from the
   evidence payload they receive, exactly as a real model would see it.
 """
 
@@ -49,10 +49,8 @@ def isolated_runtime(tmp_path, monkeypatch):
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(PROJECT_ROOT / rel, target)
-    shutil.copytree(
-        PROJECT_ROOT / "data" / "forecast_cache_v1",
-        root / "data" / "forecast_cache_v1",
-    )
+    for cache_dir in sorted((PROJECT_ROOT / "data").glob("forecast_cache_v*")):
+        shutil.copytree(cache_dir, root / "data" / cache_dir.name)
 
     working_dir = Path(tempfile.gettempdir()) / "insightiq_sqlite" / name
     working_dir.mkdir(parents=True, exist_ok=True)
@@ -80,14 +78,32 @@ def isolated_runtime(tmp_path, monkeypatch):
         target.execute(f"DELETE FROM news_articles WHERE company_ticker NOT IN ({marks})", six)
         target.execute(f"DELETE FROM news_articles WHERE provider = 'FINNHUB'")
         target.execute(f"DELETE FROM research_execution_runs WHERE ticker NOT IN ({marks})", six)
+        # SEC data of companies onboarded later (and their validation records).
+        if "sec_facts" in existing:
+            target.execute(f"DELETE FROM sec_facts WHERE company_ticker NOT IN ({marks})", six)
+        if "sec_company_validation" in existing:
+            target.execute("DELETE FROM sec_company_validation")
         target.execute(f"DELETE FROM companies WHERE ticker NOT IN ({marks})", six)
+        # Live activity after the test baseline (genuine refreshes and news in
+        # the real database) is removed from this isolated copy only, so the
+        # tests' freshness scenarios do not depend on today's date.
+        target.execute("DELETE FROM source_refreshes WHERE started_at >= ?", (TEST_DATA_CUTOFF,))
+        target.execute("DELETE FROM news_articles WHERE retrieved_at >= ?", (TEST_DATA_CUTOFF,))
         target.commit()
     finally:
         source.close()
         target.close()
 
+    from app.services import sec_coverage
+
+    sec_coverage.invalidate_cache()
     previous_root = os.environ.get("INSIGHTIQ_PROJECT_ROOT")
     os.environ["INSIGHTIQ_PROJECT_ROOT"] = str(root)
+    # The snapshot's stored articles are fixed historical data: a wide news
+    # coverage window keeps these tests independent of today's date. The
+    # coverage-window rule itself is tested with a fixed clock in
+    # test_news_relevance.py.
+    monkeypatch.setenv("INSIGHTIQ_NEWS_MAX_AGE_DAYS", "3650")
     get_settings.cache_clear()
 
     from app.services import market_ingestion, news_ingestion, sec_ingestion
@@ -112,6 +128,7 @@ def isolated_runtime(tmp_path, monkeypatch):
         else:
             os.environ["INSIGHTIQ_PROJECT_ROOT"] = previous_root
         get_settings.cache_clear()
+        sec_coverage.invalidate_cache()
         remove_test_database_dir(working_dir)
 
 
@@ -143,47 +160,86 @@ def db_rows(db_path, sql, params=()):
         con.close()
 
 
-# ----------------------------------------------------------------- fake Groq
+# ------------------------------------------------- fake Azure OpenAI client
+# TEST-ONLY stand-in for the Responses API (create / retrieve / cancel). It
+# never reaches the network; responses are built by a per-test handler.
 
-def completion(content, finish_reason="stop", usage=(1200, 900)):
+# Isolated tests start from the stored data as of this time (see isolated_runtime).
+TEST_DATA_CUTOFF = "2026-11-24T00:00:00+00:00"
+
+TEST_MODEL = "gpt-5.4-pro-2026-03-05"
+
+
+def completion(content, finish_reason="stop", usage=(1200, 900), status=None,
+               model=TEST_MODEL, reasoning_tokens=300, response_id="resp_test"):
+    """A Responses-API-shaped object. finish_reason 'length' -> incomplete."""
     usage_ns = (
         SimpleNamespace(
-            prompt_tokens=usage[0],
-            completion_tokens=usage[1],
+            input_tokens=usage[0],
+            output_tokens=usage[1],
             total_tokens=usage[0] + usage[1],
+            output_tokens_details=SimpleNamespace(reasoning_tokens=reasoning_tokens),
+            input_tokens_details=SimpleNamespace(cached_tokens=0),
         )
         if usage else None
     )
+    if status is None:
+        status = "completed" if finish_reason == "stop" else "incomplete"
+    incomplete = (
+        SimpleNamespace(reason="max_output_tokens" if finish_reason == "length" else finish_reason)
+        if status == "incomplete" else None
+    )
+    output = [SimpleNamespace(
+        type="message",
+        content=[SimpleNamespace(type="output_text", text=content or "")],
+    )] if content is not None else []
     return SimpleNamespace(
-        id="test-response",
-        model="test-model",
-        choices=[SimpleNamespace(
-            finish_reason=finish_reason,
-            message=SimpleNamespace(content=content),
-        )],
+        id=response_id,
+        status=status,
+        model=model,
+        output=output,
+        output_text=content or "",
         usage=usage_ns,
+        incomplete_details=incomplete,
+        error=None,
     )
 
 
-class FakeGroqClient:
-    """Routes each request to ``handler(kwargs, call_number)``."""
+class FakeAIClient:
+    """Routes each create() to ``handler(kwargs, call_number)`` (tests only)."""
 
     def __init__(self, handler):
         self.requests = []
+        self.cancelled = []
+        self._stored = {}
 
         def create(**kwargs):
             self.requests.append(kwargs)
-            return handler(kwargs, len(self.requests))
+            response = handler(kwargs, len(self.requests))
+            if getattr(response, "id", None) == "resp_test":
+                response.id = f"resp_test_{len(self.requests)}"
+            self._stored[response.id] = response
+            return response
 
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+        def retrieve(response_id):
+            return self._stored[response_id]
+
+        def cancel(response_id):
+            self.cancelled.append(response_id)
+            stored = self._stored.get(response_id)
+            if stored is not None:
+                stored.status = "cancelled"
+            return stored
+
+        self.responses = SimpleNamespace(create=create, retrieve=retrieve, cancel=cancel)
 
 
 def payload_of(kwargs):
-    return json.loads(kwargs["messages"][-1]["content"])
+    return json.loads(kwargs["input"][-1]["content"])
 
 
 def schema_name(kwargs):
-    return kwargs["response_format"]["json_schema"]["name"]
+    return kwargs["text"]["format"]["name"]
 
 
 def respond_provider_financial(evidence):
@@ -345,6 +401,39 @@ def respond_strategic(kwargs):
     return {"priorities": chosen}
 
 
+BRIEF_FILLER = (
+    "The saved report records these observations for the stated periods, and the figures are "
+    "listed exactly as stored by InsightIQ for this company without additional interpretation."
+)
+
+
+def respond_brief(kwargs, research_overrides=None):
+    """A valid research brief for the request's evidence (tests only)."""
+    evidence = payload_of(kwargs)["evidence"]
+    sec = [o["evidence_id"] for o in evidence.get("sec_financial_observations") or []]
+    news = [a["evidence_id"] for a in evidence.get("news_articles") or []]
+    first = sec[:1] or ["METRIC_FINANCIALS"]
+    summary = [
+        {"section": "financial_position", "evidence_ids": first,
+         "text": f"{BRIEF_FILLER} {BRIEF_FILLER}"},
+        {"section": "evidence_limitations", "evidence_ids": [],
+         "text": "The evidence covers a limited set of periods and cannot establish causes or outcomes."},
+    ]
+    research = [
+        {"section": s, "evidence_ids": [ids], "text": BRIEF_FILLER}
+        for s, ids in (("business_overview", "METRIC_FINANCIALS"), ("financial_performance", "METRIC_FINANCIALS"),
+                       ("growth_analysis", "METRIC_GROWTH"), ("valuation_snapshot", "METRIC_RATIOS"),
+                       ("key_risks", "METRIC_GROWTH"), ("outlook", "METRIC_FINANCIALS"))
+    ]
+    if news:
+        research.insert(4, {"section": "recent_news", "evidence_ids": news[:1], "text": BRIEF_FILLER})
+    for section, changes in (research_overrides or {}).items():
+        for item in research:
+            if item["section"] == section:
+                item.update(changes)
+    return {"summary_sections": summary, "research_sections": research}
+
+
 def default_handler(kwargs, n):
     name = schema_name(kwargs)
     if name == "insightiq_financial_analysis":
@@ -353,6 +442,8 @@ def default_handler(kwargs, n):
         return completion(json.dumps(respond_news(kwargs)))
     if name == "insightiq_strategic_analysis":
         return completion(json.dumps(respond_strategic(kwargs)))
+    if name == "insightiq_research_brief":
+        return completion(json.dumps(respond_brief(kwargs)))
     if name == "insightiq_news_selections":
         articles = payload_of(kwargs)["articles"]
         return completion(json.dumps({"selected_articles": [
@@ -362,13 +453,24 @@ def default_handler(kwargs, n):
     raise AssertionError("unexpected schema " + name)
 
 
-def install_fake_groq(monkeypatch, handler=default_handler):
-    """Patch every Groq entry point with one fake client (tests only)."""
-    from app.agents import news_agent
-    from app.services import groq_structured
+def install_fake_ai(monkeypatch, handler=default_handler):
+    """Route every Azure OpenAI request to one fake client (tests only)."""
+    from app.services import ai_provider
 
-    client = FakeGroqClient(handler)
-    monkeypatch.setenv("GROQ_API_KEY", "gsk_TEST_ONLY_NOT_A_REAL_KEY")
-    monkeypatch.setattr(groq_structured, "default_client", lambda timeout: client)
-    monkeypatch.setattr(news_agent, "Groq", lambda **kw: client)
+    client = FakeAIClient(handler)
+    monkeypatch.setattr(ai_provider, "default_client", lambda timeout=None: client)
     return client
+
+
+def make_cache_stale(ticker, metric):
+    """Test precondition: mark the isolated copy's cache entry as written by an
+    earlier forecasting method version (the runtime snapshot may already hold a
+    current-version cache)."""
+    import json
+    from app.services import forecast_cache
+
+    path = forecast_cache.cache_path(ticker, metric)
+    if path.is_file():
+        envelope = json.loads(path.read_text(encoding="utf-8"))
+        envelope["version"] = forecast_cache.CACHE_VERSION - 1
+        path.write_text(json.dumps(envelope), encoding="utf-8")

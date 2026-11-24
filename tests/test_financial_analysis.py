@@ -19,7 +19,7 @@ def package_for(ticker):
     from app.services import evidence_package as ep
 
     records, financials = fa.build_verified_financial_evidence(ticker, n_quarters=8)
-    forecasts, quality = fa.build_forecasts(ticker, financials)
+    forecasts, quality, _unavailable = fa.build_forecasts(ticker, financials)
     package = ep.build_financial_package(
         ticker, records, financials, forecasts, quality, fa.quality_provenance(),
     )
@@ -81,8 +81,8 @@ def rejected(f, package, fragment):
 @pytest.mark.parametrize("ticker", TICKERS)
 def test_package_is_bounded_validated_and_fits_budget(isolated_runtime, ticker):
     from app.agents import financial_agent as fa
-    from app.services.groq_structured import (
-        estimate_request_tokens, groq_runtime_settings, response_format,
+    from app.services.ai_provider import (
+        ai_runtime_settings, estimate_request_tokens, split_messages, text_format,
     )
 
     package, records = package_for(ticker)
@@ -99,12 +99,14 @@ def test_package_is_bounded_validated_and_fits_budget(isolated_runtime, ticker):
         assert abs(Decimal(c["change_pct"]) - expected) <= Decimal("0.05")
         assert current["metric"] == basis["metric"] == c["metric"]
 
-    budget = groq_runtime_settings()["request_token_budget"]
+    budget = ai_runtime_settings()["input_token_budget"]
     full = fa.financial_profiles()[0]
     messages = fa.build_financial_messages(ticker, package, full)
+    instructions, items = split_messages(messages)
     estimate = estimate_request_tokens(
-        messages, response_format("x", fa.FinancialAnalysisResponse))
-    assert estimate + full.max_completion_tokens <= budget, estimate
+        instructions, items, text_format("x", fa.FinancialAnalysisResponse))
+    # The full evidence profile fits the input budget (no reduced-profile fallback needed).
+    assert estimate <= budget, estimate
     # Saved reports are never part of the evidence.
     assert "research_runs" not in messages[1]["content"]
 

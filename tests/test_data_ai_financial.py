@@ -39,7 +39,9 @@ def test_persistent_database_integrity_and_counts(baseline):
     # Live use may add rows; nothing from the migrated snapshot may disappear.
     for table, n in before.items():
         assert now[table] >= n, table
-    assert now["sec_facts"] == 12737
+    # The six original companies' 12,737 migrated facts are all still present
+    # (checked row by row above); newly onboarded SEC companies only add rows.
+    assert now["sec_facts"] >= 12737
 
 
 @requires_original_export
@@ -69,7 +71,9 @@ def test_runtime_database_has_no_data_loss(baseline):
     now = counts(working_database_path())
     for table in ("sec_facts", "news_articles", "research_execution_runs", "companies"):
         assert now[table] >= before[table], table
-    assert now["sec_facts"] == 12737
+    # The six original companies' 12,737 migrated facts are all still present
+    # (checked row by row above); newly onboarded SEC companies only add rows.
+    assert now["sec_facts"] >= 12737
 
 
 def test_all_backups_still_valid(baseline):
@@ -83,14 +87,27 @@ def test_all_backups_still_valid(baseline):
             con.close()
 
 
+# Documented exception (approved by the project owner, 2026-11-24): the 12
+# original v1 forecast-cache files were overwritten in place by the version-2
+# forecast recompute during the Azure migration, before cache directories were
+# versioned (data/forecast_cache_v{N}). No other copy existed. They are derived
+# caches, rebuilt from SEC facts; see docs/FINAL_READINESS_REPORT.md. Every
+# other baseline file is still required to be byte-identical.
+LOST_V1_FORECAST_CACHES = "data/forecast_cache_v1/"
+
+
 def test_report_and_cache_files_unchanged(baseline):
     import hashlib
 
     changed = []
+    exempt = [rel for rel in baseline["files"] if rel.startswith(LOST_V1_FORECAST_CACHES)]
+    assert len(exempt) == 12  # the exception covers exactly the files that were lost
     for rel, meta in baseline["files"].items():
         path = PROJECT_ROOT / rel
         if rel.startswith("data/job_backup_status/"):
             continue  # rewritten by the app's own backup reconciliation if repair is needed
+        if rel.startswith(LOST_V1_FORECAST_CACHES):
+            continue
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != meta["sha256"]:
             changed.append(rel)
     assert not changed
@@ -134,17 +151,23 @@ def test_saved_report_schema(report_file):
 
 @pytest.mark.parametrize("report_file", sorted(REPORTS.glob("*.json")), ids=lambda p: p.stem[:8])
 def test_saved_report_evidence_grounded_in_database(report_file):
-    """Every cited news article and SEC fact in a saved report still exists locally."""
+    """Every cited news article and SEC fact in a saved report still exists locally
+    for the same company. Articles are resolved by company and source URL, because
+    database IDs can be reissued after a restore; an ID pointing to another
+    company's article must never be accepted as the citation."""
+    from app.services.report_history import resolve_news_evidence
+
     doc = json.loads(report_file.read_text(encoding="utf-8"))
     ticker = doc["ticker"]
     con = ro(PROJECT_ROOT / "data" / "insightiq.sqlite3")
+    con.row_factory = sqlite3.Row
     try:
         for article in doc["news"]["selected_articles"]:
-            row = con.execute(
-                "SELECT company_ticker, article_url FROM news_articles WHERE id = ?",
-                (int(article["database_id"]),)).fetchone()
-            assert row is not None, article["evidence_id"]
-            assert row[0] == ticker and row[1] == article["source_url"]
+            resolution = resolve_news_evidence(con, ticker, article)
+            assert resolution["status"] in ("resolved", "resolved_by_source_url"), article["evidence_id"]
+            row = con.execute("SELECT company_ticker, article_url FROM news_articles WHERE id = ?",
+                              (resolution["database_id"],)).fetchone()
+            assert row["company_ticker"] == ticker and row["article_url"] == article["source_url"]
         for item in doc["strategic"]["source_evidence"]:
             for fact_id in item.get("sec_fact_ids") or []:
                 row = con.execute("SELECT company_ticker FROM sec_facts WHERE id = ?", (int(fact_id),)).fetchone()

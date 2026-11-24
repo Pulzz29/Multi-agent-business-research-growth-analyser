@@ -4,6 +4,10 @@
 
 import { periodRange } from "./format.js";
 
+// Companies on the validated SEC pipeline. The backend decides this set
+// (GET /api/v1/companies/summary); the six below are only the initial value
+// until that list loads. The array is updated in place so every importer
+// sees the current set.
 export const COMPANIES = [
   { ticker: "AAPL", name: "Apple", legal: "Apple Inc." },
   { ticker: "AMZN", name: "Amazon", legal: "Amazon.com, Inc." },
@@ -13,7 +17,41 @@ export const COMPANIES = [
   { ticker: "NVDA", name: "NVIDIA", legal: "NVIDIA Corporation" },
 ];
 
+const LEGAL_SUFFIX = /[,\s]+(inc\.?|incorporated|corp\.?|corporation|co\.?|company|ltd\.?|limited|plc|n\.v\.)$/i;
+
+export function shortCompanyName(name) {
+  let text = String(name || "").trim().replace(/^the\s+/i, "");
+  for (let i = 0; i < 3; i += 1) text = text.replace(LEGAL_SUFFIX, "").trim();
+  return text || String(name || "");
+}
+
+/** Replace the SEC company list with the backend's rows ({ticker, name}). */
+export function setSecCompanies(rows) {
+  if (!Array.isArray(rows) || !rows.length) return COMPANIES;
+  const next = rows
+    .filter((r) => r && typeof r.ticker === "string")
+    .map((r) => ({ ticker: r.ticker, name: shortCompanyName(r.name || r.ticker), legal: r.name || r.ticker }));
+  if (next.length) COMPANIES.splice(0, COMPANIES.length, ...next);
+  return COMPANIES;
+}
+
 export const companyByTicker = (ticker) => COMPANIES.find((c) => c.ticker === ticker);
+
+/**
+ * Which AI provider wrote a saved report, from its own metadata. Reports made
+ * before the Azure migration have no provider field; their model identifies
+ * them as Groq-generated, and they are never relabelled.
+ */
+export function aiProviderLabel(generation) {
+  if (!generation) return null;
+  const model = generation.model || generation.deployment || null;
+  if (generation.provider === "azure_openai") {
+    return `Azure OpenAI · ${model || "deployment not recorded"}`;
+  }
+  if (!generation.provider && model && /gpt-oss/i.test(model)) return `Groq · ${model}`;
+  if (generation.provider) return `${generation.provider} · ${model || "model not recorded"}`;
+  return model || null;
+}
 
 export const METRIC_LABELS = {
   revenue: "Revenue",
@@ -263,6 +301,9 @@ export function buildReportModel(report, company) {
     generation: generation
       ? {
           model: generation.model || null,
+          provider: generation.provider || null,
+          deployment: generation.deployment || null,
+          providerLabel: aiProviderLabel(generation),
           aiStatus: generation.ai_analysis_status || {},
           calls: list(generation.calls),
         }
@@ -271,7 +312,7 @@ export function buildReportModel(report, company) {
       claims,
       forecasts,
       model: verified.model,
-      diagnostics: verified.diagnostics || financial.groq_diagnostics || null,
+      diagnostics: verified.diagnostics || financial.ai_diagnostics || financial.groq_diagnostics || null,
       limitations: list(verified.limitations),
       disclosures: list(financial.disclosures),
       analysis: analysisView(financial.analysis),
@@ -290,7 +331,7 @@ export function buildReportModel(report, company) {
       articles,
       contextual,
       themes: news.repeated_event_themes || {},
-      diagnostics: news.groq_diagnostics || null,
+      diagnostics: news.ai_diagnostics || news.groq_diagnostics || null,
       disclosures: list(news.disclosures),
       analysis: analysisView(news.analysis),
     },
@@ -300,7 +341,7 @@ export function buildReportModel(report, company) {
       withheld: list(strategic.withheld_analysis),
       priorities,
       sourceEvidence: list(strategic.source_evidence),
-      diagnostics: strategic.groq_diagnostics || null,
+      diagnostics: strategic.ai_diagnostics || strategic.groq_diagnostics || null,
       disclosures: list(strategic.disclosures),
     },
   };

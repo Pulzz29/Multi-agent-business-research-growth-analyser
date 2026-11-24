@@ -33,8 +33,10 @@ STATEMENT_FRAMES = {
 ROW_MAP = {
     "income": [
         ("revenue", ("Total Revenue", "Operating Revenue")),
+        ("gross_profit", ("Gross Profit",)),
         ("operating_income", ("Operating Income",)),
         ("net_income", ("Net Income", "Net Income Common Stockholders")),
+        ("eps_diluted", ("Diluted EPS",)),
     ],
     "balance": [
         ("total_assets", ("Total Assets",)),

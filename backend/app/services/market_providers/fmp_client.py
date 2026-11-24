@@ -26,8 +26,12 @@ PROVIDER = "FMP"
 STATEMENTS = {
     "income": ("/income-statement", {
         "revenue": "revenue",
+        "grossProfit": "gross_profit",
         "operatingIncome": "operating_income",
         "netIncome": "net_income",
+        # Per-share; the stable API names it epsDiluted (older: epsdiluted).
+        "epsDiluted": "eps_diluted",
+        "epsdiluted": "eps_diluted",
     }),
     "balance": ("/balance-sheet-statement", {
         "totalAssets": "total_assets",

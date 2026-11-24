@@ -7,7 +7,12 @@ from langgraph.graph import StateGraph, START, END
 
 from app.agents import financial_agent, news_agent, strategic_agent
 from app.services import evidence_package as packages
-from app.services.groq_structured import configured_model
+from app.services.ai_provider import (
+    AICallFailed,
+    PROVIDER as AI_PROVIDER,
+    check_job_continuation,
+    configured_deployment,
+)
 from app.services.news_quality import (
     assess_news_report,
     validate_article_source,
@@ -20,10 +25,9 @@ from app.services.source_refresh import (
 from app.services import market_registry
 
 
-SUPPORTED_TICKERS = frozenset({
-    "AAPL", "AMZN", "GOOGL",
-    "META", "MSFT", "NVDA",
-})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 
 REPORT_SCHEMA_VERSION = 2
 
@@ -54,6 +58,7 @@ class ResearchState(TypedDict, total=False):
 
 
 def source_preparation_node(state: ResearchState):
+    check_job_continuation()
     """
     Lightweight orchestration step (not an agent): check freshness and
     refresh stale SEC / news evidence through the real ingestion
@@ -131,6 +136,7 @@ def prepare_provider_sources(ticker, mode="if_stale", on_failure="continue_with_
 
 
 def financial_node(state: ResearchState):
+    check_job_continuation()
     started = time.perf_counter()
 
     ticker = state["ticker"]
@@ -178,11 +184,10 @@ def financial_node(state: ResearchState):
 
 
 def news_node(state: ResearchState):
+    check_job_continuation()
     started = time.perf_counter()
 
     ticker = state["ticker"]
-
-    provider_company = market_registry.research_profile(ticker) == "provider"
 
     # Execute the News Agent with current SQLite articles.
     # No old News Agent JSON report is reused.
@@ -192,27 +197,30 @@ def news_node(state: ResearchState):
             "ticker": ticker,
             "status": "running",
         })
-    except news_agent.NewsAgentError:
-        if not provider_company:
-            raise
-        # A provider company may have no stored company news yet: continue
-        # on financial evidence only, and say so.
+    except news_agent.NewsAgentError as exc:
+        # No stored company-specific news with a valid source link, or the AI
+        # review found none of it material: continue on financial evidence
+        # only, and say so (never substitute other news).
+        none_material = isinstance(exc, news_agent.NoMaterialNews)
         return {
             "news_result": {
                 "status": "completed",
-                "available_articles": [],
+                "available_articles": exc.available_articles if none_material else [],
                 "selected_articles": [],
-                "groq_diagnostics": None,
+                "selection_method": "ai_selected_none" if none_material else None,
+                "ai_diagnostics": exc.diagnostics if none_material else None,
                 "disclosures": [
-                    "No stored company news with a valid source link was available "
-                    "for this company; the research uses financial evidence only.",
+                    str(exc) if none_material else
+                    "No verified company-specific news is available for the selected period; "
+                    "the research uses financial evidence only.",
                 ],
             },
             "news_quality": _empty_news_quality(ticker),
             "news_analysis": {
                 "schema_version": 1,
                 "status": "unavailable",
-                "status_reason": "No company news was available for analysis.",
+                "status_reason": ("No company news was selected as material for analysis." if none_material
+                                  else "No company news was available for analysis."),
                 "items": [],
                 "withheld": [],
             },
@@ -243,11 +251,16 @@ def news_node(state: ResearchState):
         ticker,
     )
 
-    if assessed["eligible_primary_count"] == 0 and not provider_company:
-        raise ResearchWorkflowError(
-            "No directly attributed company news is "
-            "available for strategic research."
-        )
+    if assessed["eligible_primary_count"] == 0:
+        # No article names the company as its subject: research continues on
+        # financial evidence only and says so (no unrelated news is used).
+        result = {
+            **result,
+            "disclosures": list(result.get("disclosures") or []) + [
+                "No verified company-specific news is available for the selected period; "
+                "the strategic analysis uses financial evidence only.",
+            ],
+        }
 
     # Verify that approved headlines, dates, URLs and
     # publisher fields agree with live stored articles.
@@ -271,7 +284,7 @@ def news_node(state: ResearchState):
             ticker,
         )
 
-    # Second, bounded Groq request: source-grounded news
+    # Second, bounded AI request: source-grounded news
     # intelligence on the validated selection only.
     analysis, analysis_diagnostics = news_agent.write_news_analysis(
         ticker,
@@ -309,6 +322,7 @@ def _empty_news_quality(ticker):
 
 
 def strategic_node(state: ResearchState):
+    check_job_continuation()
     started = time.perf_counter()
 
     ticker = state["ticker"]
@@ -353,13 +367,24 @@ def strategic_node(state: ResearchState):
         state.get("news_analysis"),
     )
 
-    priorities, analyses, withheld, groq_diagnostics = (
-        strategic_agent.analyze_priorities_with_groq(
-            ticker,
-            evidence,
-            package,
+    strategic_status_reason = None
+    try:
+        priorities, analyses, withheld, strategic_diagnostics = (
+            strategic_agent.analyze_priorities(
+                ticker,
+                evidence,
+                package,
+            )
         )
-    )
+    except AICallFailed as failure:
+        # No priorities are invented when the AI provider fails: the
+        # section is reported as unavailable with the reason.
+        priorities, analyses, withheld = [], {}, []
+        strategic_diagnostics = failure.diagnostics
+        strategic_status_reason = (
+            f"Strategic analysis was unavailable ({failure.reason}); no research "
+            "priorities were generated for this run."
+        )
 
     rendered = [
         strategic_agent.render_priority_with_analysis(
@@ -390,7 +415,8 @@ def strategic_node(state: ResearchState):
 
     with_analysis = sum(1 for item in rendered if item.get("analysis"))
     analysis_status = (
-        "completed" if with_analysis == len(rendered)
+        "unavailable" if not rendered
+        else "completed" if with_analysis == len(rendered)
         else "partial" if with_analysis
         else "unavailable"
     )
@@ -400,8 +426,9 @@ def strategic_node(state: ResearchState):
         "research_priorities": rendered,
         "source_evidence": evidence,
         "analysis_status": analysis_status,
+        "status_reason": strategic_status_reason,
         "withheld_analysis": withheld,
-        "groq_diagnostics": groq_diagnostics,
+        "ai_diagnostics": strategic_diagnostics,
         "disclosures": [
             "Strategic priorities are research judgments, "
             "not proven financial risks or investment advice.",
@@ -595,33 +622,26 @@ def build_source_freshness(preparation, financial, news_quality, generated_at):
     }
 
 
+CALL_SUMMARY_KEYS = (
+    "provider", "deployment", "model", "status", "profile_used", "provider_requests",
+    "response_id", "response_status", "incomplete_reason",
+    "input_tokens", "output_tokens", "reasoning_tokens", "cached_input_tokens", "total_tokens",
+    "token_usage_reported_by_provider", "estimated_input_tokens",
+    "max_output_tokens", "input_token_budget", "elapsed_seconds",
+    "rate_limit_retries", "fallback_reason", "failure_reason", "attempts",
+    "reasoning_effort", "selection_method", "request_budget",
+)
+
+
 def _call_summary(diagnostics, agent, call):
     if not diagnostics:
         return {"agent": agent, "call": call, "status": "not_run"}
-    keys = (
-        "agent", "call", "model", "status", "profile_used", "provider_requests",
-        "prompt_tokens", "completion_tokens", "total_tokens",
-        "token_usage_reported_by_provider", "estimated_input_tokens",
-        "max_completion_tokens", "request_token_budget", "elapsed_seconds",
-        "rate_limit_retries", "fallback_reason", "failure_reason", "attempts",
-        "reasoning_effort",
-    )
-    return {"agent": agent, "call": call, **{k: diagnostics.get(k) for k in keys if k in diagnostics}}
+    return {"agent": agent, "call": call,
+            **{k: diagnostics.get(k) for k in CALL_SUMMARY_KEYS if k in diagnostics}}
 
 
-def _news_selection_summary(diagnostics):
-    diagnostics = diagnostics or {}
-    return {
-        "agent": "news",
-        "call": "news_selection",
-        "model": diagnostics.get("model"),
-        "status": "completed" if diagnostics else "not_run",
-        "prompt_tokens": diagnostics.get("prompt_tokens"),
-        "completion_tokens": diagnostics.get("completion_tokens"),
-        "total_tokens": diagnostics.get("total_tokens"),
-        "elapsed_seconds": diagnostics.get("elapsed_seconds"),
-        "request_budget": diagnostics.get("request_budget"),
-    }
+def _served_models(calls):
+    return sorted({c.get("model") for c in calls if c.get("model")})
 
 
 def run_research_workflow(ticker, run_id=None, options=None):
@@ -677,6 +697,12 @@ def run_research_workflow(ticker, run_id=None, options=None):
 
     financial_analysis = financial.get("financial_analysis") or {}
     provider_company = financial.get("research_profile") == "provider"
+    calls = [
+        _call_summary(financial.get("ai_call"), "financial", "financial_analysis"),
+        _call_summary(news.get("ai_diagnostics"), "news", "news_selection"),
+        _call_summary(result.get("news_analysis_diagnostics"), "news", "news_analysis"),
+        _call_summary(strategic.get("ai_diagnostics"), "strategic", "strategic_analysis"),
+    ]
     currency = financial.get("currency") or "USD"
 
     return {
@@ -708,20 +734,16 @@ def run_research_workflow(ticker, run_id=None, options=None):
             generated_at,
         ),
         "generation": {
-            "model": configured_model(),
+            "provider": AI_PROVIDER,
+            "deployment": configured_deployment(),
+            "model": ", ".join(_served_models(calls)) or None,
+            "models_served": _served_models(calls),
             "ai_analysis_status": {
                 "financial": financial_analysis.get("status"),
                 "news": news_analysis.get("status"),
                 "strategic": strategic.get("analysis_status"),
             },
-            "calls": [
-                _call_summary(financial.get("groq_call"), "financial", "financial_analysis"),
-                _news_selection_summary(news.get("groq_diagnostics")),
-                _call_summary(
-                    result.get("news_analysis_diagnostics"), "news", "news_analysis",
-                ),
-                _call_summary(strategic.get("groq_diagnostics"), "strategic", "strategic_analysis"),
-            ],
+            "calls": calls,
             "executive_summary": (
                 "Generated after the report is saved, as a separate "
                 "sidecar file; see the report viewer."
@@ -742,7 +764,7 @@ def run_research_workflow(ticker, run_id=None, options=None):
             "forecasts_unavailable": financial.get("forecasts_unavailable") or {},
             "currency": currency,
             "data_provider": financial.get("provider") or "SEC_EDGAR",
-            "groq_diagnostics": financial[
+            "ai_diagnostics": financial[
                 "verified_financial_claims"
             ]["diagnostics"],
             "analysis": financial_analysis,
@@ -768,9 +790,8 @@ def run_research_workflow(ticker, run_id=None, options=None):
             "repeated_event_themes": result[
                 "news_quality"
             ]["repeated_event_themes"],
-            "groq_diagnostics": news[
-                "groq_diagnostics"
-            ],
+            "ai_diagnostics": news.get("ai_diagnostics"),
+            "selection_method": news.get("selection_method", "ai"),
             "analysis": news_analysis,
             "disclosures": news["disclosures"] + [
                 "News intelligence text is AI-written from stored headlines "
@@ -799,7 +820,7 @@ def run_research_workflow(ticker, run_id=None, options=None):
             "historical review, not recomputed for this run.",
             "Research jobs are persisted in SQLite with a JSON journal; "
             "a job interrupted by a restart is marked failed, not resumed.",
-            "Groq rate-limit coordination applies within one backend "
-            "process only.",
+            "AI requests are limited to a bounded number of concurrent "
+            "Azure OpenAI calls within one backend process.",
         ],
     }

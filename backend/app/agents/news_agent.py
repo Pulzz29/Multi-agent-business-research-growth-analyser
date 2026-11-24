@@ -10,41 +10,39 @@ from pathlib import Path
 from typing import Literal, TypedDict
 from urllib.parse import urlparse
 
-from groq import APIStatusError, Groq
-from app.services.groq_rate_limit import guarded_chat_completion
+from app.services.ai_provider import (
+    AICallFailed,
+    RequestProfile,
+    ResponseRejected,
+    ai_runtime_settings,
+    estimate_request_tokens as _ai_estimate_request_tokens,
+    split_messages,
+    structured_completion,
+    text_format,
+)
 from pydantic import BaseModel, ConfigDict
 from langgraph.graph import StateGraph, START, END
 
 from app.database.sqlite_manager import connect
 
 
-SUPPORTED_TICKERS = frozenset({
-    "AAPL", "AMZN", "GOOGL",
-    "META", "MSFT", "NVDA",
-})
+# Companies on the validated SEC pipeline (the original six plus every US
+# universe company whose SEC filings reconcile); see sec_coverage.py.
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_TICKERS  # noqa: E402
 
-GROQ_MODEL = (os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
 RELEVANCE_THRESHOLD = 0.60
 
 logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------
-# HTTP 413 fix: token-aware news evidence budget
+# Request-size budget for the news selection call
 # ----------------------------------------------------------
-# Groq rejects (HTTP 413) a single request whose token
-# estimate (input + max_completion_tokens) exceeds the
-# account's per-minute token limit. Stored NewsData.io
-# descriptions can contain full article text (one MSFT
-# description is ~47,600 characters), so the request size
-# is bounded here. Whole articles are included or excluded;
-# no text or evidence identifier is ever truncated.
-NEWS_MAX_COMPLETION_TOKENS = 1200
-DEFAULT_NEWS_REQUEST_TOKEN_BUDGET = 6000
+# Stored NewsData.io descriptions can contain full article text
+# (one MSFT description is ~47,600 characters), so the request is
+# bounded by the configured Azure input-token budget. Whole articles
+# are included or excluded; no text or evidence identifier is ever
+# truncated.
 NEWS_REQUEST_TOKEN_BUDGET_ENV = "INSIGHTIQ_NEWS_REQUEST_TOKEN_BUDGET"
-# Conservative estimate: <= 3 UTF-8 bytes per token
-# over-counts typical English/JSON (about 4 chars per token).
-ESTIMATED_BYTES_PER_TOKEN = 3.0
-PER_MESSAGE_OVERHEAD_TOKENS = 8
 MIN_INPUT_TOKEN_ALLOWANCE = 500
 
 _SIZE_ERROR_EVENTS = []
@@ -52,6 +50,16 @@ _SIZE_ERROR_EVENTS = []
 
 class NewsAgentError(RuntimeError):
     pass
+
+
+class NoMaterialNews(NewsAgentError):
+    """The AI reviewed the verified candidates and selected none as material.
+    Carries the call diagnostics so the response ID and billed tokens are kept."""
+
+    def __init__(self, message, diagnostics, available_articles):
+        super().__init__(message)
+        self.diagnostics = diagnostics
+        self.available_articles = available_articles
 
 
 class NewsSelection(BaseModel):
@@ -80,7 +88,7 @@ class NewsState(TypedDict, total=False):
     status: str
     available_articles: list[dict]
     selected_articles: list[dict]
-    groq_diagnostics: dict
+    ai_diagnostics: dict
     disclosures: list[str]
 
 
@@ -131,22 +139,29 @@ def load_news_evidence(ticker, max_articles=12):
                 "Unsupported company ticker."
             )
 
+    # Only articles that pass the current strict company-relevance rules are
+    # offered to the model; other stored rows stay in the database, unused.
+    from app.services.company_identity import identity_for
+    from app.services.news_relevance import filter_company_news
+
     with connect() as conn:
-        records = conn.execute(
+        records = [dict(r) for r in conn.execute(
             """
             SELECT *
             FROM news_articles
             WHERE company_ticker = ?
-              AND relevance_score >= ?
             """,
-            (ticker, RELEVANCE_THRESHOLD),
-        ).fetchall()
+            (ticker,),
+        ).fetchall()]
+
+    accepted, _rejected = filter_company_news(records, identity_for(ticker))
 
     results = []
     skipped = 0
 
-    for record in records:
-        row = dict(record)
+    for row in accepted:
+        if row.get("company_ticker") != ticker:
+            raise NewsAgentError("News evidence belongs to a different company.")
 
         try:
             metadata = json.loads(
@@ -213,12 +228,9 @@ def load_news_evidence(ticker, max_articles=12):
             "source_url": url,
             "published_at": published_at,
             "publisher": publisher,
-            "relevance_score": float(
-                row["relevance_score"]
-            ),
-            "relevance_reason": row.get(
-                "relevance_reason"
-            ),
+            "relevance_score": float(row["relevance"]["score"]),
+            "relevance_reason": row["relevance"]["reason"],
+            "event_type": row["relevance"]["event_type"],
         })
 
     # Use dates only as supplied by the real provider.
@@ -235,8 +247,8 @@ def load_news_evidence(ticker, max_articles=12):
 
     if not results:
         raise NewsAgentError(
-            "No qualifying news articles with genuine "
-            "source URLs were found in SQLite."
+            "No verified company-specific news with a genuine "
+            "source URL is available for the selected period."
         )
 
     if len({
@@ -260,9 +272,11 @@ def validate_news_selections(
 
     selections = response.selected_articles
 
-    if not 1 <= len(selections) <= 4:
+    # The request asks for "up to four" articles: selecting none is a valid
+    # answer when no candidate is material, and is reported as such.
+    if len(selections) > 4:
         raise NewsAgentError(
-            "Expected one to four selected articles."
+            "Expected at most four selected articles."
         )
 
     selected = []
@@ -271,12 +285,12 @@ def validate_news_selections(
     for choice in selections:
         if choice.evidence_id not in allowed:
             raise NewsAgentError(
-                "Groq selected an unknown news evidence ID."
+                "The model selected an unknown news evidence ID."
             )
 
         if choice.evidence_id in seen:
             raise NewsAgentError(
-                "Groq selected a duplicate news article."
+                "The model selected a duplicate news article."
             )
 
         seen.add(choice.evidence_id)
@@ -284,7 +298,7 @@ def validate_news_selections(
         source = allowed[choice.evidence_id]
 
         # The headline, URL, publisher and date are
-        # copied from the database, never from Groq.
+        # copied from the database, never from the model.
         selected.append({
             **source,
             "ai_topic_tag": choice.topic,
@@ -295,11 +309,11 @@ def validate_news_selections(
 
 
 def news_request_token_budget():
-    """Total token budget per News Agent request (input + completion)."""
+    """Input-token budget for the news selection request."""
     raw = os.getenv(NEWS_REQUEST_TOKEN_BUDGET_ENV, "").strip()
 
     if not raw:
-        return DEFAULT_NEWS_REQUEST_TOKEN_BUDGET
+        return int(ai_runtime_settings()["input_token_budget"])
 
     try:
         budget = int(raw)
@@ -308,72 +322,48 @@ def news_request_token_budget():
             NEWS_REQUEST_TOKEN_BUDGET_ENV + " must be an integer."
         )
 
-    minimum = NEWS_MAX_COMPLETION_TOKENS + MIN_INPUT_TOKEN_ALLOWANCE
-
-    if not minimum <= budget <= 131072:
+    if not MIN_INPUT_TOKEN_ALLOWANCE <= budget <= 400000:
         raise NewsAgentError(
             NEWS_REQUEST_TOKEN_BUDGET_ENV
-            + f" must be between {minimum} and 131072."
+            + f" must be between {MIN_INPUT_TOKEN_ALLOWANCE} and 400000."
         )
 
     return budget
 
 
-def news_response_format():
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "insightiq_news_selections",
-            "strict": True,
-            "schema": NewsSelections.model_json_schema(),
-        },
-    }
+def news_text_format():
+    return text_format("insightiq_news_selections", NewsSelections)
 
 
-def estimate_request_tokens(messages, response_format):
-    """Conservative token estimate for messages plus schema."""
-    payload = json.dumps(
-        {"messages": messages, "response_format": response_format},
-        ensure_ascii=False,
-        allow_nan=False,
-    )
-
-    return (
-        math.ceil(len(payload.encode("utf-8")) / ESTIMATED_BYTES_PER_TOKEN)
-        + PER_MESSAGE_OVERHEAD_TOKENS * len(messages)
-    )
+def estimate_request_tokens(messages, fmt=None):
+    """Conservative token estimate for one selection request."""
+    instructions, items = split_messages(messages)
+    return _ai_estimate_request_tokens(instructions, items, fmt or news_text_format())
 
 
 def fit_articles_to_budget(ticker, articles, budget=None):
     """
-    Choose whole articles whose request fits the token budget.
+    Choose whole articles whose request fits the input-token budget.
 
     Priority: higher relevance first, then more recent (the
     incoming order is already newest-first). Articles that fit
-    are returned in their original order, unmodified. When the
-    full candidate set fits, the request is identical to the
-    original implementation.
+    are returned in their original order, unmodified.
     """
     if not articles:
         raise NewsAgentError(
             "No news evidence was supplied for selection."
         )
 
-    budget = news_request_token_budget() if budget is None else budget
-    input_budget = budget - NEWS_MAX_COMPLETION_TOKENS
-    response_format = news_response_format()
+    input_budget = news_request_token_budget() if budget is None else budget
+    fmt = news_text_format()
 
     def cost(subset):
-        return estimate_request_tokens(
-            build_news_messages(ticker, subset),
-            response_format,
-        )
+        return estimate_request_tokens(build_news_messages(ticker, subset), fmt)
 
     full_cost = cost(articles)
 
     if full_cost <= input_budget:
         return list(articles), {
-            "request_token_budget": budget,
             "input_token_budget": input_budget,
             "estimated_input_tokens": full_cost,
             "estimated_input_tokens_all_candidates": full_cost,
@@ -400,11 +390,10 @@ def fit_articles_to_budget(ticker, articles, budget=None):
     if not subset:
         raise NewsAgentError(
             "No stored news evidence fits within the configured "
-            "Groq request budget."
+            "AI request size budget."
         )
 
     return subset, {
-        "request_token_budget": budget,
         "input_token_budget": input_budget,
         "estimated_input_tokens": cost(subset),
         "estimated_input_tokens_all_candidates": full_cost,
@@ -412,45 +401,6 @@ def fit_articles_to_budget(ticker, articles, budget=None):
         "articles_sent": len(subset),
         "articles_excluded_for_budget": len(articles) - len(subset),
     }
-
-
-def record_request_size_error(error, request_size):
-    """Sanitized diagnostic for HTTP 413: sizes and limits only."""
-    message = str(getattr(error, "message", "") or error)
-    numbers = re.search(
-        r"limit\D{0,20}(\d+)\D{1,40}requested\D{0,20}(\d+)",
-        message,
-        flags=re.IGNORECASE,
-    )
-
-    limit_type = None
-    lowered = message.lower()
-    if "tokens per minute" in lowered or "(tpm)" in lowered:
-        limit_type = "tokens_per_minute"
-    elif "tokens per day" in lowered or "(tpd)" in lowered:
-        limit_type = "tokens_per_day"
-
-    event = {
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "component": "news_agent.groq_request",
-        "status_code": getattr(error, "status_code", None),
-        "exception": type(error).__name__,
-        "model": GROQ_MODEL,
-        "provider_limit_type": limit_type,
-        "provider_limit_tokens": int(numbers.group(1)) if numbers else None,
-        "provider_requested_tokens": int(numbers.group(2)) if numbers else None,
-        **request_size,
-    }
-
-    _SIZE_ERROR_EVENTS.append(event)
-    del _SIZE_ERROR_EVENTS[:-50]
-
-    logger.warning("groq_request_too_large %s", json.dumps(event))
-    return event
-
-
-def recent_request_size_errors():
-    return list(_SIZE_ERROR_EVENTS)
 
 
 def build_news_messages(ticker, articles):
@@ -503,107 +453,43 @@ def build_news_messages(ticker, articles):
     ]
 
 
-def select_news_with_groq(ticker, articles):
+def select_news(ticker, articles, client=None):
+    """
+    One bounded Azure OpenAI request that picks up to four evidence IDs.
+    Headline, URL, publisher and date are always copied from the database.
+    Raises AICallFailed when no valid selection could be obtained.
+    """
     articles, budget_report = fit_articles_to_budget(
         ticker,
         articles,
     )
+    max_output = ai_runtime_settings()["max_output_news_selection"]
 
-    messages = build_news_messages(ticker, articles)
-    response_format = news_response_format()
+    def validate(parsed, profile):
+        try:
+            return validate_news_selections(parsed, articles)
+        except NewsAgentError as error:
+            raise ResponseRejected(str(error)) from None
 
-    estimated = estimate_request_tokens(messages, response_format)
-
-    if estimated > budget_report["input_token_budget"]:
-        raise NewsAgentError(
-            "News request exceeds the configured Groq budget."
-        )
-
-    request_size = {
-        "request_body_bytes": len(json.dumps(
-            {"messages": messages, "response_format": response_format},
-            ensure_ascii=False,
-        ).encode("utf-8")),
-        "estimated_input_tokens": estimated,
-        "max_completion_tokens": NEWS_MAX_COMPLETION_TOKENS,
-        "request_token_budget": budget_report["request_token_budget"],
-        "articles_sent": len(articles),
-    }
-
-    client = Groq(
-        api_key=os.environ["GROQ_API_KEY"],
-        timeout=30.0,
-        max_retries=0,
+    _, selected, call = structured_completion(
+        agent="news",
+        call_name="news_selection",
+        schema_name="insightiq_news_selections",
+        schema_model=NewsSelections,
+        build_messages=lambda profile: build_news_messages(ticker, articles),
+        profiles=[RequestProfile("full", max_output)],
+        validate=validate,
+        request_token_budget=budget_report["input_token_budget"],
+        client=client,
     )
-
-    started = time.perf_counter()
-
-    try:
-        response = guarded_chat_completion(client,
-            model=GROQ_MODEL,
-            messages=messages,
-            response_format=response_format,
-            temperature=0,
-            max_completion_tokens=NEWS_MAX_COMPLETION_TOKENS,
-        )
-    except APIStatusError as error:
-        if getattr(error, "status_code", None) == 413:
-            record_request_size_error(error, request_size)
-        raise
-
-    elapsed = time.perf_counter() - started
-
-    if not response.choices:
-        raise NewsAgentError(
-            "Groq returned no news selection."
-        )
-
-    choice = response.choices[0]
-
-    if choice.finish_reason != "stop":
-        raise NewsAgentError(
-            "Incomplete Groq news response: "
-            + str(choice.finish_reason)
-        )
-
-    if not choice.message.content:
-        raise NewsAgentError(
-            "Empty Groq news response."
-        )
-
-    parsed = NewsSelections.model_validate_json(
-        choice.message.content
-    )
-
-    selected = validate_news_selections(
-        parsed,
-        articles,
-    )
-
-    usage = getattr(response, "usage", None)
 
     diagnostics = {
-        "model": GROQ_MODEL,
-        "response_id": getattr(
-            response, "id", None
-        ),
-        "finish_reason": choice.finish_reason,
-        "elapsed_seconds": round(elapsed, 3),
-        "prompt_tokens": getattr(
-            usage, "prompt_tokens", None
-        ),
-        "completion_tokens": getattr(
-            usage, "completion_tokens", None
-        ),
-        "total_tokens": getattr(
-            usage, "total_tokens", None
-        ),
+        **call,
         "available_articles": len(articles),
         "selected_articles": len(selected),
         "schema_validated": True,
         "evidence_ids_validated": True,
         "request_budget": budget_report,
-        "request_body_bytes": request_size["request_body_bytes"],
     }
 
     return selected, diagnostics
@@ -616,10 +502,34 @@ def news_agent_node(state: NewsState):
         ticker
     )
 
-    selected, diagnostics = select_news_with_groq(
-        ticker,
-        articles,
-    )
+    selection_method = "ai"
+    failure_reason = None
+    try:
+        selected, diagnostics = select_news(
+            ticker,
+            articles,
+        )
+    except AICallFailed as failure:
+        failure_reason = failure.reason
+        # Labelled deterministic fallback: the most relevant, most recent
+        # stored articles (all already passed the company relevance rules).
+        selected = deterministic_news_selection(articles)
+        selection_method = "deterministic_fallback"
+        diagnostics = {
+            **failure.diagnostics,
+            "available_articles": len(articles),
+            "selected_articles": len(selected),
+            "selection_method": selection_method,
+        }
+
+    if selection_method == "ai" and not selected:
+        raise NoMaterialNews(
+            f"The AI article review found none of the {len(articles)} verified "
+            "company-specific articles material to the company's business; "
+            "the research uses financial evidence only.",
+            {**diagnostics, "selection_method": "ai_selected_none"},
+            articles,
+        )
 
     disclosures = [
         "Headlines, publisher metadata, publication "
@@ -643,7 +553,7 @@ def news_agent_node(state: NewsState):
         disclosures.append(
             f"{excluded} stored articles were not offered to the "
             "model because including them would exceed the "
-            "configured Groq request size budget. Their stored "
+            "configured AI request size budget. Their stored "
             "records are unchanged."
         )
 
@@ -654,13 +564,36 @@ def news_agent_node(state: NewsState):
             "headline or HTTPS article URL was unavailable."
         )
 
+    if selection_method == "deterministic_fallback":
+        cause = (
+            "The AI article selection did not pass validation"
+            if failure_reason in ("validation_rejected", "invalid_schema")
+            else "The AI provider was unavailable for article selection"
+        )
+        disclosures.append(
+            f"{cause}; the most relevant and most recent stored articles were "
+            "selected deterministically and carry no AI topic tag."
+        )
+
     return {
         "status": "completed",
         "available_articles": articles,
         "selected_articles": selected,
-        "groq_diagnostics": diagnostics,
+        "selection_method": selection_method,
+        "ai_diagnostics": diagnostics,
         "disclosures": disclosures,
     }
+
+
+def deterministic_news_selection(articles, limit=4):
+    # Newest first, then (stable) highest relevance first.
+    ranked = sorted(articles, key=lambda a: str(a.get("published_at") or ""), reverse=True)
+    ranked = sorted(ranked, key=lambda a: -float(a.get("relevance_score") or 0))
+    ranked = sorted(ranked[: max(limit, 0)], key=lambda a: str(a.get("published_at") or ""), reverse=True)
+    return [
+        {**a, "ai_topic_tag": None, "topic_tag_semantically_verified": False}
+        for a in ranked[:limit]
+    ]
 
 
 def build_news_graph():
@@ -728,10 +661,10 @@ def run_news_agent(ticker):
 # validated item by item.
 
 from app.services import evidence_package as _packages
-from app.services.groq_structured import (
-    GroqCallFailed as _GroqCallFailed,
+from app.services.ai_provider import (
+    AICallFailed as _AICallFailed,
     RequestProfile as _RequestProfile,
-    groq_runtime_settings as _groq_runtime_settings,
+    ai_runtime_settings as _ai_runtime_settings,
     structured_completion as _structured_completion,
 )
 from app.services.narrative_validation import (
@@ -789,12 +722,11 @@ NEWS_ANALYSIS_SYSTEM_PROMPT = (
 
 
 def news_analysis_profiles():
-    settings = _groq_runtime_settings()
-    full = settings["news_analysis_max_completion"]
+    full = _ai_runtime_settings()["max_output_news_analysis"]
     return [
         _RequestProfile("full", full, {"excerpt_chars": _packages.EXCERPT_FULL_CHARS}),
         _RequestProfile(
-            "reduced", max(1000, int(full * 0.75)),
+            "reduced", full,
             {"excerpt_chars": _packages.EXCERPT_REDUCED_CHARS},
         ),
     ]
@@ -920,7 +852,7 @@ def evaluate_news_items(items, package):
     return accepted, withheld
 
 
-def write_news_analysis(ticker, assessed_articles, client=None):
+def _write_news_analysis_unscoped(ticker, assessed_articles, client=None):
     """
     Returns (analysis, diagnostics). Never raises for provider failures:
     the validated article selection is kept and analysis is marked
@@ -955,7 +887,7 @@ def write_news_analysis(ticker, assessed_articles, client=None):
             profiles=news_analysis_profiles(),
             client=client,
         )
-    except _GroqCallFailed as failure:
+    except _AICallFailed as failure:
         return {
             "schema_version": 1,
             "status": "unavailable",
@@ -985,3 +917,14 @@ def write_news_analysis(ticker, assessed_articles, client=None):
         ),
         "validation_label": _passed_validation(NEWS_ANALYSIS_CHECKS)["label"],
     }, diagnostics
+
+
+def write_news_analysis(ticker, assessed_articles, client=None):
+    """Runs the AI step with company-scope validation bound (see narrative_validation)."""
+    import json as _json
+
+    from app.services.narrative_validation import company_scope
+
+    evidence_text = _json.dumps(assessed_articles, default=str, ensure_ascii=False)
+    with company_scope(ticker, evidence_text):
+        return _write_news_analysis_unscoped(ticker, assessed_articles, client=client)

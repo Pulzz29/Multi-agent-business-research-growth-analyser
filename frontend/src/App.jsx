@@ -3,7 +3,7 @@ import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { Sidebar, Topbar } from "./components/Layout.jsx";
 import { ThemeToggle } from "./components/ui.jsx";
 import { api } from "./lib/api.js";
-import { companyByTicker } from "./lib/reportModel.js";
+import { companyByTicker, setSecCompanies } from "./lib/reportModel.js";
 import { useHashRoute } from "./lib/router.js";
 import { ActivityPage } from "./pages/ActivityPage.jsx";
 import { CompanyPage } from "./pages/CompanyPage.jsx";
@@ -155,7 +155,10 @@ export default function App() {
         onAuthError();
         return;
       }
-      if (s.status === "fulfilled") setSummary(s.value);
+      if (s.status === "fulfilled") {
+        setSecCompanies(s.value?.companies);
+        setSummary(s.value);
+      }
       if (d.status === "fulfilled") setDashboard(d.value);
       if (r.status === "fulfilled") setRuns(r.value);
       const failed = results.filter((x) => x.status === "rejected" && x.reason?.name !== "AbortError");
@@ -285,6 +288,7 @@ export default function App() {
               token={token}
               market={route.market}
               sector={route.sector}
+              companies={route.companies}
               navigate={navigate}
               onAuthError={onAuthError}
             />

@@ -54,3 +54,26 @@ test("formatting helpers and malformed input", () => {
   assert.equal(buildComparisonModel(null), null);
   assert.equal(buildComparisonModel({}), null);
 });
+
+test("custom comparison fields are mapped; whole-sector snapshots stay sector type", () => {
+  const sector = buildComparisonModel(snapshot);
+  assert.equal(sector.comparisonType, "sector");
+  assert.equal(sector.isCustom, false);
+  assert.equal(sector.relativeNote, null);
+  assert.deepEqual(sector.selectedCompanies, []);
+
+  const picked = snapshot.ranking.companies.slice(0, 2).map((c) => ({ symbol: c.symbol, name: c.name }));
+  const note = "Scores are relative to the selected companies and may differ from the full sector ranking.";
+  const custom = buildComparisonModel({
+    ...snapshot,
+    comparison_type: "custom",
+    selected_companies: picked,
+    duplicates_removed: ["X"],
+    relative_note: note,
+  });
+  assert.equal(custom.comparisonType, "custom");
+  assert.equal(custom.isCustom, true);
+  assert.deepEqual(custom.selectedCompanies, picked);
+  assert.deepEqual(custom.duplicatesRemoved, ["X"]);
+  assert.equal(custom.relativeNote, note);
+});

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { parseSymbols } from "./selection.js";
 
 export const COMPANY_TABS = ["overview", "financials", "forecasts", "news", "research"];
 export const MARKETS = ["US", "IN"];
@@ -10,9 +11,11 @@ export const MARKETS = ["US", "IN"];
  *   #/companies/META             -> overview tab
  *   #/companies/META/financials
  *   #/companies/META/reports/<run-id>
+ *   #/markets/US/sectors/technology?companies=AAPL,MSFT  (custom comparison)
  */
 export function parseHash(hash) {
-  const parts = String(hash || "")
+  const [path, query = ""] = String(hash || "").split("?");
+  const parts = path
     .replace(/^#\/?/, "")
     .split("/")
     .filter(Boolean)
@@ -27,7 +30,9 @@ export function parseHash(hash) {
       return { page: "market-company", market, symbol: parts[3].toUpperCase() };
     }
     if (parts[2] === "sectors") {
-      return { page: "sectors", market, sector: parts[3] ? parts[3].toLowerCase() : null };
+      const sector = parts[3] ? parts[3].toLowerCase() : null;
+      const companies = sector ? parseSymbols(new URLSearchParams(query).get("companies")) : [];
+      return companies.length ? { page: "sectors", market, sector, companies } : { page: "sectors", market, sector };
     }
     return { page: "market", market };
   }
@@ -51,7 +56,9 @@ export function buildHash(route) {
     return `#/markets/${route.market || "US"}/companies/${encodeURIComponent(route.symbol)}`;
   }
   if (route.page === "sectors") {
-    return `#/markets/${route.market || "US"}/sectors${route.sector ? `/${encodeURIComponent(route.sector)}` : ""}`;
+    const base = `#/markets/${route.market || "US"}/sectors${route.sector ? `/${encodeURIComponent(route.sector)}` : ""}`;
+    const companies = route.sector && Array.isArray(route.companies) ? route.companies : [];
+    return companies.length ? `${base}?companies=${companies.map(encodeURIComponent).join(",")}` : base;
   }
   if (route.page === "company" && route.ticker) {
     if (route.runId) return `#/companies/${route.ticker}/reports/${route.runId}`;
@@ -59,6 +66,12 @@ export function buildHash(route) {
     return `#/companies/${route.ticker}`;
   }
   return "#/overview";
+}
+
+/** Update the address bar (bookmarkable) without re-routing or scrolling. */
+export function replaceHash(route) {
+  const hash = buildHash(route);
+  if (window.location.hash !== hash) window.history.replaceState(null, "", hash);
 }
 
 export function useHashRoute() {

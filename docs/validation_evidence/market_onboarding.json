@@ -1,0 +1,645 @@
+{
+  "source": "scripts/onboard_market_data.py run of 2026-11-24 (log reconstructed into this record) plus a retry of 7 companies",
+  "market_status_counts": {
+    "US": "{'profile': {'refreshed': 47}, 'quote': {'cached_fresh': 47}, 'statements': {'refreshed': 31, 'failed': 16}}",
+    "IN": "{'quote': {'cached_fresh': 44, 'failed': 1}, 'statements': {'refreshed': 28, 'failed': 1, 'cached_fresh': 16}, 'profile': {'cached_fresh': 44, 'failed': 1}}"
+  },
+  "fmp_statement_failures": [
+    {
+      "ticker": "BMY",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "CL",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "COP",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "EOG",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "HD",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "KMB",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "LLY",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "LOW",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "MDLZ",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "MRK",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "MS",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "ORCL",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "OXY",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "PG",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "SLB",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    },
+    {
+      "ticker": "TMUS",
+      "error": "FMP rejected the request (HTTP 402): the API key or plan does not cover this data."
+    }
+  ],
+  "news": {
+    "AAPL": {
+      "status": "cached",
+      "records_fetched": 0,
+      "records_relevant": null,
+      "records_inserted": 0
+    },
+    "MSFT": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "NVDA": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "ORCL": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "ADBE": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "CSCO": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "GOOGL": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 8,
+      "records_inserted": 8
+    },
+    "META": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 6,
+      "records_inserted": 6
+    },
+    "NFLX": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "DIS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 4,
+      "records_inserted": 4
+    },
+    "TMUS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "VZ": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "AMZN": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "WMT": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "COST": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "HD": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "TGT": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "LOW": {
+      "status": "success",
+      "records_fetched": 5,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "PG": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 6,
+      "records_inserted": 6
+    },
+    "KO": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "PEP": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "CL": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "KMB": {
+      "status": "success",
+      "records_fetched": 7,
+      "records_relevant": 6,
+      "records_inserted": 6
+    },
+    "MDLZ": {
+      "status": "success",
+      "records_fetched": 9,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "JPM": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 6,
+      "records_inserted": 6
+    },
+    "BAC": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "C": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "MS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "LLY": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 8,
+      "records_inserted": 8
+    },
+    "JNJ": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "MRK": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "PFE": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "ABBV": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "BMY": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 8,
+      "records_inserted": 8
+    },
+    "CVX": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "COP": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "EOG": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "SLB": {
+      "status": "success",
+      "records_fetched": 3,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "OXY": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "TSLA": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "GM": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 10,
+      "records_inserted": 10
+    },
+    "F": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "RIVN": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "LCID": {
+      "status": "success",
+      "records_fetched": 7,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "TCS.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 5,
+      "records_inserted": 5,
+      "records_irrelevant": 5,
+      "irrelevant_by_reason": {
+        "generic_market_commentary": 4,
+        "multi_company_roundup": 1
+      },
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "INFY.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "HCLTECH.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "WIPRO.NS": {
+      "status": "success",
+      "records_fetched": 9,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "TECHM.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 8,
+      "records_inserted": 8
+    },
+    "LTIM.NS": {
+      "status": "success",
+      "records_fetched": 1,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "HDFCBANK.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "ICICIBANK.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "SBIN.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "KOTAKBANK.NS": {
+      "status": "success",
+      "records_fetched": 2,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "AXISBANK.NS": {
+      "status": "success",
+      "records_fetched": 8,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "INDUSINDBK.NS": {
+      "status": "success",
+      "records_fetched": 7,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "HINDUNILVR.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "ITC.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "NESTLEIND.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "BRITANNIA.NS": {
+      "status": "failed",
+      "records_fetched": null,
+      "records_relevant": null,
+      "records_inserted": null,
+      "error": "NewsData.io returned HTTP 422."
+    },
+    "DABUR.NS": {
+      "status": "success",
+      "records_fetched": 2,
+      "records_relevant": 2,
+      "records_inserted": 2
+    },
+    "TATACONSUM.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "SUNPHARMA.NS": {
+      "status": "success",
+      "records_fetched": 1,
+      "records_relevant": 1,
+      "records_inserted": 1,
+      "records_irrelevant": 0,
+      "irrelevant_by_reason": {},
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "DRREDDY.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0,
+      "records_irrelevant": 0,
+      "irrelevant_by_reason": {},
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "CIPLA.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "DIVISLAB.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "LUPIN.NS": {
+      "status": "success",
+      "records_fetched": 1,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "ZYDUSLIFE.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "RELIANCE.NS": {
+      "status": "success",
+      "records_fetched": 2,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "ONGC.NS": {
+      "status": "success",
+      "records_fetched": 4,
+      "records_relevant": 4,
+      "records_inserted": 4,
+      "records_irrelevant": 0,
+      "irrelevant_by_reason": {},
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "NTPC.NS": {
+      "status": "success",
+      "records_fetched": 7,
+      "records_relevant": 7,
+      "records_inserted": 7
+    },
+    "POWERGRID.NS": {
+      "status": "success",
+      "records_fetched": 3,
+      "records_relevant": 2,
+      "records_inserted": 2,
+      "records_irrelevant": 1,
+      "irrelevant_by_reason": {
+        "watchlist_or_listicle": 1
+      },
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "BPCL.NS": {
+      "status": "success",
+      "records_fetched": 5,
+      "records_relevant": 3,
+      "records_inserted": 3,
+      "records_irrelevant": 2,
+      "irrelevant_by_reason": {
+        "watchlist_or_listicle": 2
+      },
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "IOC.NS": {
+      "status": "success",
+      "records_fetched": 3,
+      "records_relevant": 3,
+      "records_inserted": 3
+    },
+    "MARUTI.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 6,
+      "records_inserted": 6,
+      "records_irrelevant": 4,
+      "irrelevant_by_reason": {
+        "generic_market_commentary": 1,
+        "personal_or_lifestyle_story": 1,
+        "watchlist_or_listicle": 2
+      },
+      "note": "retried after fixing the NewsData 100-character query limit (first attempt: HTTP 422)"
+    },
+    "M&M.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "BAJAJ-AUTO.NS": {
+      "status": "success",
+      "records_fetched": 1,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "EICHERMOT.NS": {
+      "status": "success",
+      "records_fetched": 6,
+      "records_relevant": 5,
+      "records_inserted": 5
+    },
+    "HEROMOTOCO.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "TVSMOTOR.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "DMART.NS": {
+      "status": "success",
+      "records_fetched": 1,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "TRENT.NS": {
+      "status": "success",
+      "records_fetched": 4,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "TITAN.NS": {
+      "status": "success",
+      "records_fetched": 4,
+      "records_relevant": 1,
+      "records_inserted": 1
+    },
+    "NYKAA.NS": {
+      "status": "cached",
+      "records_fetched": 0,
+      "records_relevant": null,
+      "records_inserted": 0
+    },
+    "ETERNAL.NS": {
+      "status": "success",
+      "records_fetched": 8,
+      "records_relevant": 6,
+      "records_inserted": 5
+    },
+    "BHARTIARTL.NS": {
+      "status": "success",
+      "records_fetched": 10,
+      "records_relevant": 9,
+      "records_inserted": 9
+    },
+    "IDEA.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "INDUSTOWER.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    },
+    "TATACOMM.NS": {
+      "status": "success",
+      "records_fetched": 0,
+      "records_relevant": 0,
+      "records_inserted": 0
+    }
+  },
+  "snapshot_integrity_ok": true,
+  "recovery_point_verified": true,
+  "finished_at_utc": "2026-11-24T09:53:29.749146+00:00"
+}

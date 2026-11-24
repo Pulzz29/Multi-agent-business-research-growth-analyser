@@ -1,0 +1,107 @@
+{
+  "finnhub": {
+    "provider": "Finnhub",
+    "checked_at_utc": "2026-11-24T10:23:15.567102+00:00",
+    "mode": "live_request",
+    "outcome": "failed",
+    "error_type": "ProviderAccessDenied",
+    "error": "FINNHUB rejected the request (HTTP 401): the API key or plan does not cover this data.",
+    "elapsed_seconds": 0.58
+  },
+  "fmp": {
+    "provider": "Financial Modeling Prep",
+    "checked_at_utc": "2026-11-24T10:23:16.151038+00:00",
+    "mode": "live_request",
+    "outcome": "failed",
+    "error_type": "ProviderQuotaExceeded",
+    "error": "The daily FMP request budget is used up; stored data is shown until tomorrow.",
+    "elapsed_seconds": 0.0,
+    "note": "The single verification call was refused by InsightIQ's own daily FMP budget (240 requests), used up by today's onboarding. FMP answered live earlier today: 47 profiles and 31 statement sets loaded; 16 symbols returned HTTP 402 (not covered by the API plan)."
+  },
+  "yfinance": {
+    "provider": "Yahoo Finance (yfinance)",
+    "checked_at_utc": "2026-11-24T10:23:16.153049+00:00",
+    "mode": "live_request",
+    "outcome": "success",
+    "data": {
+      "company": "TCS.NS",
+      "type": "profile+quote",
+      "name": "Tata Consultancy Services Limited",
+      "exchange": "NSI",
+      "currency": "INR",
+      "price_present": true,
+      "as_of": null
+    },
+    "elapsed_seconds": 6.57
+  },
+  "azure_openai": {
+    "provider": "Azure OpenAI",
+    "mode": "live_request (scripts/verify_azure.py)",
+    "outcome": "success",
+    "checked_at_utc": "2026-11-24T05:47:47.921379+00:00",
+    "deployment": "gpt-5.4-pro",
+    "model_served": "gpt-5.4-pro",
+    "response_id": "resp_0946556276c74638006b0524f5537c81908cd588717a296a8e",
+    "tokens": {
+      "input_tokens": 87,
+      "output_tokens": 57,
+      "reasoning_tokens": 16,
+      "total_tokens": 144
+    },
+    "structured_output_correct": true
+  },
+  "sec_edgar": {
+    "provider": "SEC EDGAR",
+    "mode": "live_request (scripts/onboard_sec_universe.py)",
+    "checked_at_utc": "2026-11-24T09:27:00.739740+00:00",
+    "companies": 47,
+    "refresh_status_counts": {
+      "success": 40,
+      "no_new_filings": 6,
+      "cached": 1
+    },
+    "validation_summary": {
+      "validated": 44,
+      "unavailable": 3
+    }
+  },
+  "newsdata": {
+    "provider": "NewsData.io",
+    "mode": "live_request (scripts/onboard_market_data.py)",
+    "checked_at_utc": "2026-11-24T09:53:29.749146+00:00",
+    "status_counts": {
+      "failed": 1,
+      "success": 86,
+      "cached": 2
+    },
+    "articles_fetched": 570,
+    "articles_accepted": 356,
+    "articles_inserted": 355,
+    "stopped_reason": null
+  },
+  "market_data_load": {
+    "mode": "live_request (scripts/onboard_market_data.py, 2026-11-24)",
+    "status_counts": {
+      "US": "{'profile': {'refreshed': 47}, 'quote': {'cached_fresh': 47}, 'statements': {'refreshed': 31, 'failed': 16}}",
+      "IN": "{'quote': {'cached_fresh': 44, 'failed': 1}, 'statements': {'refreshed': 28, 'failed': 1, 'cached_fresh': 16}, 'profile': {'cached_fresh': 44, 'failed': 1}}"
+    },
+    "fmp_statement_plan_rejections_http_402": [
+      "BMY",
+      "CL",
+      "COP",
+      "EOG",
+      "HD",
+      "KMB",
+      "LLY",
+      "LOW",
+      "MDLZ",
+      "MRK",
+      "MS",
+      "ORCL",
+      "OXY",
+      "PG",
+      "SLB",
+      "TMUS"
+    ]
+  }
+}

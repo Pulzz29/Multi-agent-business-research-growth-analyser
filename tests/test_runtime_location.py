@@ -92,7 +92,7 @@ def test_existing_database_is_not_modified(env):
     before = env["current"].read_bytes()
     result = align(env)
     assert env["current"].read_bytes() == before
-    assert "current session database already present (not modified)" in result["actions"]
+    assert "current session database is the newest (not modified)" in result["actions"]
 
 
 def test_matching_path_is_a_no_op(env):
@@ -100,3 +100,82 @@ def test_matching_path_is_a_no_op(env):
     env["config"]["runtime_database_path"] = str(env["current"])
     result = align(env)
     assert result["actions"] == [] and env["calls"]["backup"] == 0
+
+
+
+def make_dated_db(path, newest_update):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(path))
+    con.execute("CREATE TABLE research_execution_runs (run_id TEXT PRIMARY KEY, updated_at_utc TEXT)")
+    con.execute("CREATE TABLE sec_facts (id INTEGER PRIMARY KEY)")
+    con.execute("INSERT INTO research_execution_runs VALUES ('r1', ?)", (newest_update,))
+    con.commit()
+    con.close()
+
+
+def test_reused_session_folder_with_older_database_is_superseded_by_newer_backup(env, monkeypatch):
+    """Regression (2026-11-24): the session temp folder switched back to a folder
+    that still held an older database while newer runs existed only in the
+    latest verified backup. The newest data must win; the older file is kept."""
+    from app.services import server_bootstrap
+
+    backup = env["root"] / "backup.sqlite3"
+    make_dated_db(backup, "2026-11-23T17:58:25+00:00")
+    make_dated_db(env["current"], "2026-11-23T12:00:00+00:00")
+    monkeypatch.setattr(server_bootstrap, "latest_backup_pair",
+                        lambda d: (backup, env["root"] / "backup.manifest.json", {}))
+    result = align(env)
+    assert env["calls"]["restore"] == [str(env["current"].resolve())]
+    moved = [p for p in env["current"].parent.iterdir() if ".superseded-" in p.name]
+    assert moved, result["actions"]  # the older database is moved aside, never deleted
+    assert any("verified backup" in a for a in result["actions"])
+
+
+def test_newer_current_database_is_kept_over_older_backup(env, monkeypatch):
+    from app.services import server_bootstrap
+
+    backup = env["root"] / "backup.sqlite3"
+    make_dated_db(backup, "2026-11-20T10:00:00+00:00")
+    make_dated_db(env["current"], "2026-11-24T09:00:00+00:00")
+    before = env["current"].read_bytes()
+    monkeypatch.setattr(server_bootstrap, "latest_backup_pair",
+                        lambda d: (backup, env["root"] / "backup.manifest.json", {}))
+    result = align(env)
+    assert env["calls"]["restore"] == [] and env["current"].read_bytes() == before
+    assert "current session database is the newest (not modified)" in result["actions"]
+
+
+def test_latest_activity_reads_timestamps(tmp_path):
+    path = tmp_path / "x.sqlite3"
+    make_dated_db(path, "2026-11-23T17:58:25+00:00")
+    assert runtime_location.latest_activity(path) == "2026-11-23T17:58:25+00:00"
+
+
+def test_backup_verification_cache_reverifies_any_changed_file(tmp_path, monkeypatch):
+    # The dashboard reads backup health on every request; verification is
+    # cached only while both files are byte-for-byte the same file identity.
+    from app.services import startup_recovery
+
+    backup = tmp_path / "b.sqlite3"
+    manifest = tmp_path / "b.manifest.json"
+    backup.write_bytes(b"x" * 10)
+    manifest.write_text("{}", encoding="utf-8")
+    calls = []
+
+    def fake_verify(b, m):
+        calls.append(b)
+        if b.read_bytes().endswith(b"!"):
+            raise startup_recovery.StartupRecoveryError("Recovery backup checksum mismatch.")
+        return {"backup_file": b.name}
+
+    monkeypatch.setattr(startup_recovery, "_verify_backup_files", fake_verify)
+    monkeypatch.setattr(startup_recovery, "_VERIFIED", {})
+    startup_recovery.verified_backup(backup, manifest)
+    startup_recovery.verified_backup(backup, manifest)
+    assert len(calls) == 1                      # unchanged file: served from cache
+
+    backup.write_bytes(b"x" * 10 + b"!")        # altered backup
+    for _ in range(2):                          # failures are never cached
+        with pytest.raises(startup_recovery.StartupRecoveryError):
+            startup_recovery.verified_backup(backup, manifest)
+    assert len(calls) == 3

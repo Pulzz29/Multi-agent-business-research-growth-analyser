@@ -32,7 +32,7 @@ def secrets():
     for name in (".env", ".env.test"):
         for key, value in dotenv_values(ROOT / name).items():
             value = (value or "").strip()
-            if key in ("API_ACCESS_KEY", "GROQ_API_KEY", "NEWSDATA_API_KEY", "SEC_USER_AGENT") and len(value) >= 8 \
+            if key in ("API_ACCESS_KEY", "AZURE_OPENAI_API_KEY", "NEWSDATA_API_KEY", "FINNHUB_API_KEY", "FMP_API_KEY", "SEC_USER_AGENT") and len(value) >= 8 \
                     and "placeholder" not in value and "example.invalid" not in value:
                 out.add(value.encode())
     return out
@@ -100,7 +100,7 @@ def main():
             backup_problems.append(m.name)
     results["recovery_point_manifests"] = len(list((root / "data" / "sqlite_backups").glob("*.manifest.json")))
     results["recovery_point_problems"] = backup_problems
-    results["forecast_cache_files"] = len(list((root / "data" / "forecast_cache_v1").glob("*.json")))
+    results["forecast_cache_files"] = len(list((root / "data").glob("forecast_cache_v*/*.json")))
     results["extracted_to"] = str(extract_to)
 
     ok = (results["zip_crc_ok"] and not results["forbidden_entries"] and not mismatched and not hits

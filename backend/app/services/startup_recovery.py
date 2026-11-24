@@ -33,6 +33,19 @@ def exclusive_startup_lock(lock_path):
             yield
 
 
+# Successful verifications, keyed by the exact identity of both files
+# (path, size, modification time). A backup that is replaced, touched or
+# altered in any way gets a new key and is fully verified again; failures are
+# never cached. The cache is per process, so startup always verifies in full.
+_VERIFIED = {}
+_VERIFIED_LIMIT = 256
+
+
+def _file_key(path):
+    stat = path.stat()
+    return (str(path), stat.st_size, stat.st_mtime_ns)
+
+
 def verified_backup(backup_path, manifest_path):
     backup_path = Path(backup_path).resolve()
     manifest_path = Path(manifest_path).resolve()
@@ -46,6 +59,19 @@ def verified_backup(backup_path, manifest_path):
         raise StartupRecoveryError(
             "Recovery manifest is unavailable."
         )
+
+    key = (_file_key(backup_path), _file_key(manifest_path))
+    if key in _VERIFIED:
+        return dict(_VERIFIED[key])
+
+    manifest = _verify_backup_files(backup_path, manifest_path)
+    if len(_VERIFIED) >= _VERIFIED_LIMIT:
+        _VERIFIED.clear()
+    _VERIFIED[key] = dict(manifest)
+    return manifest
+
+
+def _verify_backup_files(backup_path, manifest_path):
 
     try:
         manifest = json.loads(

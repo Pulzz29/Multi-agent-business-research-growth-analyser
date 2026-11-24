@@ -6,6 +6,7 @@ import { formatDate, formatDateTime, relativeTime } from "../lib/format.js";
 import { createOpenGuard, lastUpdatedLabel } from "../lib/freshness.js";
 import { MARKET_LABELS, formatMetric } from "../lib/sectorModel.js";
 import { ResearchOptions, ResearchTab } from "./CompanyPage.jsx";
+import { GrowthAnalysisCard } from "../components/GrowthAnalysis.jsx";
 
 const PENDING = ["queued", "running"];
 
@@ -235,7 +236,7 @@ export function MarketCompanyPage({
                     ? "Load the company's data first"
                     : PENDING.includes(activeJob?.status)
                       ? `A research run for ${activeJob.ticker} is in progress`
-                      : "Run the Financial, News and Strategic agents on this company's provider data (uses Groq quota)"
+                      : "Run the Financial, News and Strategic agents on this company's provider data (uses Azure OpenAI tokens; can take several minutes)"
                 }
                 onClick={() => {
                   onStartResearch?.(d.symbol, researchOptions);
@@ -278,8 +279,23 @@ export function MarketCompanyPage({
             ))}
           </div>
         )}
-        {inputs.roe_basis && <p className="small muted">ROE and ROA use {inputs.roe_basis}. Growth compares with the fiscal year ending {formatDate(inputs.prior_period_end)}.</p>}
+        {inputs.roe_basis && (
+          <p className="small muted">
+            ROE and ROA use {inputs.roe_basis}.{" "}
+            {inputs.prior_period_end
+              ? `Revenue growth compares with the fiscal year ending ${formatDate(inputs.prior_period_end)}.`
+              : "Revenue growth is not shown: no prior fiscal year is stored for comparison."}
+          </p>
+        )}
+        {inputs.newer_incomplete_period_end && (
+          <Notice tone="warning">
+            A newer fiscal year ending {formatDate(inputs.newer_incomplete_period_end)} is stored without revenue or net
+            income, so these ratios use the last complete year.
+          </Notice>
+        )}
       </Card>
+
+      {d.registered && <GrowthAnalysisCard token={token} ticker={symbol} />}
 
       {periods.length > 0 && (
         <Card title="Annual statements" subtitle={`Provider values in ${inputs.statement_currency || d.currency}, exactly as stored`}>
@@ -317,7 +333,9 @@ export function MarketCompanyPage({
 
       <Card title="Company news" subtitle="Stored articles; publisher reports are not independently verified">
         {!d.news?.length ? (
-          <EmptyState title="No stored news for this company">Use “Refresh data” to fetch recent articles.</EmptyState>
+          <EmptyState title="No verified company-specific news is available for the selected period.">
+            Only articles in which this company is the subject of the headline are shown. Use “Refresh data” to check for new articles.
+          </EmptyState>
         ) : (
           <ul className="news-list">
             {d.news.map((n) => (

@@ -24,7 +24,10 @@ def load_environment(env_file):
         load_dotenv(env_file, override=False)
     os.environ.setdefault("INSIGHTIQ_PROJECT_ROOT", str(PROJECT_ROOT))
 
-    required = ("API_ACCESS_KEY", "GROQ_API_KEY", "NEWSDATA_API_KEY", "SEC_USER_AGENT")
+    required = (
+        "API_ACCESS_KEY", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_DEPLOYMENT", "NEWSDATA_API_KEY", "SEC_USER_AGENT",
+    )
     missing = [name for name in required if not os.getenv(name, "").strip()]
     if missing:
         sys.exit(

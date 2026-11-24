@@ -112,9 +112,14 @@ export const api = {
   company: (token, ticker, signal) => request(`/companies/${enc(ticker)}/overview`, token, { signal }),
   companyReport: (token, ticker, id, signal) =>
     request(`/companies/${enc(ticker)}/reports/${enc(id)}`, token, { signal }),
+  // Frozen chart and metrics dataset for one saved report (no external calls).
+  reportInsights: (token, ticker, id, signal) =>
+    request(`/companies/${enc(ticker)}/reports/${enc(id)}/insights`, token, { signal }),
   newsStatus: (token, ticker, signal) => request(`/news/status/${enc(ticker)}`, token, { signal }),
   freshness: (token, ticker, signal) =>
     request(`/companies/${enc(ticker)}/freshness`, token, { signal }),
+  // Growth analysis from stored data (no provider or AI calls).
+  growth: (token, ticker, signal) => request(`/companies/${enc(ticker)}/growth`, token, { signal }),
 
   // Explicit user actions (may call external providers)
   // options: { refresh: "if_stale" | "skip", on_refresh_failure: "continue_with_cached" | "fail" }
@@ -127,6 +132,9 @@ export const api = {
       preferDetail: true,
     }),
   job: (token, id, signal) => request(`/jobs/${enc(id)}`, token, { signal }),
+  cancelJob: (token, id) => request(`/jobs/${enc(id)}/cancel`, token, { method: "POST", preferDetail: true }),
+  summaryStatus: (token, ticker, id, signal) =>
+    request(`/companies/${enc(ticker)}/reports/${enc(id)}/executive-summary`, token, { signal }),
   refreshNews: (token, ticker) =>
     request("/news/refresh", token, { method: "POST", body: { ticker } }),
   // Markets and sector comparison
@@ -143,7 +151,7 @@ export const api = {
   comparisonHistory: (token, market, sector, signal) =>
     request(`/markets/${enc(market)}/sectors/${enc(sector)}/comparisons`, token, { signal }),
   comparison: (token, id, signal) => request(`/sector-comparisons/${enc(id)}`, token, { signal }),
-  // Explicit actions (call market data providers and/or Groq)
+  // Explicit actions (call market data providers and/or Azure OpenAI)
   providerSearch: (token, market, q) =>
     request(`/markets/${enc(market)}/companies/search`, token, { method: "POST", body: { q }, preferDetail: true }),
   refreshMarketCompany: (token, market, symbol, body = {}) =>
@@ -162,16 +170,22 @@ export const api = {
     }),
   refreshMarketQuotes: (token, market) =>
     request(`/markets/${enc(market)}/quotes/refresh`, token, { method: "POST", preferDetail: true }),
-  generateComparison: (token, market, sector, refresh = true) =>
+  // companies: optional list of symbols from this sector (custom comparison).
+  generateComparison: (token, market, sector, refresh = true, companies = null) =>
     request(`/markets/${enc(market)}/sectors/${enc(sector)}/comparison`, token, {
       method: "POST",
-      body: { refresh },
+      body: Array.isArray(companies) ? { refresh, companies } : { refresh },
       preferDetail: true,
     }),
   downloadComparisonReport: (token, id, format) => download(`/sector-comparisons/${enc(id)}/report?format=${enc(format)}`, token),
-  generateSummary: (token, ticker, id) =>
+  // Research report PDF (no provider or AI calls).
+  downloadReportPdf: (token, ticker, id) => download(`/companies/${enc(ticker)}/reports/${enc(id)}/pdf`, token),
+  // force=true is the button (regenerate even if a current version exists);
+  // force=false is the automatic path (no AI call when a current version exists).
+  generateSummary: (token, ticker, id, force = false) =>
     request(`/companies/${enc(ticker)}/reports/${enc(id)}/executive-summary`, token, {
       method: "POST",
+      body: { force },
       preferDetail: true,
     }),
 };

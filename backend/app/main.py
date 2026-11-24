@@ -1,4 +1,5 @@
 import hmac
+import logging
 import json
 import os
 import uuid
@@ -24,14 +25,8 @@ from app.services.research_jobs import (
 )
 
 
-SUPPORTED_COMPANIES = (
-    "AAPL",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "MSFT",
-    "NVDA",
-)
+# Companies on the validated SEC pipeline (live set; see sec_coverage.py).
+from app.services.sec_coverage import SEC_VALIDATED as SUPPORTED_COMPANIES  # noqa: E402
 
 security_scheme = HTTPBearer(
     auto_error=False,
@@ -201,11 +196,21 @@ def health_ready():
             detail="Research service not ready.",
         )
 
+    # Configuration only (no AI request): whether the Azure deployment is set.
+    try:
+        from app.services.ai_provider import ai_runtime_settings
+
+        ai = ai_runtime_settings()
+        ai_status = {"provider": "azure_openai", "deployment": ai["deployment"], "configured": True}
+    except Exception:
+        ai_status = {"provider": "azure_openai", "deployment": None, "configured": False}
+
     return {
         "status": "ready",
         "service": "insightiq-api",
         "database": "available",
         "research_job_journal": "available",
+        "ai_provider": ai_status,
     }
 
 
@@ -431,6 +436,7 @@ def submit_research_job(
                     "Research for this company is already "
                     + active["status"] + "."
                 ),
+                headers={"X-Active-Run-Id": active["run_id"]},
             )
 
         if not _worker_slots.acquire(blocking=False):
@@ -498,6 +504,30 @@ def submit_research_job(
             + created["run_id"]
         ),
     }
+
+@app.post(
+    "/api/v1/jobs/{run_id}/cancel",
+    dependencies=[Depends(require_api_key)],
+)
+def cancel_research_job(run_id: str):
+    """Cancel a queued job, or stop a running job (in-flight AI calls are cancelled)."""
+    run_id = validate_job_id(run_id)
+    from app.services.research_jobs import ResearchJobError as _ResearchJobError
+    from app.services.research_jobs import request_cancel as _request_cancel
+
+    try:
+        job = _request_cancel(project_root(), run_id)
+    except _ResearchJobError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=404, detail="Research job not found.")
+    return {
+        "run_id": run_id,
+        "status": job.get("status"),
+        "error_code": job.get("error_code"),
+        "cancel_requested": bool(job.get("cancel_requested")) or job.get("error_code") == "cancelled",
+    }
+
 
 # ==========================================================
 # Completed research backup health — read-only
@@ -674,8 +704,8 @@ from datetime import timezone as _insightiq_news_timezone
 
 from app.services.news_ingestion import (
     connect as _insightiq_news_connect,
-    SUPPORTED_TICKERS as _insightiq_news_tickers,
 )
+from app.services.sec_coverage import SEC_VALIDATED as _insightiq_news_tickers
 from app.services import source_refresh as _source_refresh
 
 _insightiq_news_refresh_lock = (
@@ -694,19 +724,13 @@ def _insightiq_news_status_snapshot(ticker):
             detail="Unsupported company ticker.",
         )
 
+    from app.services.company_profile import news_status as _verified_news_status
+
     with _insightiq_news_connect() as conn:
 
-        article = conn.execute(
-            """
-            SELECT
-                COUNT(*) AS article_count,
-                MAX(published_at) AS latest_published_at,
-                MAX(retrieved_at) AS latest_retrieved_at
-            FROM news_articles
-            WHERE company_ticker = ?
-            """,
-            (ticker,),
-        ).fetchone()
+        # Counts and dates describe verified company-specific news only;
+        # stored rows that fail the relevance rules are reported as hidden.
+        article = _verified_news_status(conn, ticker)
 
         refresh = conn.execute(
             """
@@ -737,6 +761,10 @@ def _insightiq_news_status_snapshot(ticker):
             refresh["completed_at"]
             if refresh else None
         ),
+        "stored_article_count": article["stored_article_count"],
+        "hidden_article_count": article["hidden_article_count"],
+        "hidden_by_reason": article["hidden_by_reason"],
+        "relevance_version": article["relevance_version"],
     }
 
 
@@ -895,7 +923,7 @@ async def insightiq_refresh_company_news(
 
 # ==========================================================
 # Company intelligence dashboard — authenticated
-# GET routes are read-only: no Groq, NewsData.io or SEC calls,
+# GET routes are read-only: no AI, NewsData.io or SEC calls,
 # no forecast training and no database writes.
 # ==========================================================
 
@@ -980,6 +1008,24 @@ def company_overview(ticker: str):
 
 
 @app.get(
+    "/api/v1/companies/{ticker}/growth",
+    dependencies=[Depends(require_api_key)],
+)
+def company_growth_analysis(ticker: str):
+    """Growth analysis from stored data (SEC filings or provider statements).
+    Read-only: no provider or AI calls."""
+    from app.services import growth_analysis as _growth_analysis
+
+    ticker = _require_research_ticker(ticker)
+    try:
+        result, _ = _growth_analysis.company_growth(ticker)
+        return {"ticker": ticker, "growth": result}
+    except Exception:
+        logging.getLogger("insightiq.growth").exception("Growth analysis failed for %s", ticker)
+        raise HTTPException(status_code=503, detail="Growth analysis unavailable.")
+
+
+@app.get(
     "/api/v1/research/runs",
     dependencies=[Depends(require_api_key)],
 )
@@ -1033,25 +1079,28 @@ def company_report(ticker: str, run_id: str):
         )
 
 
-# Explicit, user-initiated AI action (uses Groq quota).
+# Explicit, user-initiated AI action (uses Azure OpenAI tokens).
 # Never overwrites an existing completed summary.
 
 from app.services.executive_summary import (
     ExecutiveSummaryError as _ExecutiveSummaryError,
-    generate_summary as _generate_summary,
+    brief_state as _brief_state,
+    start_brief as _start_brief,
 )
 
-_summary_request_lock = threading.Lock()
+
+class SummaryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The button forces a regeneration even when a current version exists.
+    force: bool = False
 
 
-@app.post(
-    "/api/v1/companies/{ticker}/reports/{run_id}/executive-summary",
-    dependencies=[Depends(require_api_key)],
-)
-def create_executive_summary(ticker: str, run_id: str):
-    ticker = _require_research_ticker(ticker)
-    run_id = validate_job_id(run_id)
+def _summary_state(ticker, run_id):
+    return _brief_state(project_root(), run_id, ticker)
 
+
+def _require_saved_report(ticker, run_id):
     try:
         _report_history.read_report(ticker, run_id)
     except _report_history.ReportHistoryError:
@@ -1065,34 +1114,89 @@ def create_executive_summary(ticker: str, run_id: str):
             detail="Research report is not available.",
         )
 
-    if not _summary_request_lock.acquire(blocking=False):
-        raise HTTPException(
-            status_code=429,
-            detail="Another summary is being generated.",
-            headers={"Retry-After": "10"},
-        )
 
+@app.get(
+    "/api/v1/companies/{ticker}/reports/{run_id}/insights",
+    dependencies=[Depends(require_api_key)],
+)
+def report_insights(ticker: str, run_id: str):
+    """Chart datasets, growth analysis, ratios vs sector median and news
+    sources for one saved report, frozen point-in-time on first request.
+    Read-only with respect to providers and AI: no external calls."""
+    from app.services import report_insights as _report_insights
+
+    ticker = _require_research_ticker(ticker)
+    run_id = validate_job_id(run_id)
+    _require_saved_report(ticker, run_id)
     try:
-        return _generate_summary(
-            project_root(),
-            run_id,
-            ticker=ticker,
-        )
-
-    except _ExecutiveSummaryError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=str(exc),
-        )
-
+        return _report_insights.get_insights(ticker, run_id)
     except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="The summary service is unavailable.",
-        )
+        logging.getLogger("insightiq.report_insights").exception(
+            "Report insights failed for %s %s", ticker, run_id)
+        raise HTTPException(status_code=503, detail="Report charts are unavailable.")
 
-    finally:
-        _summary_request_lock.release()
+
+@app.get(
+    "/api/v1/companies/{ticker}/reports/{run_id}/pdf",
+    dependencies=[Depends(require_api_key)],
+)
+def download_report_pdf(ticker: str, run_id: str):
+    """The research report as a PDF: AI summary and research (when generated),
+    charts drawn server-side from the frozen dataset, growth and ratio tables,
+    news sources and disclaimer. No provider or AI calls."""
+    from fastapi.responses import Response as _PdfResponse
+
+    from app.services import company_report_pdf as _company_report_pdf
+
+    ticker = _require_research_ticker(ticker)
+    run_id = validate_job_id(run_id)
+    _require_saved_report(ticker, run_id)
+    try:
+        content, filename = _company_report_pdf.build(ticker, run_id)
+    except Exception:
+        logging.getLogger("insightiq.report_pdf").exception("Report PDF failed for %s %s", ticker, run_id)
+        raise HTTPException(status_code=503, detail="The report PDF could not be generated.")
+    return _PdfResponse(content=content, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get(
+    "/api/v1/companies/{ticker}/reports/{run_id}/executive-summary",
+    dependencies=[Depends(require_api_key)],
+)
+def executive_summary_status(ticker: str, run_id: str):
+    """Read-only: whether a summary exists, is being generated, or failed."""
+    ticker = _require_research_ticker(ticker)
+    run_id = validate_job_id(run_id)
+    _require_saved_report(ticker, run_id)
+    return _summary_state(ticker, run_id)
+
+
+@app.post(
+    "/api/v1/companies/{ticker}/reports/{run_id}/executive-summary",
+    dependencies=[Depends(require_api_key)],
+    status_code=202,
+)
+def create_executive_summary(ticker: str, run_id: str, request: SummaryRequest | None = None):
+    """
+    Start the AI summary and thorough research in the background (one Azure
+    OpenAI call that can take minutes). Returns 202 with the job state; poll the
+    GET route. Not forced: a brief built from this report's current data is
+    returned as-is (no AI call). A request while one is running reuses it.
+    """
+    ticker = _require_research_ticker(ticker)
+    run_id = validate_job_id(run_id)
+    _require_saved_report(ticker, run_id)
+    force = bool(request and request.force)
+    try:
+        outcome, _ = _start_brief(project_root(), run_id, ticker, force=force,
+                                  trigger="button" if force else "auto")
+    except _ExecutiveSummaryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception:
+        logging.getLogger("insightiq.executive_summary").exception("Could not start brief for %s", run_id)
+        raise HTTPException(status_code=503, detail="The summary service is unavailable.")
+    return {**_summary_state(ticker, run_id), "request_outcome": outcome}
 
 
 # ==========================================================
@@ -1179,10 +1283,11 @@ async def refresh_company_sources(
 # ==========================================================
 # Markets, company search and sector comparison — authenticated
 # GET routes are read-only (stored data only). POST routes may
-# call the market's data providers and, for comparisons, Groq.
+# call the market's data providers and, for comparisons, Azure OpenAI.
 # ==========================================================
 
 import logging as _markets_logging
+from typing import Annotated as _MarketsAnnotated
 from typing import List as _MarketsList
 
 from fastapi import Response as _MarketsResponse
@@ -1196,10 +1301,17 @@ from app.services import sector_report as _sector_report
 
 _markets_logger = _markets_logging.getLogger("insightiq.api.markets")
 
-try:
-    _market_storage.ensure_market_storage()
-except Exception:  # storage is created lazily on first write instead
-    _markets_logger.warning("Market storage could not be initialised at startup.")
+@app.on_event("startup")
+def _initialise_market_storage():
+    # Runs when the server starts, not at import time, so importing this
+    # module (for example in tests) never touches a database.
+    try:
+        _market_storage.ensure_market_storage()
+    except Exception:  # storage is created lazily on first write instead
+        _markets_logger.warning("Market storage could not be initialised at startup.")
+
+
+_MarketsSymbol = _MarketsAnnotated[str, _Field(min_length=1, max_length=24)]
 
 
 class MarketSearchRequest(BaseModel):
@@ -1225,6 +1337,10 @@ class SectorComparisonRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     refresh: bool = True
+    # Custom comparison: symbols from this sector to compare (absent = whole
+    # sector). Membership, de-duplication and the min/max count are checked by
+    # sector_comparison.validate_selection (HTTP 400 with a clear reason).
+    companies: _MarketsList[_MarketsSymbol] | None = _Field(default=None, max_length=20)
 
 
 def _market_or_404(market):
@@ -1386,7 +1502,12 @@ async def market_quotes_refresh(market: str):
 def market_sectors(market: str, search: str = CompanyQuery(default="", max_length=60)):
     market = _market_or_404(market)
     try:
-        return {"market": market, "sectors": _market_registry.sectors(market, search)}
+        return {
+            "market": market,
+            "sectors": _market_registry.sectors(market, search),
+            # Selection limits for "Compare selected companies" (single source: settings).
+            "custom_comparison": _sector_comparison.custom_limits(),
+        }
     except Exception:
         raise HTTPException(status_code=503, detail="Sector list unavailable.")
 
@@ -1418,7 +1539,10 @@ async def generate_sector_comparison(market: str, sector: str, request: SectorCo
     try:
         return await _insightiq_news_asyncio.to_thread(
             _sector_comparison.build_comparison, market, key, request.refresh,
+            None, None, None, request.companies,
         )
+    except _sector_comparison.SelectionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except _sector_comparison.ComparisonBusy as exc:
         raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "15"})
     except _sector_comparison.ComparisonNoData as exc:
@@ -1450,8 +1574,9 @@ def download_sector_report(
     except Exception:
         _markets_logger.exception("Report rendering failed for %s", comparison_id)
         raise HTTPException(status_code=503, detail="The report could not be generated.")
+    custom = "_custom" if _sector_comparison.snapshot_type(snapshot) == "custom" else ""
     filename = (
-        f"InsightIQ_{snapshot['market']}_{snapshot['sector_key']}_"
+        f"InsightIQ_{snapshot['market']}_{snapshot['sector_key']}{custom}_"
         f"{snapshot['generated_at_utc'][:10]}.{extension}"
     )
     return _MarketsResponse(

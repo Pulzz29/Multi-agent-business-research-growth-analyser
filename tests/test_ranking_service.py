@@ -187,3 +187,94 @@ def test_invalid_config_rejected():
     bad["weights"]["default"]["unknown_metric"] = 0.5
     with pytest.raises(rs.RankingConfigError):
         rs.validate_config(bad)
+
+
+# --- Custom comparison: ranking over a selected subset (universe="selected") ---
+
+def _sector():
+    return [
+        co("A", net_margin_pct=40, revenue_growth_pct=5),
+        co("B", net_margin_pct=30, revenue_growth_pct=10),
+        co("C", net_margin_pct=20, revenue_growth_pct=30),
+        co("D", net_margin_pct=10, revenue_growth_pct=20),
+    ]
+
+
+def test_selected_universe_normalises_over_the_subset_only():
+    cfg = config({"net_margin_pct": 1.0, "revenue_growth_pct": 1.0})
+    full = by_symbol(rs.rank_companies(_sector(), "technology", cfg))
+    subset = [c for c in _sector() if c["symbol"] in ("B", "D")]
+    result = rs.rank_companies(subset, "technology", cfg, universe="selected")
+    rows = by_symbol(result)
+    assert set(rows) == {"B", "D"}
+    margin = {s: next(b for b in rows[s]["breakdown"] if b["metric"] == "net_margin_pct") for s in rows}
+    # Within {B, D} B has the highest margin (100) and D the lowest (0);
+    # within the full sector B scores 66.67 on margin.
+    assert margin["B"]["normalized_score"] == 100.0 and margin["D"]["normalized_score"] == 0.0
+    full_margin = next(b for b in full["B"]["breakdown"] if b["metric"] == "net_margin_pct")
+    assert full_margin["normalized_score"] == pytest.approx(66.67)
+    assert rows["B"]["score"] != full["B"]["score"]
+    # Same scoring function: subset results equal a sector-universe run on the same input.
+    same = rs.rank_companies(subset, "technology", cfg)
+    assert [(c["symbol"], c["score"], c["rank"]) for c in same["companies"]] == [
+        (c["symbol"], c["score"], c["rank"]) for c in result["companies"]
+    ]
+
+
+def test_selected_universe_order_and_method_note():
+    cfg = config({"net_margin_pct": 1.0})
+    subset = [co("X", net_margin_pct=5), co("Y", net_margin_pct=25), co("Z", net_margin_pct=15)]
+    result = rs.rank_companies(subset, "technology", cfg, universe="selected")
+    assert [c["symbol"] for c in result["companies"]] == ["Y", "Z", "X"]
+    assert [c["rank"] for c in result["companies"]] == [1, 2, 3]
+    assert result["method"]["universe"] == "selected"
+    assert result["method"]["relative_note"] == rs.RELATIVE_NOTE
+    assert "selected companies" in result["method"]["normalization"]
+    assert "within the selected companies" in result["companies"][0]["explanation"]
+    sector = rs.rank_companies(subset, "technology", cfg)
+    assert sector["method"]["universe"] == "sector"
+    assert "relative_note" not in sector["method"]
+
+
+def test_selected_universe_zero_variance_does_not_crash():
+    cfg = config({"net_margin_pct": 1.0, "revenue_growth_pct": 1.0})
+    subset = [co("A", net_margin_pct=20, revenue_growth_pct=10), co("B", net_margin_pct=20, revenue_growth_pct=10)]
+    result = rs.rank_companies(subset, "technology", cfg, universe="selected")
+    assert result["status"] == "ranked"
+    assert all(c["score"] == 50.0 and c["rank"] == 1 for c in result["companies"])
+    assert result["ties"] == [["A", "B"]]
+
+
+def test_selected_universe_missing_metric_is_flagged():
+    cfg = config({"net_margin_pct": 1.0, "revenue_growth_pct": 1.0}, min_coverage=0.4)
+    subset = [
+        co("A", net_margin_pct=30, revenue_growth_pct=10),
+        co("B", net_margin_pct=10, revenue_growth_pct=None),
+        co("C", net_margin_pct=20, revenue_growth_pct=30),
+    ]
+    rows = by_symbol(rs.rank_companies(subset, "technology", cfg, universe="selected"))
+    assert rows["B"]["imputed_metrics"] == ["revenue_growth_pct"]
+    growth = next(b for b in rows["B"]["breakdown"] if b["metric"] == "revenue_growth_pct")
+    assert growth["imputed"] is True and growth["value_used"] == 20
+    assert "median of the selected companies" in rows["B"]["explanation"]
+
+
+def test_selected_universe_fewer_than_two_valid_companies():
+    cfg = config({"net_margin_pct": 1.0, "revenue_growth_pct": 1.0})
+    one = rs.rank_companies([co("A", net_margin_pct=10)], "technology", cfg, universe="selected")
+    assert one["status"] == "insufficient_companies"
+    assert one["companies"][0]["not_ranked_reason"] == "fewer than two companies among the selected companies"
+    # Two selected, but only one has enough data to be ranked.
+    sparse = rs.rank_companies(
+        [co("A", net_margin_pct=10, revenue_growth_pct=5), co("B", net_margin_pct=20, revenue_growth_pct=None),
+         co("C", net_margin_pct=None, revenue_growth_pct=9)],
+        "technology", config({"net_margin_pct": 1.0, "revenue_growth_pct": 1.0}, min_coverage=0.9),
+        universe="selected",
+    )
+    assert sparse["status"] == "insufficient_companies"
+    assert not any(c["ranked"] for c in sparse["companies"])
+
+
+def test_invalid_universe_rejected():
+    with pytest.raises(ValueError):
+        rs.rank_companies([co("A", net_margin_pct=1), co("B", net_margin_pct=2)], "technology", universe="custom")

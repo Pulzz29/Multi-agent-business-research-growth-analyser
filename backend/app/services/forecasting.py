@@ -205,217 +205,278 @@ def predict_sarimax(
     return values, intervals
 
 
-def backtest(values):
-    """
-    Two fixed rolling-origin evaluations:
-    train through N-8, forecast next four;
-    train through N-4, forecast next four.
+# ------------------------------------------------- point-in-time walk-forward
+#
+# Origins (n = contiguous quarters available):
+#   selection folds : train on quarters [0, n-12) and [0, n-8), forecast 4
+#   evaluation fold : train on quarters [0, n-4), forecast the last 4
+# The model is chosen on the selection folds only; its accuracy and the
+# baseline's are then reported on the later evaluation fold, which played no
+# part in the choice. Every fold trains on the series exactly as it could have
+# been built from SEC filings available at that time (facts filed on or before
+# the first filing that reported the fold's last training quarter), so later
+# restatements never leak into a backtest. Actuals are today's values.
 
-    No test observation is used to train its own forecast.
-    """
-    n = len(values)
+SELECTION_OFFSETS = (3 * HORIZON, 2 * HORIZON)
+EVALUATION_OFFSET = HORIZON
+MIN_HISTORY = MIN_TRAIN + 3 * HORIZON  # 28 contiguous quarters
+INTERVAL_MIN_POINTS = 8
+INTERVAL_MIN_COVERAGE = 0.75
 
-    cutoffs = (n - 2 * HORIZON, n - HORIZON)
 
-    if cutoffs[0] < MIN_TRAIN:
-        raise ForecastingError(
-            "Not enough observations for rolling-origin backtests."
-        )
+def first_reported_date(ticker, metric, period_end):
+    """Earliest SEC filing date of any fact ending on ``period_end`` for the metric."""
+    from app.database.sqlite_manager import connect
+    from app.services import financial_normalization as fin
 
-    results = {
-        "seasonal_naive": {
-            "folds": [],
-            "errors": [],
-        },
+    concepts = (fin.OCF_CONCEPT,) if metric == "operating_cash_flow" else fin.REVENUE_CONCEPTS
+    placeholders = ",".join("?" for _ in concepts)
+    with connect() as conn:
+        row = conn.execute(
+            f"""
+            SELECT MIN(filed_at) FROM sec_facts
+            WHERE company_ticker = ? AND unit = 'USD' AND period_end = ?
+              AND concept IN ({placeholders}) AND filed_at IS NOT NULL
+            """,
+            (ticker, period_end, *concepts),
+        ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def point_in_time_training(ticker, metric, history, origin, cache):
+    """Training values for a fold origin, built only from filings available then."""
+    cutoff_end = history[origin - 1]["period_end"]
+    as_of = first_reported_date(ticker, metric, cutoff_end)
+    if not as_of:
+        raise ForecastingError(f"No filing date for {cutoff_end}.")
+    if as_of not in cache:
+        try:
+            cache[as_of] = normalized_quarterly_financials(ticker, as_of=as_of)[metric]
+        except Exception as exc:
+            raise ForecastingError(f"Point-in-time normalisation failed: {type(exc).__name__}") from None
+    series = [row for row in cache[as_of] if row["period_end"] <= cutoff_end]
+    series = contiguous_recent_history(series)
+    if not series or series[-1]["period_end"] != cutoff_end:
+        raise ForecastingError(f"Quarter ending {cutoff_end} was not yet derivable from filings.")
+    if len(series) < MIN_TRAIN:
+        raise ForecastingError("Too few point-in-time training quarters.")
+    values = np.array([float(Decimal(r["value"]) / Decimal("1000000000")) for r in series], dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ForecastingError("Nonfinite point-in-time values.")
+    return values, as_of
+
+
+def _run_fold(train, actual, origin_info):
+    """Baseline and every SARIMAX candidate on one fold (with 95% intervals)."""
+    out = {}
+    baseline = seasonal_naive(train)
+    out["seasonal_naive"] = {
+        **origin_info,
+        "train_length": len(train),
+        "horizon": HORIZON,
+        "mae_billion_usd": mae(actual, baseline),
+        "errors": (actual - baseline).tolist(),
     }
-
     for index, specification in enumerate(CANDIDATES):
-        results[f"sarimax_{index + 1}"] = {
-            "specification": specification,
-            "folds": [],
-            "errors": [],
-            "failures": [],
-        }
-
-    for cutoff in cutoffs:
-        train = values[:cutoff]
-        actual = values[cutoff:cutoff + HORIZON]
-
-        baseline = seasonal_naive(train)
-
-        baseline_score = mae(actual, baseline)
-
-        results["seasonal_naive"]["folds"].append({
-            "train_length": len(train),
-            "horizon": HORIZON,
-            "mae_billion_usd": baseline_score,
-        })
-
-        results["seasonal_naive"]["errors"].extend(
-            (actual - baseline).tolist()
-        )
-
-        for index, specification in enumerate(CANDIDATES):
-            key = f"sarimax_{index + 1}"
-
-            try:
-                fitted, fit_diagnostics = fit_sarimax(
-                    train,
-                    specification,
-                )
-
-                predicted, _ = predict_sarimax(fitted)
-
-                score = mae(actual, predicted)
-
-                results[key]["folds"].append({
-                    "train_length": len(train),
-                    "horizon": HORIZON,
-                    "mae_billion_usd": score,
-                    "fit_diagnostics": fit_diagnostics,
-                })
-
-                results[key]["errors"].extend(
-                    (actual - predicted).tolist()
-                )
-
-            except Exception as exc:
-                results[key]["failures"].append({
-                    "train_length": len(train),
-                    "error": (
-                        f"{type(exc).__name__}: {exc}"
-                    )[:500],
-                })
-
-    baseline_mae = float(np.mean([
-        fold["mae_billion_usd"]
-        for fold in results["seasonal_naive"]["folds"]
-    ]))
-
-    results["seasonal_naive"]["mean_mae_billion_usd"] = (
-        baseline_mae
-    )
-
-    for index in range(len(CANDIDATES)):
         key = f"sarimax_{index + 1}"
-        model_result = results[key]
+        try:
+            fitted, fit_diagnostics = fit_sarimax(train, specification)
+            predicted, intervals = predict_sarimax(fitted, include_intervals=True)
+            covered = None
+            if intervals is not None:
+                covered = int(np.sum((actual >= intervals[:, 0]) & (actual <= intervals[:, 1])))
+            out[key] = {
+                **origin_info,
+                "train_length": len(train),
+                "horizon": HORIZON,
+                "mae_billion_usd": mae(actual, predicted),
+                "errors": (actual - predicted).tolist(),
+                "interval_points": int(len(actual)) if intervals is not None else 0,
+                "interval_hits": covered,
+                "fit_diagnostics": fit_diagnostics,
+            }
+        except Exception as exc:
+            out[key] = {**origin_info, "train_length": len(train),
+                        "failure": f"{type(exc).__name__}: {exc}"[:300]}
+    return out
 
-        if len(model_result["folds"]) == len(cutoffs):
-            model_result["mean_mae_billion_usd"] = float(
-                np.mean([
-                    fold["mae_billion_usd"]
-                    for fold in model_result["folds"]
-                ])
-            )
-        else:
-            model_result["mean_mae_billion_usd"] = None
 
-    return results
+def walk_forward(ticker, metric, history, values, point_in_time=True):
+    n = len(values)
+    cache = {}
+    models = ["seasonal_naive"] + [f"sarimax_{i + 1}" for i in range(len(CANDIDATES))]
+    folds = {"selection": [], "evaluation": []}
+
+    for kind, offsets in (("selection", SELECTION_OFFSETS), ("evaluation", (EVALUATION_OFFSET,))):
+        for offset in offsets:
+            origin = n - offset
+            info = {"origin_period_end": history[origin - 1]["period_end"]}
+            try:
+                if point_in_time:
+                    train, as_of = point_in_time_training(ticker, metric, history, origin, cache)
+                    info["training_data_as_of"] = as_of
+                else:
+                    train = values[:origin]
+                    info["training_data_as_of"] = "current_restated_values"
+            except ForecastingError as exc:
+                folds[kind].append({"origin_period_end": info["origin_period_end"], "unavailable": str(exc)})
+                continue
+            actual = values[origin:origin + HORIZON]
+            folds[kind].append(_run_fold(train, actual, info))
+
+    # Per-model selection summary (shape kept compatible with earlier caches).
+    backtesting = {}
+    for model in models:
+        entries = [f[model] for f in folds["selection"] if model in f]
+        ok = [e for e in entries if "mae_billion_usd" in e]
+        backtesting[model] = {
+            "specification": CANDIDATES[int(model[-1]) - 1] if model != "seasonal_naive" else None,
+            "folds": [{k: v for k, v in e.items() if k != "errors"} for e in ok],
+            "errors": [x for e in ok for x in e["errors"]],
+            "failures": [{"origin_period_end": e["origin_period_end"], "error": e["failure"]}
+                         for e in entries if "failure" in e],
+            "mean_mae_billion_usd": (
+                float(np.mean([e["mae_billion_usd"] for e in ok]))
+                if len(ok) == len(SELECTION_OFFSETS) else None
+            ),
+        }
+    return backtesting, folds
 
 
 def choose_candidate(backtest_results):
-    baseline = backtest_results[
-        "seasonal_naive"
-    ]["mean_mae_billion_usd"]
-
+    baseline = backtest_results["seasonal_naive"]["mean_mae_billion_usd"]
+    if baseline is None:
+        return "seasonal_naive", None
     eligible = []
-
     for index in range(len(CANDIDATES)):
         key = f"sarimax_{index + 1}"
-        score = backtest_results[key][
-            "mean_mae_billion_usd"
-        ]
-
+        score = backtest_results[key]["mean_mae_billion_usd"]
         if score is not None and score < baseline:
             eligible.append((score, key, CANDIDATES[index]))
-
     if not eligible:
         return "seasonal_naive", None
-
-    _, name, specification = min(
-        eligible,
-        key=lambda item: item[0],
-    )
-
+    _, name, specification = min(eligible, key=lambda item: item[0])
     return name, specification
 
 
-def forecast_financial_metric(ticker, metric):
-    if metric not in {
-        "revenue",
-        "operating_cash_flow",
-    }:
+def validation_summary(selected, folds):
+    """Held-out accuracy and empirical interval coverage (computed, never assumed)."""
+    evaluation = next((f for f in folds["evaluation"] if "seasonal_naive" in f), None)
+    summary = {
+        "method": "point_in_time_walk_forward",
+        "selection_folds": sum(1 for f in folds["selection"] if "seasonal_naive" in f),
+        "evaluation_origin_period_end": folds["evaluation"][0].get("origin_period_end") if folds["evaluation"] else None,
+        "evaluation_available": evaluation is not None,
+        "evaluation_unavailable_reason": (
+            None if evaluation is not None
+            else next((f.get("unavailable") for f in folds["evaluation"] if f.get("unavailable")),
+                      "No evaluation fold could be run.")
+        ),
+        "selected_model": selected,
+        "selected_mae_billion_usd": None,
+        "baseline_mae_billion_usd": None,
+        "beats_baseline": None,
+        "holdout_quarters": HORIZON if evaluation is not None else 0,
+        "interval_points": 0,
+        "interval_hits": 0,
+        "interval_coverage": None,
+        "interval_status": "unavailable",
+        "interval_display_allowed": False,
+        "interval_warning": None,
+    }
+    if evaluation is not None:
+        baseline = evaluation["seasonal_naive"]["mae_billion_usd"]
+        chosen = evaluation.get(selected) or {}
+        selected_mae = chosen.get("mae_billion_usd")
+        if selected == "seasonal_naive":
+            selected_mae = baseline
+        summary.update({"baseline_mae_billion_usd": baseline, "selected_mae_billion_usd": selected_mae})
+        if selected != "seasonal_naive" and selected_mae is not None:
+            summary["beats_baseline"] = bool(selected_mae < baseline)
+
+    if selected == "seasonal_naive":
+        summary["interval_warning"] = "The seasonal-naive baseline has no statistical prediction interval."
+        return summary
+
+    points = hits = 0
+    for fold in folds["selection"] + folds["evaluation"]:
+        entry = fold.get(selected) or {}
+        if entry.get("interval_hits") is not None:
+            points += entry["interval_points"]
+            hits += entry["interval_hits"]
+    summary["interval_points"] = points
+    summary["interval_hits"] = hits
+    if points:
+        coverage = hits / points
+        summary["interval_coverage"] = round(coverage, 4)
+        if points >= INTERVAL_MIN_POINTS and coverage >= INTERVAL_MIN_COVERAGE:
+            summary["interval_status"] = "validated_limited_sample"
+            summary["interval_display_allowed"] = True
+            summary["interval_warning"] = (
+                f"Nominal 95% interval covered {hits} of {points} out-of-sample quarters; "
+                "a small sample, so treat the interval as indicative."
+            )
+        else:
+            summary["interval_status"] = "not_validated"
+            summary["interval_warning"] = (
+                f"Nominal 95% interval covered only {hits} of {points} out-of-sample quarters; "
+                "the interval is withheld."
+            )
+    else:
+        summary["interval_status"] = "not_validated"
+        summary["interval_warning"] = "No out-of-sample interval could be evaluated; the interval is withheld."
+    return summary
+
+
+def forecast_financial_metric(ticker, metric, point_in_time=True):
+    if metric not in {"revenue", "operating_cash_flow"}:
         raise ValueError("Unsupported financial metric.")
 
     financials = normalized_quarterly_financials(ticker)
-
-    history = contiguous_recent_history(
-        financials[metric]
-    )
-
+    history = contiguous_recent_history(financials[metric])
     values = validate_history(history)
+    if len(values) < MIN_HISTORY:
+        raise ForecastingError(
+            f"Insufficient continuous quarters: {len(values)}. At least {MIN_HISTORY} required "
+            "for model selection plus an independent held-out evaluation."
+        )
 
-    backtest_results = backtest(values)
-
-    selected, specification = choose_candidate(
-        backtest_results
-    )
-
+    backtest_results, folds = walk_forward(ticker, metric, history, values, point_in_time)
+    selected, specification = choose_candidate(backtest_results)
     selection_reason = (
-        "SARIMAX beat the seasonal-naive baseline "
-        "on both rolling-origin folds in aggregate."
-        if specification is not None
-        else
-        "Seasonal-naive baseline performed at least "
-        "as well as the eligible SARIMAX candidates, "
-        "or SARIMAX failed diagnostics."
+        "SARIMAX beat the seasonal-naive baseline on the point-in-time model-selection folds."
+        if specification is not None else
+        "Seasonal-naive baseline performed at least as well as the SARIMAX candidates on the "
+        "model-selection folds, or SARIMAX failed diagnostics."
     )
 
     final_diagnostics = None
     intervals = None
-
     if specification is not None:
         try:
-            fitted, final_diagnostics = fit_sarimax(
-                values,
-                specification,
-            )
-
-            predicted, intervals = predict_sarimax(
-                fitted,
-                include_intervals=True,
-            )
-
+            fitted, final_diagnostics = fit_sarimax(values, specification)
+            predicted, intervals = predict_sarimax(fitted, include_intervals=True)
         except Exception as exc:
-            selected = "seasonal_naive"
-            specification = None
+            selected, specification = "seasonal_naive", None
             selection_reason = (
-                "SARIMAX final fit failed: "
-                f"{type(exc).__name__}: {exc}. "
-                "Used observed seasonal baseline."
+                f"SARIMAX final fit failed: {type(exc).__name__}: {exc}. Used observed seasonal baseline."
             )
-            final_diagnostics = {
-                "fallback_error": str(exc)[:500]
-            }
+            final_diagnostics = {"fallback_error": str(exc)[:500]}
             predicted = seasonal_naive(values)
-
     else:
         predicted = seasonal_naive(values)
 
-    # A negative revenue forecast is economically invalid.
-    # Fallback is disclosed rather than silently clipping.
     if metric == "revenue" and np.any(predicted < 0):
-        selected = "seasonal_naive"
-        specification = None
+        selected, specification = "seasonal_naive", None
         predicted = seasonal_naive(values)
         intervals = None
-        selection_reason = (
-            "SARIMAX predicted negative revenue; "
-            "seasonal-naive fallback applied."
-        )
+        selection_reason = "SARIMAX predicted negative revenue; seasonal-naive fallback applied."
+
+    validation = validation_summary(selected, folds)
+    if intervals is not None and not validation["interval_display_allowed"]:
+        intervals = None  # unvalidated intervals are never published
 
     forecast = []
-
     for index, value in enumerate(predicted):
         row = {
             "fiscal_quarter_ahead": index + 1,
@@ -423,37 +484,24 @@ def forecast_financial_metric(ticker, metric):
             "lower_95_billion_usd": None,
             "upper_95_billion_usd": None,
         }
-
         if intervals is not None:
-            row["lower_95_billion_usd"] = float(
-                intervals[index, 0]
-            )
-            row["upper_95_billion_usd"] = float(
-                intervals[index, 1]
-            )
-
+            row["lower_95_billion_usd"] = float(intervals[index, 0])
+            row["upper_95_billion_usd"] = float(intervals[index, 1])
         forecast.append(row)
 
     return {
         "ticker": ticker,
         "metric": metric,
-        "generated_at_utc": datetime.now(
-            timezone.utc
-        ).isoformat(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "horizon_quarters": HORIZON,
         "history_quarters": len(history),
-        "last_observed_period_end": history[-1][
-            "period_end"
-        ],
+        "last_observed_period_end": history[-1]["period_end"],
         "last_eight_sec_evidence": [
             {
                 "period_end": item["period_end"],
                 "value_usd": item["value"],
                 "method": item["method"],
-                "source_fact_ids": [
-                    source["sec_fact_id"]
-                    for source in item["evidence"]
-                ],
+                "source_fact_ids": [source["sec_fact_id"] for source in item["evidence"]],
             }
             for item in history[-8:]
         ],
@@ -461,18 +509,18 @@ def forecast_financial_metric(ticker, metric):
         "specification": specification,
         "selection_reason": selection_reason,
         "backtesting": backtest_results,
+        "validation": validation,
         "final_fit_diagnostics": final_diagnostics,
         "forecast": forecast,
         "interval_method": (
-            "sarimax_model_based_95_percent"
-            if intervals is not None
-            else "unavailable"
+            "sarimax_model_based_95_percent_empirically_checked"
+            if intervals is not None else "unavailable"
         ),
         "caveats": [
-            "Forecasts are estimates, not SEC reported facts.",
-            "Two backtesting folds provide limited uncertainty evidence.",
-            "Model-based intervals are not empirically calibrated.",
-            "Historical normalization diagnostics remain documented.",
+            "Forecasts are statistical estimates, not SEC-reported facts.",
+            "The model is chosen on two point-in-time folds and evaluated on a later held-out fold.",
+            "Backtests use only SEC filings available at each fold's origin (no later restatements).",
+            "Prediction intervals are shown only when their out-of-sample coverage passed the gate.",
             "No missing financial quarters were interpolated.",
         ],
     }

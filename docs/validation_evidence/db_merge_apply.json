@@ -1,0 +1,207 @@
+{
+  "started_at_utc": "2026-11-24T06:12:11.542923+00:00",
+  "mode": "apply",
+  "backup": "insightiq_20261123T175825639801Z_cc1c3e9dae.sqlite3",
+  "current_database": "runtime database (path from data/server_startup_config.json)",
+  "tables": {
+    "companies": {
+      "rows_missing_in_current": 44,
+      "natural_key": [
+        "ticker"
+      ]
+    },
+    "market_companies": {
+      "rows_missing_in_current": 50,
+      "natural_key": [
+        "symbol"
+      ]
+    },
+    "market_quotes": {
+      "rows_missing_in_current": 95,
+      "natural_key": [
+        "symbol",
+        "provider",
+        "fetched_at"
+      ]
+    },
+    "market_statements": {
+      "rows_missing_in_current": 658,
+      "natural_key": [
+        "symbol",
+        "provider",
+        "period_type",
+        "period_end",
+        "metric",
+        "value_text"
+      ]
+    },
+    "news_articles": {
+      "rows_missing_in_current": 10,
+      "natural_key": [
+        "provider",
+        "provider_article_id",
+        "company_ticker"
+      ],
+      "articles": [
+        {
+          "company_ticker": "ETERNAL.NS",
+          "provider": "NEWSDATA",
+          "title": "Why SuperYou is betting on a 70:30 digital-to-ground mix, with Qcom leading sales"
+        },
+        {
+          "company_ticker": "ETERNAL.NS",
+          "provider": "NEWSDATA",
+          "title": "Blinkit Delivery Partner Earns Rs 39,000 In First Month In Chandigarh; Shares His Experience Of Working With The Quick-Commerce Giant, Here\u2019s How He Made It Happen"
+        },
+        {
+          "company_ticker": "ETERNAL.NS",
+          "provider": "NEWSDATA",
+          "title": "Eternal-SBI credit card opens applications to all: Fees, cashback and discount limits explained"
+        },
+        {
+          "company_ticker": "JPL.NS",
+          "provider": "NEWSDATA",
+          "title": "Jio Platforms, ITC and BSE among 15 stocks added by MFs in October 2026"
+        },
+        {
+          "company_ticker": "JPL.NS",
+          "provider": "NEWSDATA",
+          "title": "Top sectors that witnessed high levels of buying by mutual funds in October 2026"
+        },
+        {
+          "company_ticker": "ITC.NS",
+          "provider": "NEWSDATA",
+          "title": "Anirudh Ravichander, Kavya Maran Reception Buzz in Chennai"
+        },
+        {
+          "company_ticker": "ITC.NS",
+          "provider": "NEWSDATA",
+          "title": "ITC Share Price Movements: Tracking the Conglomerate Today"
+        },
+        {
+          "company_ticker": "ITC.NS",
+          "provider": "NEWSDATA",
+          "title": "CBIC draft GST proposal to shield buyers from ITC loss"
+        },
+        {
+          "company_ticker": "ITC.NS",
+          "provider": "NEWSDATA",
+          "title": "CBIC Proposes GST Law Changes To Protect Genuine Buyers From ITC Denial"
+        },
+        {
+          "company_ticker": "IREDA.NS",
+          "provider": "NEWSDATA",
+          "title": "IREDA High-Volume Breakout From an Descending Channel"
+        }
+      ]
+    },
+    "source_refreshes": {
+      "rows_missing_in_current": 117,
+      "natural_key": [
+        "company_ticker",
+        "source",
+        "started_at"
+      ]
+    },
+    "research_execution_runs": {
+      "rows_missing_in_current": 5,
+      "natural_key": [
+        "run_id"
+      ],
+      "runs": [
+        {
+          "run_id": "b140b69a-e4ef-46fd-a6af-fe1b28c7287f",
+          "ticker": "AAPL",
+          "status": "completed",
+          "created_at_utc": "2026-11-23T17:15:14.364051+00:00",
+          "updated_at_utc": "2026-11-23T17:15:48.639566+00:00",
+          "started_at_utc": "2026-11-23T17:15:14.458658+00:00",
+          "finished_at_utc": "2026-11-23T17:15:48.639566+00:00",
+          "report_path": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\reports\\research_runs\\b140b69a-e4ef-46fd-a6af-fe1b28c7287f.json",
+          "error_type": null,
+          "error_code": null
+        },
+        {
+          "run_id": "58f7fea5-781e-48fc-ab16-82eafb3b8b42",
+          "ticker": "ETERNAL.NS",
+          "status": "completed",
+          "created_at_utc": "2026-11-23T17:20:12.452685+00:00",
+          "updated_at_utc": "2026-11-23T17:21:04.697575+00:00",
+          "started_at_utc": "2026-11-23T17:20:12.502146+00:00",
+          "finished_at_utc": "2026-11-23T17:21:04.697575+00:00",
+          "report_path": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\reports\\research_runs\\58f7fea5-781e-48fc-ab16-82eafb3b8b42.json",
+          "error_type": null,
+          "error_code": null
+        },
+        {
+          "run_id": "a4aad44b-bcf0-495a-8f5c-685a6b5763c7",
+          "ticker": "GROWW.NS",
+          "status": "completed",
+          "created_at_utc": "2026-11-23T17:25:15.754683+00:00",
+          "updated_at_utc": "2026-11-23T17:25:31.103317+00:00",
+          "started_at_utc": "2026-11-23T17:25:15.789271+00:00",
+          "finished_at_utc": "2026-11-23T17:25:31.103317+00:00",
+          "report_path": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\reports\\research_runs\\a4aad44b-bcf0-495a-8f5c-685a6b5763c7.json",
+          "error_type": null,
+          "error_code": null
+        },
+        {
+          "run_id": "733c14c3-c26a-4b48-ab4c-5b15d3166c46",
+          "ticker": "ITC.NS",
+          "status": "completed",
+          "created_at_utc": "2026-11-23T17:55:23.619205+00:00",
+          "updated_at_utc": "2026-11-23T17:55:37.550515+00:00",
+          "started_at_utc": "2026-11-23T17:55:23.662980+00:00",
+          "finished_at_utc": "2026-11-23T17:55:37.550515+00:00",
+          "report_path": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\reports\\research_runs\\733c14c3-c26a-4b48-ab4c-5b15d3166c46.json",
+          "error_type": null,
+          "error_code": null
+        },
+        {
+          "run_id": "c95a6e54-b9a7-491a-92c5-0decafdfa6f5",
+          "ticker": "IREDA.NS",
+          "status": "completed",
+          "created_at_utc": "2026-11-23T17:57:51.103792+00:00",
+          "updated_at_utc": "2026-11-23T17:58:25.552324+00:00",
+          "started_at_utc": "2026-11-23T17:57:51.126750+00:00",
+          "finished_at_utc": "2026-11-23T17:58:25.552324+00:00",
+          "report_path": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\reports\\research_runs\\c95a6e54-b9a7-491a-92c5-0decafdfa6f5.json",
+          "error_type": null,
+          "error_code": null
+        }
+      ]
+    },
+    "research_observability_events": {
+      "rows_missing_in_current": 20,
+      "natural_key": [
+        "run_id",
+        "span_id",
+        "event_type",
+        "timestamp_utc"
+      ]
+    },
+    "provider_usage": {
+      "rows_missing_in_current": 3,
+      "natural_key": [
+        "provider",
+        "usage_day"
+      ]
+    }
+  },
+  "pre_merge_backup": "insightiq_20261124T061211934901Z_62e1073b46.sqlite3",
+  "inserted": {
+    "companies": 44,
+    "market_companies": 50,
+    "market_quotes": 95,
+    "market_statements": 658,
+    "news_articles": 10,
+    "source_refreshes": 117,
+    "research_execution_runs": 5,
+    "research_observability_events": 20,
+    "provider_usage": 3
+  },
+  "integrity_after_merge": "ok",
+  "snapshot": true,
+  "recovery_point_verified": true,
+  "finished_at_utc": "2026-11-24T06:12:13.181930+00:00"
+}
