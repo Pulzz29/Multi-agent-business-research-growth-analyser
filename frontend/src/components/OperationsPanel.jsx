@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Badge, Card, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "./ui.jsx";
+import { Badge, Card, EmptyState, ErrorState, Skeleton, StatusBadge } from "./ui.jsx";
 import { api } from "../lib/api.js";
 import { formatCount, formatDateTime, humanize } from "../lib/format.js";
-import { latencyRows, ms, tokenRows } from "../lib/operationsModel.js";
+import { latencyRows, ms, observabilitySummary, tokenRows } from "../lib/operationsModel.js";
 
 function TraceSpans({ token, traceId }) {
   const [state, setState] = useState({ loading: true, error: "", spans: [] });
@@ -80,16 +80,53 @@ export function OperationsPanel({ token }) {
   const latency = latencyRows(d.latency);
   const tokens = tokenRows(d.tokens);
   const runs = d.runs || {};
+  const obs = observabilitySummary(d);
   const backup = d.last_backup;
 
   return (
     <Fragment>
-      <div className="stats-row">
-        <Stat label={`Runs (${runs.window_days} days)`} value={formatCount(runs.runs)} />
-        <Stat label="Run success rate" value={runs.success_rate == null ? "—" : `${(runs.success_rate * 100).toFixed(1)}%`} />
-        <Stat label="Run p50 / p95" value={runs.duration_seconds?.p50 == null ? "—" : `${runs.duration_seconds.p50.toFixed(0)} s / ${runs.duration_seconds.p95.toFixed(0)} s`} />
-        <Stat label="Open alerts" value={formatCount(d.alerts.length)} tone={d.alerts.length ? "negative" : undefined} />
-      </div>
+      <section className="obs-strip card" aria-label="OpenTelemetry observability">
+        <div className="obs-item">
+          <span className="obs-label">Research runs ({runs.window_days} d)</span>
+          <strong>{obs.runs == null ? "—" : formatCount(obs.runs)}</strong>
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">Success rate</span>
+          <strong>{obs.successRate == null ? "—" : `${(obs.successRate * 100).toFixed(1)}%`}</strong>
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">Failed runs</span>
+          <strong className={obs.failed ? "tone-negative" : undefined}>{formatCount(obs.failed)}</strong>
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">Run P50 / P95</span>
+          <strong>{obs.p50 == null ? "—" : `${obs.p50.toFixed(0)} s / ${obs.p95.toFixed(0)} s`}</strong>
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">AI tokens ({d.tokens?.window_days} d)</span>
+          <strong title="Provider-reported tokens only">{obs.tokens == null ? "Not reported" : formatCount(obs.tokens)}</strong>
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">Guardrails</span>
+          {obs.guardrail ? (
+            <span className="obs-guard">
+              <StatusBadge
+                status={obs.guardrail.rejected ? "unavailable" : "completed"}
+                label={obs.guardrail.passRate == null ? "—" : `${(obs.guardrail.passRate * 100).toFixed(0)}% passed`}
+              />
+              <span className="small muted">
+                {formatCount(obs.guardrail.rejected)} rejected · {formatCount(obs.guardrail.blocked)} blocked
+              </span>
+            </span>
+          ) : (
+            <strong className="muted">No checks yet</strong>
+          )}
+        </div>
+        <div className="obs-item">
+          <span className="obs-label">Open alerts</span>
+          <strong className={d.alerts.length ? "tone-negative" : undefined}>{formatCount(d.alerts.length)}</strong>
+        </div>
+      </section>
 
       <div className="grid-2">
         <Card title="Alerts" subtitle="Evaluated on measured telemetry; stored until resolved">

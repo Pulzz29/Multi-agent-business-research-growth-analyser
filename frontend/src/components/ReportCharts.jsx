@@ -120,16 +120,26 @@ function ChartsBody({ data, finBasis, setFinBasis, marginBasis, setMarginBasis }
         Data as of {formatDateTime(data.data_as_of)} · {data.data_source} · values in {data.currency} as reported
       </p>
       <div className="report-charts">
-        <Panel title="Price history" sub="Daily closing price and volume">
-          <EmptyState title="Not enough data to chart">
-            <span className="small">{price.reason}</span>
-            {price.latest && (
-              <span className="small">
-                {" "}
-                Latest stored quote: <strong>{price.latest.text}</strong> ({price.latest.provider}, {formatDateTime(price.latest.fetchedAt)}).
+        <Panel title="Price history" sub={price.latest ? "Last recorded price (not live)" : "Daily closing price and volume"}>
+          {price.latest ? (
+            // Not enough stored history for a chart: the last recorded price, labelled as historical.
+            <div className="last-price" role="group" aria-label="Last recorded price">
+              <span className="last-price-label">Last recorded price</span>
+              <strong className="last-price-value">
+                {price.latest.text} <span className="small muted">{price.latest.currency}</span>
+              </strong>
+              <span className="small muted">
+                Recorded {formatDateTime(price.latest.fetchedAt)}
+                {price.latest.provider ? ` · source: ${price.latest.provider}` : ""}
               </span>
-            )}
-          </EmptyState>
+              <span className={`badge ${price.latest.stale ? "badge-warning" : "badge-neutral"}`}>
+                {price.latest.stale ? "Historical price - may be out of date" : "Stored quote - not a live price"}
+              </span>
+              <span className="small muted">{price.reason}</span>
+            </div>
+          ) : (
+            <p className="small muted">Price data unavailable: no valid recorded price is stored for this company.</p>
+          )}
         </Panel>
 
         <Panel

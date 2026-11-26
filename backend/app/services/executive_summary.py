@@ -522,6 +522,10 @@ def _write_sidecar(root, record):
 
     path = summaries_directory(root) / f"{record['run_id']}.json"
     document_store.write_text(path, json.dumps(record, indent=2, ensure_ascii=False, allow_nan=False))
+    if record.get("status") == "completed":
+        from app.services import report_blob
+
+        report_blob.schedule_research(record["ticker"], record["run_id"])  # new summary version -> new PDF
     return path
 
 

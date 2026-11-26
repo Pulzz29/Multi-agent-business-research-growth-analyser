@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Building2, Database, FileText, Search } from "lucide-react";
-import { BarChart } from "./charts.jsx";
-import { Card, CompanyMark, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "./ui.jsx";
+import { Search } from "lucide-react";
+import { Card, CompanyMark, EmptyState, ErrorState, Skeleton, StatusBadge } from "./ui.jsx";
 import { api } from "../lib/api.js";
-import { formatCount, formatDateTime, formatMoney, formatPerShare, relativeTime, shortId } from "../lib/format.js";
-import { MARKET_NAMES, forMarket, sectorBars } from "../lib/marketOverviewModel.js";
+import { formatDateTime, formatMoney, formatPerShare, relativeTime, shortId } from "../lib/format.js";
+import { MARKET_NAMES, forMarket } from "../lib/marketOverviewModel.js";
 
 /** Market-specific Overview section (US or IN): all values come from the backend. */
-// showSectors=false (Indian Overview) hides the sector breakdown chart and gives
-// the company search the full width; sector data and pages are unchanged.
-export function MarketOverview({ token, market, navigate, onAuthError, showRuns, showSectors = true }) {
+// Overview shows company search and the largest companies (genuine stored market
+// caps only); sector analysis stays on the Sector-wise Comparison pages.
+export function MarketOverview({ token, market, navigate, onAuthError, showRuns }) {
   const [state, setState] = useState({ loading: true, error: "", data: null });
   const [query, setQuery] = useState("");
   const [results, setResults] = useState({ market, items: [], loading: false });
@@ -57,35 +56,10 @@ export function MarketOverview({ token, market, navigate, onAuthError, showRuns,
   if (state.loading) return <Card title={MARKET_NAMES[market]}><Skeleton lines={5} /></Card>;
   if (state.error) return <ErrorState message={state.error} />;
   if (!data) return null;
-  const c = data.counts;
+  const top = data.top_companies;
 
   return (
     <section aria-label={`${MARKET_NAMES[market]} overview`}>
-      <div className="stats-row">
-        <Stat label="Companies in universe" value={formatCount(c.universe_companies)} icon={Building2} sub={`${formatCount(c.sectors)} sectors`} />
-        <Stat label="Companies with data" value={formatCount(c.with_statements)} icon={Database} sub={`${formatCount(c.stored_companies)} loaded · ${formatCount(c.with_quotes)} with quotes`} />
-        <Stat label="Research runs" value={formatCount(c.research_runs)} icon={FileText} sub={`${formatCount(c.completed_research_runs)} completed`} />
-        <Stat label="Currency" value={data.currency} sub={market === "IN" ? "Indian units: crore / lakh crore" : "Billions / trillions"} />
-      </div>
-
-      <div className={showSectors ? "grid-2" : undefined}>
-        {showSectors && (
-        <Card title="Sector breakdown" subtitle="Curated universe vs companies with data loaded">
-          {data.sectors.length ? (
-            <BarChart
-              data={sectorBars(data)}
-              yFormat={(v) => String(Math.round(v))}
-              ariaLabel={`${MARKET_NAMES[market]} companies per sector`}
-              legend={[
-                { id: "universe", label: "Universe", tone: "secondary" },
-                { id: "loaded", label: "Loaded", tone: "primary" },
-              ]}
-            />
-          ) : (
-            <EmptyState title="No sectors configured" />
-          )}
-        </Card>
-        )}
         <Card title="Find a company" subtitle={`Search the ${MARKET_NAMES[market]} (stored and curated companies)`}>
           <label className="search-field">
             <Search size={15} aria-hidden="true" />
@@ -93,8 +67,8 @@ export function MarketOverview({ token, market, navigate, onAuthError, showRuns,
           </label>
           {results.loading && <Skeleton lines={2} />}
           {results.market === market && results.items.length > 0 && (
-            <ul className={showSectors ? "activity-list" : "activity-list search-results-wide"}>
-              {results.items.slice(0, showSectors ? 8 : 12).map((r) => (
+            <ul className="activity-list search-results-wide">
+              {results.items.slice(0, 12).map((r) => (
                 <li key={r.symbol}>
                   <button type="button" className="activity-item" onClick={() => open(r.symbol)}>
                     <CompanyMark ticker={r.symbol} name={r.name} size="sm" />
@@ -111,28 +85,38 @@ export function MarketOverview({ token, market, navigate, onAuthError, showRuns,
             <p className="small muted">No {MARKET_NAMES[market]} companies match “{query.trim()}”.</p>
           )}
         </Card>
-      </div>
 
-      <Card title="Largest companies" subtitle={`By latest stored market capitalisation (${data.currency})`}>
-        {!data.top_companies.length ? (
-          <EmptyState title="No market data loaded yet">Open the {MARKET_NAMES[market]} page and load market data.</EmptyState>
+      <Card
+        title={`Top ${top.length || ""} largest companies`.replace("  ", " ")}
+        subtitle={`Ranked by latest stored market capitalisation (${data.currency})${
+          top.length && data.companies_with_market_cap !== undefined ? ` · ${top.length} of ${data.companies_with_market_cap} companies with a stored market cap` : ""
+        }`}
+      >
+        {!top.length ? (
+          <EmptyState title="No market capitalisation data stored yet">Open the {MARKET_NAMES[market]} page and load market data.</EmptyState>
         ) : (
-          <div className="top-company-grid">
-            {data.top_companies.map((t) => (
-              <button key={t.symbol} type="button" className="top-company-card" onClick={() => open(t.symbol)}>
-                <CompanyMark ticker={t.symbol} name={t.name} />
-                <span>
-                  <strong>{t.name}</strong>
-                  <span className="small muted" style={{ display: "block" }}>
-                    {t.symbol} · {t.sector_label || "sector n/a"}
+          <ol className="top-company-list">
+            {top.map((t, index) => (
+              <li key={t.symbol}>
+                <button type="button" className="top-company-row" onClick={() => open(t.symbol)}>
+                  <span className="top-rank" aria-label={`Rank ${index + 1}`}>{index + 1}</span>
+                  <CompanyMark ticker={t.symbol} name={t.name} size="sm" />
+                  <span className="top-company-main">
+                    <strong>{t.name}</strong>
+                    <span className="small muted">
+                      {t.symbol} · {t.sector_label || "sector n/a"}
+                    </span>
                   </span>
-                  <span className="small">
-                    {formatMoney(t.market_cap, t.currency)} · {formatPerShare(t.price, t.currency)} · {relativeTime(t.quote_fetched_at)}
+                  <span className="top-company-values">
+                    <strong>{formatMoney(t.market_cap, t.currency)}</strong>
+                    <span className="small muted">
+                      {formatPerShare(t.price, t.currency)} · {relativeTime(t.quote_fetched_at)}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+              </li>
             ))}
-          </div>
+          </ol>
         )}
       </Card>
 

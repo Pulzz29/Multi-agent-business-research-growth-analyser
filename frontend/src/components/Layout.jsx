@@ -1,9 +1,13 @@
 import { storeMarket } from "../lib/marketOverviewModel.js";
-import { Activity, ChevronRight, Globe2, Layers, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
-import { COMPANIES, companyByTicker } from "../lib/reportModel.js";
+import { Activity, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Globe2, Layers, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { companyByTicker } from "../lib/reportModel.js";
+import { MARKET_NAMES } from "../lib/marketOverviewModel.js";
 import { CompanyMark, ThemeToggle } from "./ui.jsx";
 
-export function Sidebar({ route, navigate, open, onClose, activeJob }) {
+// collapsed: icon-only rail on desktop (labels become tooltips); the mobile
+// drawer always shows labels.
+export function Sidebar({ route, navigate, open, onClose, activeJob, collapsed = false, onToggleCollapse, topCompanies }) {
+  const tip = (label) => ({ title: collapsed ? label : undefined, "aria-label": label });
   const go = (next) => {
     navigate(next);
     onClose();
@@ -11,15 +15,27 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
   return (
     <>
       <div className={`scrim ${open ? "is-open" : ""}`} onClick={onClose} aria-hidden="true" />
-      <aside className={`sidebar ${open ? "is-open" : ""}`} aria-label="Main navigation">
+      <aside className={`sidebar ${open ? "is-open" : ""} ${collapsed ? "is-collapsed" : ""}`} aria-label="Main navigation">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             IQ
           </span>
-          <div>
+          <div className="brand-text">
             <p className="brand-name">InsightIQ</p>
             <p className="brand-tag">Business intelligence</p>
           </div>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className="icon-btn icon-btn-sm sidebar-collapse"
+              onClick={onToggleCollapse}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+            </button>
+          )}
           <button type="button" className="icon-btn sidebar-close" onClick={onClose} aria-label="Close menu">
             <X size={18} />
           </button>
@@ -32,16 +48,27 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
             className={`nav-item ${route.page === "overview" ? "is-active" : ""}`}
             aria-current={route.page === "overview" ? "page" : undefined}
             onClick={() => go({ page: "overview" })}
+            {...tip("Overview")}
           >
-            <LayoutDashboard size={17} aria-hidden="true" /> Overview
+            <LayoutDashboard size={17} aria-hidden="true" /> <span className="nav-text">Overview</span>
           </button>
           <button
             type="button"
             className={`nav-item ${route.page === "activity" ? "is-active" : ""}`}
             aria-current={route.page === "activity" ? "page" : undefined}
             onClick={() => go({ page: "activity" })}
+            {...tip("Activity")}
           >
-            <Activity size={17} aria-hidden="true" /> Activity
+            <Activity size={17} aria-hidden="true" /> <span className="nav-text">Activity</span>
+          </button>
+          <button
+            type="button"
+            className={`nav-item ${route.page === "reports" ? "is-active" : ""}`}
+            aria-current={route.page === "reports" ? "page" : undefined}
+            onClick={() => go({ page: "reports" })}
+            {...tip("Saved Reports")}
+          >
+            <FileText size={17} aria-hidden="true" /> <span className="nav-text">Saved Reports</span>
           </button>
 
           <p className="nav-label">Markets</p>
@@ -60,8 +87,9 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
                   storeMarket(market);
                   go({ page: "market", market });
                 }}
+                {...tip(label)}
               >
-                <Globe2 size={17} aria-hidden="true" /> {label}
+                <Globe2 size={17} aria-hidden="true" /> <span className="nav-text">{label}</span>
               </button>
             );
           })}
@@ -70,13 +98,24 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
             className={`nav-item ${route.page === "sectors" ? "is-active" : ""}`}
             aria-current={route.page === "sectors" ? "page" : undefined}
             onClick={() => go({ page: "sectors", market: route.market || "US" })}
+            {...tip("Sector-wise Comparison")}
           >
-            <Layers size={17} aria-hidden="true" /> Sector-wise Comparison
+            <Layers size={17} aria-hidden="true" /> <span className="nav-text">Sector-wise Comparison</span>
           </button>
 
-          <p className="nav-label">Companies</p>
-          {COMPANIES.map((company) => {
-            const isActive = route.page === "company" && route.ticker === company.ticker;
+          <p className="nav-label">Top companies · {MARKET_NAMES[topCompanies?.market] || ""}</p>
+          {topCompanies?.loading && <p className="nav-hint small muted">Loading…</p>}
+          {!topCompanies?.loading && !(topCompanies?.items || []).length && (
+            <p className="nav-hint small muted">No ranked companies yet.</p>
+          )}
+          {(topCompanies?.items || []).map((company) => {
+            const sec = Boolean(companyByTicker(company.ticker));
+            const isActive =
+              (route.page === "company" && route.ticker === company.ticker) ||
+              (route.page === "market-company" && route.symbol === company.ticker);
+            const target = sec
+              ? { page: "company", ticker: company.ticker, tab: "overview" }
+              : { page: "market-company", market: topCompanies.market, symbol: company.ticker };
             const running = activeJob?.ticker === company.ticker && ["queued", "running"].includes(activeJob?.status);
             return (
               <button
@@ -84,7 +123,8 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
                 type="button"
                 className={`nav-item nav-company ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "page" : undefined}
-                onClick={() => go({ page: "company", ticker: company.ticker, tab: "overview" })}
+                onClick={() => go(target)}
+                {...tip(`${company.name} (${company.ticker}) · ${company.capText}`)}
               >
                 <CompanyMark ticker={company.ticker} name={company.name} size="sm" />
                 <span className="nav-company-name">{company.name}</span>
@@ -118,6 +158,7 @@ const TAB_LABELS = {
 export function Topbar({ route, navigate, theme, onToggleTheme, onMenu, onDisconnect, userEmail }) {
   const crumbs = [{ label: "InsightIQ", route: { page: "overview" } }];
   if (route.page === "activity") crumbs.push({ label: "Activity" });
+  if (route.page === "reports") crumbs.push({ label: "Saved Reports" });
   if (route.page === "overview") crumbs.push({ label: "Overview" });
   const MARKET_NAMES = { US: "United States", IN: "India" };
   if (route.page === "market") crumbs.push({ label: `${MARKET_NAMES[route.market]} market` });

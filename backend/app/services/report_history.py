@@ -360,6 +360,46 @@ def news_evidence_resolution(doc):
         return {eid: {"status": "unknown", "database_id": None} for eid in articles}
 
 
+def _company_names(tickers):
+    """Display name and market for tickers (market registry, then SEC companies)."""
+    if not tickers:
+        return {}
+    marks = ",".join("?" for _ in tickers)
+    with connect() as conn:
+        market_rows = {r["symbol"]: dict(r) for r in conn.execute(
+            f"SELECT symbol, name, market FROM market_companies WHERE symbol IN ({marks})", tickers).fetchall()}
+        names = {r["ticker"]: r["name"] for r in conn.execute(
+            f"SELECT ticker, name FROM companies WHERE ticker IN ({marks})", tickers).fetchall()}
+    out = {}
+    for ticker in tickers:
+        stored = market_rows.get(ticker) or {}
+        out[ticker] = {"name": stored.get("name") or names.get(ticker) or ticker,
+                       "market": stored.get("market") or ("IN" if ticker.endswith((".NS", ".BO")) else "US")}
+    return out
+
+
+def saved_report_catalog():
+    """Every saved research report (US and India), newest first. Each historical
+    report is listed separately; the generation time is the report's own
+    persisted timestamp (None when the report never recorded one)."""
+    history = list_runs(limit=1_000_000)
+    rows = [r for r in history["runs"] if r["report_available"] and r["ticker"]]
+    names = _company_names(sorted({r["ticker"] for r in rows}))
+    out = []
+    for r in rows:
+        info = names[r["ticker"]]
+        out.append({
+            "run_id": r["run_id"], "ticker": r["ticker"], "name": info["name"], "market": info["market"],
+            "title": f"{info['name']} ({r['ticker']}) - multi-agent research report",
+            "generated_at_utc": r["report_generated_at_utc"],
+            "created_at_utc": r["created_at_utc"],
+            "summary_status": r["summary_status"],
+            "sec_validated": r["ticker"] in SUPPORTED_TICKERS,
+        })
+    out.sort(key=lambda r: r["generated_at_utc"] or r["created_at_utc"] or "", reverse=True)
+    return out
+
+
 def companies_with_reports():
     """Distinct companies (US and India) with at least one completed run whose
     report is saved, from the same merged history as list_runs. Each entry:

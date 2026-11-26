@@ -22,6 +22,7 @@ export function parseHash(hash) {
     .map(decodeURIComponent);
 
   if (parts[0] === "activity") return { page: "activity" };
+  if (parts[0] === "reports") return { page: "reports" };
   if (parts[0] === "overview") {
     const m = String(new URLSearchParams(query).get("market") || "").toUpperCase();
     return MARKETS.includes(m) ? { page: "overview", market: m } : { page: "overview" };
@@ -58,6 +59,7 @@ export function parseHash(hash) {
 
 export function buildHash(route) {
   if (route.page === "activity") return "#/activity";
+  if (route.page === "reports") return "#/reports";
   if (route.page === "market") return `#/markets/${route.market || "US"}`;
   if (route.page === "market-company" && route.symbol) {
     const base = `#/markets/${route.market || "US"}/companies/${encodeURIComponent(route.symbol)}`;

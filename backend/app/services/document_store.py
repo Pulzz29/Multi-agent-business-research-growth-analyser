@@ -27,6 +27,7 @@ MANAGED_PREFIXES = (
     "reports/sector_comparisons/",
     "data/research_job_journal/",
     "data/forecast_cache_v",
+    "data/chat_answer_cache/",
 )
 
 

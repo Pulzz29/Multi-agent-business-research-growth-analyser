@@ -78,6 +78,18 @@ export function formatDate(value) {
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+
+/** A persisted report timestamp exactly as InsightIQ PDFs print it ("26 Nov 2026 10:00 UTC").
+ *  Missing or invalid metadata is shown as "Not recorded", never replaced by another time. */
+export function formatReportTime(value) {
+  const text = String(value || "");
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(text)) return "Not recorded";
+  const d = new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`);
+  if (Number.isNaN(d.getTime())) return "Not recorded";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+}
+
 export function formatDateTime(value) {
   const parsed = parseIsoDate(value);
   if (!parsed) return UNAVAILABLE;

@@ -513,6 +513,9 @@ def _write_snapshot(snapshot, root=None):
         path, json.dumps(snapshot, indent=2, ensure_ascii=False, allow_nan=False), root=root)
     if not created:
         raise ComparisonError("Refusing to overwrite a saved comparison.")
+    from app.services import report_blob
+
+    report_blob.schedule_sector(snapshot["comparison_id"])
     return path
 
 

@@ -1,5 +1,13 @@
-# InsightIQ API image (PostgreSQL backend). Build from the project root:
-#   docker build -t insightiq-api:local .
+# InsightIQ image (PostgreSQL backend): FastAPI plus the production React build,
+# served same-origin by the API. Build from the project root:
+#   docker build -t insightiq:local .      (or: az acr build -t insightiq:<tag> .)
+FROM node:20-alpine AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.13-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,7 +17,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     INSIGHTIQ_API_HOST=0.0.0.0 \
     INSIGHTIQ_API_PORT=8000 \
     DB_BACKEND=postgres \
-    PG_BIN_DIR=/usr/bin
+    PG_BIN_DIR=/usr/bin \
+    INSIGHTIQ_STATIC_DIR=/app/web \
+    BACKUP_DIR=/tmp/insightiq/pg_backups
 
 # PostgreSQL client tools are used by the backup CronJob (pg_dump/pg_restore).
 RUN apt-get update \
@@ -24,6 +34,7 @@ COPY backend/ backend/
 COPY scripts/ scripts/
 # Reconciliation evidence read at runtime by the forecast cache (no secrets).
 COPY reports/financial_evidence_reconciliation_final.json reports/forecast_uncertainty_quality_review.json reports/
+COPY --from=web /web/dist /app/web
 
 RUN useradd --system --uid 10001 --home /app insightiq \
     && mkdir -p /app/data /app/logs /tmp/insightiq \

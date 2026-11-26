@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
-import { Card, CompanyMark, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "../components/ui.jsx";
+import { Card, CompanyMark, EmptyState, ErrorState, Skeleton, StatusBadge } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
-import { duration, formatCount, formatDateTime, formatSeconds, humanize, shortId } from "../lib/format.js";
+import { duration, formatCount, formatDateTime, formatReportTime, formatSeconds, humanize, shortId } from "../lib/format.js";
 import { companyByTicker } from "../lib/reportModel.js";
 import { runReportRoute } from "../lib/auth.js";
 import { OperationsPanel } from "../components/OperationsPanel.jsx";
@@ -113,7 +113,6 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
   const isSecTicker = (ticker) => Boolean(companyByTicker(ticker)) || secValidated.has(ticker);
   const all = runs?.runs || [];
   const list = filter === "ALL" ? all : all.filter((r) => r.ticker === filter);
-  const failed = all.filter((r) => r.status === "failed").length;
   const perf = dashboard?.performance?.components;
   const policies = dashboard?.reliability?.policies || [];
 
@@ -129,12 +128,6 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
 
       {error && <ErrorState message={error} onRetry={onRetry} />}
 
-      <div className="stats-row">
-        <Stat label="Research runs" value={runs ? formatCount(runs.run_count) : "…"} />
-        <Stat label="Completed reports" value={runs ? formatCount(runs.completed_report_count) : "…"} />
-        <Stat label="Failed runs" value={runs ? formatCount(failed) : "…"} tone={failed ? "negative" : undefined} />
-        <Stat label="Traced spans sampled" value={dashboard ? formatCount(dashboard.performance?.sampled_span_count) : "…"} />
-      </div>
 
       <Card
         title="Research runs"
@@ -274,7 +267,7 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
                               </div>
                               <div className="kv-row">
                                 <dt>Report</dt>
-                                <dd>{run.report_available ? `Saved (${formatDateTime(run.report_generated_at_utc)})` : "No report saved"}</dd>
+                                <dd>{run.report_available ? `Saved (generated ${formatReportTime(run.report_generated_at_utc)})` : "No report saved"}</dd>
                               </div>
                             </dl>
                             <TraceDetails token={token} run={run} />

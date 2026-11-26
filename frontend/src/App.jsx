@@ -5,7 +5,11 @@ import { companyByTicker, setSecCompanies } from "./lib/reportModel.js";
 import { setLogoFetcher } from "./lib/logos.js";
 import { useHashRoute } from "./lib/router.js";
 import { ActivityPage } from "./pages/ActivityPage.jsx";
+import { SavedReportsPage } from "./pages/SavedReportsPage.jsx";
+import { readStoredMarket, resolveMarket } from "./lib/marketOverviewModel.js";
+import { formatMoney } from "./lib/format.js";
 import { LoginPage } from "./pages/LoginPage.jsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { CompanyPage } from "./pages/CompanyPage.jsx";
 import { MarketCompanyPage } from "./pages/MarketCompanyPage.jsx";
 import { MarketPage } from "./pages/MarketPage.jsx";
@@ -17,6 +21,7 @@ const PENDING = ["queued", "running"];
 // Indian (NSE/BSE) symbols carry an exchange suffix; everything else is US.
 const marketOf = (symbol) => (/\.(NS|BO)$/i.test(String(symbol || "")) ? "IN" : "US");
 const THEME_KEY = "insightiq-theme";
+const SIDEBAR_KEY = "insightiq-sidebar";
 
 function readStorage(storage, key) {
   try {
@@ -49,6 +54,13 @@ export default function App() {
   const token = user ? "session" : "";
   const [route, navigate] = useHashRoute();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readStorage("localStorage", SIDEBAR_KEY) === "collapsed");
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((value) => {
+      writeStorage("localStorage", SIDEBAR_KEY, value ? "" : "collapsed");
+      return !value;
+    });
+  }, []);
 
   const [summary, setSummary] = useState(null);
   const [dashboard, setDashboard] = useState(null);
@@ -111,6 +123,35 @@ export default function App() {
     }
     disconnect("You have signed out.");
   }, [disconnect]);
+
+  // Sidebar: top 10 companies of the market selected on Overview (genuine stored
+  // market caps, ranked by the backend). Results are keyed by market, so a
+  // response for the previous market is never shown after switching.
+  const sidebarMarket = route.page === "overview" ? resolveMarket(route.market, readStoredMarket()) : readStoredMarket() || "US";
+  const [topCompanies, setTopCompanies] = useState({ market: sidebarMarket, items: [], loading: true });
+  useEffect(() => {
+    if (!token) return undefined;
+    const controller = new AbortController();
+    setTopCompanies({ market: sidebarMarket, items: [], loading: true });
+    api
+      .marketOverview(token, sidebarMarket, controller.signal)
+      .then((data) => {
+        if (data?.market && data.market !== sidebarMarket) return;
+        setTopCompanies({
+          market: sidebarMarket,
+          loading: false,
+          items: (data?.top_companies || []).slice(0, 10).map((c) => ({
+            ticker: c.symbol,
+            name: c.name,
+            capText: formatMoney(c.market_cap, c.currency),
+          })),
+        });
+      })
+      .catch((err) => {
+        if (err?.name !== "AbortError") setTopCompanies({ market: sidebarMarket, items: [], loading: false });
+      });
+    return () => controller.abort();
+  }, [token, sidebarMarket]);
 
   // Company logos: one batched metadata request for the symbols on screen.
   useEffect(() => {
@@ -226,11 +267,11 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <Sidebar route={route} navigate={navigate} open={menuOpen} onClose={() => setMenuOpen(false)} activeJob={activeJob} />
+      <Sidebar route={route} navigate={navigate} open={menuOpen} onClose={() => setMenuOpen(false)} activeJob={activeJob} collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} topCompanies={topCompanies} />
       <div className="workspace">
         <Topbar
           route={route}
@@ -242,12 +283,14 @@ export default function App() {
           userEmail={user?.email}
         />
         <main id="main" className="content" tabIndex={-1}>
+          <ErrorBoundary resetKey={JSON.stringify(route)}>
           {route.page === "overview" && (
             <OverviewPage token={token} market={route.market} summary={summary} dashboard={dashboard} runs={runs} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} onAuthError={onAuthError} />
           )}
           {route.page === "activity" && (
             <ActivityPage token={token} runs={runs} dashboard={dashboard} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} />
           )}
+          {route.page === "reports" && <SavedReportsPage token={token} navigate={navigate} onAuthError={onAuthError} />}
           {route.page === "market" && <MarketPage key={route.market} token={token} market={route.market} navigate={navigate} onAuthError={onAuthError} />}
           {(route.page === "market-company" || (route.page === "company" && !companyByTicker(route.ticker))) && (
             // Provider-sourced companies (any company outside the six SEC dashboards).
@@ -292,6 +335,7 @@ export default function App() {
               onAuthError={onAuthError}
             />
           )}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -19,15 +19,31 @@ const STATUS_MESSAGES = {
   409: "The report is not ready yet.",
   422: "Please check the selected information.",
   429: "The service is busy. Try again shortly.",
+  500: "Something went wrong on our side. Please try again in a moment.",
   502: "The AI provider could not complete the request.",
   503: "The service is temporarily unavailable.",
 };
 
 // Authentication is the HttpOnly session cookie set by /auth/login; the
 // `token` argument kept in every call is unused (pages pass a signed-in flag).
+export const REQUEST_TIMEOUT_MS = 120000;
+
+/** An AbortSignal that also fires after the timeout (requests never hang). */
+export function timeoutSignal(signal, ms = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("timeout", "TimeoutError")), ms);
+  const forward = () => controller.abort(signal.reason);
+  if (signal) {
+    if (signal.aborted) forward();
+    else signal.addEventListener("abort", forward, { once: true });
+  }
+  return { signal: controller.signal, done: () => clearTimeout(timer), timedOut: () => controller.signal.reason?.name === "TimeoutError" };
+}
+
 async function request(path, token, options = {}) {
   let response;
   const method = options.method || "GET";
+  const guard = timeoutSignal(options.signal, options.timeoutMs);
 
   try {
     response = await fetch(`${BASE}${path}`, {
@@ -39,13 +55,16 @@ async function request(path, token, options = {}) {
         ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
+      signal: guard.signal,
       cache: "no-store",
     });
   } catch (error) {
+    guard.done();
+    if (guard.timedOut()) throw new ApiError("The request took too long. Please try again.", 0, "timeout");
     if (error?.name === "AbortError") throw error;
     throw new ApiError("Could not connect to the server. Check that InsightIQ is running.", 0);
   }
+  guard.done();
 
   if (!response.ok) {
     // Backend details are user-safe by design (no provider errors or paths);
@@ -108,6 +127,16 @@ export const api = {
     request("/auth/login", null, { method: "POST", body: { email, password }, preferDetail: true }),
   me: (signal) => request("/auth/me", null, { signal }),
   logout: () => request("/auth/logout", null, { method: "POST" }),
+  // Research assistant (session user; conversations are private to the user).
+  chatConversations: (token, signal, runId) =>
+    request(`/chat/conversations${runId ? `?run_id=${enc(runId)}` : ""}`, token, { signal }),
+  // scope: { ticker, run_id } binds the chat to one report's executive summary.
+  newChat: (token, scope) => request("/chat/conversations", token, { method: "POST", body: scope ? { scope } : {} }),
+  chatMessages: (token, id, signal) => request(`/chat/conversations/${enc(id)}/messages`, token, { signal }),
+  sendChat: (token, id, body) =>
+    request(`/chat/conversations/${enc(id)}/messages`, token, { method: "POST", body, preferDetail: true }),
+  // Every saved research report (stored data only).
+  savedReports: (token, signal) => request("/saved-reports", token, { signal }),
   // Companies with at least one completed run that has a saved report (US and India).
   researchCompanies: (token, signal) => request("/research/companies", token, { signal }),
   // Portfolio / system (read-only)

@@ -87,7 +87,7 @@ def install_redaction():
 EXPENSIVE = re.compile(
     r"^/api/v1/(jobs|research|companies/[^/]+/(refresh|summary|brief|reports/[^/]+/(summary|brief))"
     r"|markets/[^/]+/(companies/search|companies/[^/]+/(data|refresh)|quotes/refresh|sectors/.+)"
-    r"|news/refresh)"
+    r"|news/refresh|chat/conversations/[^/]+/messages)"
 )
 
 

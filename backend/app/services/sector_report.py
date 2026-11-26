@@ -23,10 +23,9 @@ def fmt_metric(value, unit, currency):
 
 
 def _date(text):
-    try:
-        return datetime.fromisoformat(str(text).replace("Z", "+00:00")).strftime("%d %b %Y %H:%M UTC")
-    except (TypeError, ValueError):
-        return str(text or "n/a")
+    from app.services.pdf_common import format_timestamp
+
+    return format_timestamp(text)
 
 
 def report_model(snapshot):
@@ -216,7 +215,7 @@ def render_pdf(snapshot):
 
     from app.services.pdf_common import page_decorator
 
-    footer = page_decorator(f"InsightIQ · {m['title']}")
+    footer = page_decorator(f"InsightIQ · {m['title']} · generated {m['generated']}")
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()
 

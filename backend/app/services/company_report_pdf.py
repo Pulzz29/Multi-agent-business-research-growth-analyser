@@ -32,15 +32,15 @@ DISCLAIMER = (
 
 
 def _when(text):
-    try:
-        return datetime.fromisoformat(str(text).replace("Z", "+00:00")).strftime("%d %b %Y %H:%M UTC")
-    except (TypeError, ValueError):
-        return str(text or "n/a")
+    """A persisted timestamp as '26 Nov 2026 10:00 UTC'; never the current time."""
+    from app.services.pdf_common import format_timestamp
+
+    return format_timestamp(text)
 
 
 def safe_filename(company, generated_at):
     name = re.sub(r"[^A-Za-z0-9]+", "_", str(company or "Company")).strip("_")[:60] or "Company"
-    day = str(generated_at or "")[:10] or datetime.utcnow().date().isoformat()
+    day = str(generated_at or "")[:10] or "undated"  # no invented date for reports without a timestamp
     return f"{name}_Research_Report_{day}.pdf"
 
 
@@ -337,6 +337,7 @@ def render_pdf(report, insights, brief, company_name):
     story.append(p(DISCLAIMER, small))
 
     footer = pdf_common.page_decorator(f"InsightIQ · {company_name} ({ticker}) research report · "
+                                       f"generated {_when(report.get('generated_at_utc'))} · "
                                        f"data as of {_when(insights.get('data_as_of'))}")
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()

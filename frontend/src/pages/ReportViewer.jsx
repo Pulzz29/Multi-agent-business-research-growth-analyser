@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChatWidget } from "../components/ChatWidget.jsx";
 import { BarChart3, BrainCircuit, Database, Download, FileText, Landmark, Newspaper, Sparkles, Target, TrendingUp } from "lucide-react";
 import { Badge, Card, ClampText, EmptyState, EvidencePanel, ExternalLink, Notice, Skeleton, StatusBadge } from "../components/ui.jsx";
 import { ReportCharts } from "../components/ReportCharts.jsx";
 import { panelState, shouldAutoStart } from "../lib/briefModel.js";
 import { api } from "../lib/api.js";
-import {
-  exactUsd,
-  formatBillions,
-  formatDate,
-  formatDateTime,
-  formatPct,
-  formatSeconds,
-  formatUsdLong,
-  humanize,
-  periodRange,
-  shortId,
-} from "../lib/format.js";
+import { exactUsd, formatBillions, formatDate, formatDateTime, formatPct, formatSeconds, formatUsdLong, humanize, periodRange, shortId, formatReportTime } from "../lib/format.js";
 import {
   CATEGORY_LABELS,
   EVIDENCE_STATE_LABELS,
@@ -499,7 +489,7 @@ function ExecutiveSummary({ token, model, summary, onSummary, isLatest }) {
       title="Executive summary"
       subtitle={
         completed
-          ? `Generated on ${formatDateTime(record.generated_at_utc)}${record.data_as_of ? ` · based on data as of ${formatDateTime(record.data_as_of)}` : ""} · ${record.word_count} words`
+          ? `Generated on ${formatReportTime(record.generated_at_utc)}${record.data_as_of ? ` · based on data as of ${formatDateTime(record.data_as_of)}` : ""} · ${record.word_count} words`
           : "A synthesis of the saved report"
       }
       action={completed ? <div className="badge-row"><Badge tone="info">Evidence-checked</Badge>{button}</div> : null}
@@ -563,8 +553,10 @@ function ExecutiveSummary({ token, model, summary, onSummary, isLatest }) {
                 </div>
               ))}
               {research.withheld?.length > 0 && (
-                <Notice tone="warning" title="Sections withheld by validation">
-                  {research.withheld.map((w) => `${w.title || humanize(w.section)}: ${w.reason}`).join(" · ")}
+                // Validation still runs and is recorded; only the technical details are not shown.
+                <Notice tone="info" title="Evidence limitation">
+                  Some parts of this analysis are not shown because the stored evidence was not sufficient to support
+                  them. Everything shown above passed InsightIQ's evidence checks.
                 </Notice>
               )}
             </div>
@@ -579,6 +571,11 @@ function ExecutiveSummary({ token, model, summary, onSummary, isLatest }) {
           )}
           <h3 className="research-heading">Sources</h3>
           <SourcesList sources={record.sources || job?.sources} />
+          <ChatWidget
+            token={token}
+            inline
+            scope={{ ticker: model.ticker, run_id: model.runId, version: record.generated_at_utc }}
+          />
           <p className="small muted">
             AI-generated from this report and InsightIQ's computed figures. Not investment advice. {record.disclosure}
           </p>
@@ -1218,7 +1215,7 @@ export function ReportViewer({ token, doc, company, isLatest, inDatabase, onSumm
         <div className="report-head-main">
           <p className="eyebrow">Research report</p>
           <h2 className="report-title">
-            {model.ticker} research report · {formatDateTime(model.generatedAt)}
+            {model.ticker} research report · generated {formatReportTime(model.generatedAt)}
           </h2>
           <div className="badge-row">
             <StatusBadge status="completed" label="Completed" />

@@ -16,7 +16,7 @@ def _market_of_ticker(ticker, stored_markets):
     return "IN" if str(ticker).upper().endswith((".NS", ".BO")) else "US"
 
 
-def overview(market, top_limit=8, runs_limit=8):
+def overview(market, top_limit=10, runs_limit=8):
     market = registry.require_market(market)
     cfg = registry.market_config(market)
     stored = {c["symbol"]: c for c in storage.list_companies(market)}
@@ -62,6 +62,7 @@ def overview(market, top_limit=8, runs_limit=8):
         },
         "sectors": sectors,
         "top_companies": top["companies"],
+        "companies_with_market_cap": top["companies_with_market_cap"],
         "top_basis": top["basis"],
         "recent_runs": recent,
     }

@@ -164,8 +164,15 @@ export function priceView(insights) {
   return {
     available: Boolean(price.available),
     reason: price.reason || "Price history is not stored.",
-    latest: quote && finite(Number(quote.price)) !== null
-      ? { text: `${SYMBOLS[quote.currency] ?? ""}${Number(quote.price).toLocaleString("en-US", { maximumFractionDigits: 2 })}`, provider: quote.provider, fetchedAt: quote.fetched_at }
+    latest: quote && finite(Number(quote.price)) !== null && Number(quote.price) > 0
+      ? {
+          text: `${SYMBOLS[quote.currency] ?? ""}${Number(quote.price).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+          currency: quote.currency || "",
+          provider: quote.provider,
+          fetchedAt: quote.fetched_at,
+          // Older than 3 days (or undated): labelled historical, never shown as live.
+          stale: !quote.fetched_at || Date.now() - Date.parse(quote.fetched_at) > 3 * 86400000 || Number.isNaN(Date.parse(quote.fetched_at)),
+        }
       : null,
   };
 }

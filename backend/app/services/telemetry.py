@@ -21,6 +21,7 @@ import functools
 import hashlib
 import json
 import logging
+import os
 import queue
 import re
 import statistics
@@ -94,11 +95,29 @@ def span(kind, name, trace_id=None, run_id=None, **attributes):
     except BaseException as exc:
         status = "error"
         extra["error_type"] = type(exc).__name__
+        if kind != "validation" and isinstance(exc, Exception):
+            _record_error(kind, name, exc, ctx, (time.perf_counter() - started) * 1000.0, extra)
         raise
     finally:
         _CURRENT.reset(token)
         record(kind, name, ctx, parent.span_id if parent else None, status, started_wall,
                (time.perf_counter() - started) * 1000.0, extra)
+
+
+_SEVERITY = {"workflow": "critical", "provider": "warning", "auth": "warning"}
+
+
+def _record_error(kind, name, exc, ctx, duration_ms, extra):
+    """Persist a sanitised error record for a failed span (never raises)."""
+    try:
+        from app.services import errors
+
+        errors.record(f"{kind}:{name}", exc, severity=_SEVERITY.get(kind, "error"),
+                      component=extra.get("agent") or extra.get("provider") or name, run_id=ctx.run_id,
+                      trace_id=ctx.trace_id, ticker=extra.get("ticker"), duration_ms=duration_ms,
+                      retries=extra.get("requests"))
+    except Exception:
+        pass
 
 
 def record(kind, name, ctx, parent_span_id, status, started_at, duration_ms, attributes):
@@ -114,6 +133,50 @@ def record(kind, name, ctx, parent_span_id, status, started_at, duration_ms, att
     except queue.Full:
         return  # telemetry must never slow or fail the application
     _ensure_writer()
+    if _EXPORT_TRACER is not None:
+        _export_span(row)
+
+
+# Optional export to Azure Monitor / Application Insights: enabled only when
+# APPLICATIONINSIGHTS_CONNECTION_STRING is set and the azure-monitor exporter
+# package is installed. PostgreSQL remains the system of record.
+_EXPORT_TRACER = None
+
+
+def configure_exporters():
+    global _EXPORT_TRACER
+    connection = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+    if not connection or _EXPORT_TRACER is not None:
+        return False
+    try:
+        from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    except ImportError:
+        logger.warning("azure_monitor_exporter_unavailable (package not installed)")
+        return False
+    try:
+        provider = TracerProvider(resource=Resource.create({"service.name": "insightiq-api"}))
+        provider.add_span_processor(BatchSpanProcessor(AzureMonitorTraceExporter(connection_string=connection)))
+        _EXPORT_TRACER = provider.get_tracer("insightiq.telemetry")
+        return True
+    except Exception as exc:
+        logger.warning("azure_monitor_exporter_failed %s", type(exc).__name__)
+        return False
+
+
+def _export_span(row):
+    try:
+        trace_id, span_id, parent, run_id, kind, name, status, started_at, duration_ms, tin, tout, attrs = row
+        start = int(started_at.timestamp() * 1e9)
+        span = _EXPORT_TRACER.start_span(name, start_time=start, attributes={
+            "insightiq.trace_id": trace_id, "insightiq.span_id": span_id, "insightiq.parent_span_id": parent or "",
+            "insightiq.run_id": run_id or "", "insightiq.kind": kind, "insightiq.status": status,
+            "insightiq.input_tokens": tin or 0, "insightiq.output_tokens": tout or 0})
+        span.end(end_time=start + int(duration_ms * 1e6))
+    except Exception:
+        pass
 
 
 def db_statement(sql, duration_ms, ok):
@@ -225,6 +288,47 @@ def _model_call_result(result, extra, exc):
     })
 
 
+def _governance_call(original, kwargs):
+    """Run a structured model call and record its governance outcome."""
+    captured = {}
+    build = kwargs.get("build_messages")
+    if build is not None:
+        def capturing_build(profile, _b=build):
+            messages = _b(profile)
+            try:
+                system = next((m["content"] for m in messages if m.get("role") == "system"), None)
+                captured["prompt"] = system
+                captured["messages"] = messages
+            except Exception:
+                pass
+            return messages
+        kwargs["build_messages"] = capturing_build
+    from app.services import governance
+
+    outcome, diagnostics = "failed", {}
+    try:
+        result = original(**kwargs)
+        outcome, diagnostics = "success", result[2] or {}
+        return result
+    except Exception as exc:
+        diagnostics = getattr(exc, "diagnostics", None) or {}
+        reason = getattr(exc, "reason", None)
+        outcome = "rejected" if reason == "validation_rejected" else "failed"
+        raise
+    finally:
+        try:
+            attempts = diagnostics.get("attempts") or []
+            rejections = sum(1 for a in attempts if a.get("outcome") == "validation_rejected")
+            reasons = [a.get("validation_reason") for a in attempts if a.get("validation_reason")]
+            governance.record(
+                kwargs.get("agent") or "model", outcome, call_name=kwargs.get("call_name"),
+                provider=diagnostics.get("provider"), model=diagnostics.get("model"),
+                prompt_sha256=governance.sha(captured.get("prompt")), validation_rejections=rejections,
+                violations=reasons, evidence=governance.evidence_from_messages(captured.get("messages") or []))
+        except Exception:
+            pass
+
+
 def _traced_structured_completion(original):
     def call(*args, **kwargs):
         validate = kwargs.get("validate")
@@ -239,7 +343,9 @@ def _traced_structured_completion(original):
                         raise
             traced_validate.__insightiq_traced__ = True
             kwargs["validate"] = traced_validate
-        return original(*args, **kwargs)
+        if args:
+            return original(*args, **kwargs)
+        return _governance_call(original, kwargs)
 
     functools.update_wrapper(call, original)
     return _wrap(call, "model_call", "structured_completion", _model_call_attrs, _model_call_result)
@@ -266,6 +372,12 @@ def install():
         ("app.services.company_report_pdf", "render_pdf", ("pdf", "company_report_pdf")),
         ("app.services.sector_report", "render_pdf", ("pdf", "sector_report_pdf")),
         ("app.services.research_jobs", "execute_queued_research_job", ("workflow", "research_job")),
+        ("app.services.auth", "authenticate", ("auth", "authenticate")),
+        ("app.services.market_ingestion", "refresh_company", ("provider", "refresh_company")),
+        ("app.services.source_refresh", "refresh_one", ("provider", "sec_news_refresh")),
+        ("app.services.fundamentals", "compute", ("financial_calculation", "fundamentals")),
+        ("app.services.market_forecasts", "qualify", ("forecast", "forecast_qualification")),
+        ("app.services.report_history", "read_report", ("report", "read_report")),
     ]
     installed = []
     for module_name, attr, spec in targets:
@@ -279,11 +391,23 @@ def install():
         if spec is None:
             replacement = _traced_structured_completion(original)
         else:
-            attrs_fn = _run_id_attrs if attr == "execute_queued_research_job" else _ticker_attrs
+            attrs_fn = (_run_id_attrs if attr == "execute_queued_research_job" else
+                        _no_attrs if attr == "authenticate" else  # never log credentials
+                        _symbol_attrs if module_name.endswith(("market_ingestion", "fundamentals",
+                                                               "market_forecasts")) else _ticker_attrs)
             replacement = _wrap(original, spec[0], spec[1], attrs_fn)
         _replace_everywhere(original, replacement)
         installed.append(f"{module_name}.{attr}")
     return installed
+
+
+def _no_attrs(args, kwargs):
+    return {}
+
+
+def _symbol_attrs(args, kwargs):
+    symbol = kwargs.get("symbol") or (args[1] if len(args) > 1 and isinstance(args[1], str) else None)
+    return {"ticker": symbol} if symbol else {}
 
 
 def _ticker_attrs(args, kwargs):

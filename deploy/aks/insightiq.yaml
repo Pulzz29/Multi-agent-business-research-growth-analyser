@@ -74,6 +74,9 @@ spec:
       labels: { app: insightiq-api }
     spec:
       securityContext: { runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001 }
+      # Lets uvicorn finish in-flight requests on rollout; research jobs cut off
+      # by a restart are marked failed by startup recovery (never left "running").
+      terminationGracePeriodSeconds: 60
       containers:
         - name: api
           image: <REGISTRY>/insightiq-api:<RELEASE>

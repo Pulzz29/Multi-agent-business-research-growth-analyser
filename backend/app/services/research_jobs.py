@@ -745,6 +745,13 @@ def execute_queued_research_job(root, run_id, graph_runner):
             agent_statuses=expected_statuses,
             report_path=str(report_path),
         )
+        from app.services import governance, report_blob
+
+        report_blob.schedule_research(ticker, run_id)  # durable PDF of the new report
+        limitations = result.get("limitations") or []
+        governance.record("research_report", "partial" if limitations else "success", run_id=run_id,
+                          ticker=ticker, violations=[str(x)[:200] for x in limitations][:10],
+                          evidence={"report_sha256": governance.sha(json.dumps(result, sort_keys=True, default=str))})
 
         # Backup is separate from research success.
         # A failed backup must not turn a completed
@@ -849,6 +856,12 @@ def execute_queued_research_job(root, run_id, graph_runner):
                     error_type=type(exc).__name__,
                     error_code=error_code,
                 )
+                from app.services import errors, governance
+
+                errors.record(f"research_job:{error_code}", exc, severity="critical", component="research_workflow",
+                              run_id=run_id, ticker=ticker, final_status="failed")
+                governance.record("research_report", "failed", run_id=run_id, ticker=ticker,
+                                  violations=[error_code])
         except Exception:
             # A storage failure must not disguise
             # the original execution failure.

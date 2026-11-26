@@ -15,6 +15,9 @@ python-dateutil>=2.9,<3
 langgraph>=0.3,<2
 langchain-core>=0.3,<2
 openai>=2.54,<3
+# Azure Blob Storage for report files and backups (managed identity)
+azure-storage-blob>=12.20,<13
+azure-identity>=1.17,<2
 opentelemetry-api>=1.45.1,<2
 opentelemetry-sdk>=1.45.1,<2
 opentelemetry-instrumentation-fastapi>=0.51b0,<1

@@ -69,7 +69,10 @@ async def _database_unavailable_handler(request, exc):
         logging.getLogger("insightiq.db").error("request_failed database_unavailable %s",
                                                 type(exc).__name__)
         return JSONResponse(status_code=503, content={"detail": "The database is unavailable. Try again shortly."})
-    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+    from app.services import errors as _errors
+
+    _errors.record(f"api:{request.method} {request.url.path}", exc, severity="error")
+    return JSONResponse(status_code=500, content={"detail": _errors.FRIENDLY})
 
 
 def project_root():
@@ -522,7 +525,11 @@ def submit_research_job(
             )
 
     try:
+        import contextvars as _contextvars
+
+        # The research job runs in the submitting request's trace context.
         _worker_executor.submit(
+            _contextvars.copy_context().run,
             _execute_submitted_job,
             created["run_id"],
             options,
@@ -1211,7 +1218,9 @@ def download_report_pdf(ticker: str, run_id: str):
     run_id = validate_job_id(run_id)
     _require_saved_report(ticker, run_id)
     try:
-        content, filename = _company_report_pdf.build(ticker, run_id)
+        from app.services import report_blob as _report_blob
+
+        content, filename = _report_blob.research_pdf(ticker, run_id)
     except Exception:
         logging.getLogger("insightiq.report_pdf").exception("Report PDF failed for %s %s", ticker, run_id)
         raise HTTPException(status_code=503, detail="The report PDF could not be generated.")
@@ -1376,6 +1385,11 @@ def _initialise_market_storage():
     from app.services import telemetry
 
     telemetry.install()
+    telemetry.configure_exporters()  # optional Azure Monitor; off unless configured
+    # Scheduled pg_dump backups (+ Blob upload); off unless BACKUP_INTERVAL_HOURS > 0.
+    from app.services import backup_scheduler
+
+    backup_scheduler.start()
 
 
 @app.on_event("shutdown")
@@ -1724,16 +1738,14 @@ def download_sector_report(
         snapshot = _sector_comparison.read_snapshot(comparison_id)
     except _sector_comparison.SnapshotNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    from app.services import report_blob as _report_blob
+
+    filename = _report_blob.sector_filename(snapshot, format)
     try:
-        content, media_type, extension = _sector_report.render(snapshot, format)
+        content, media_type = _report_blob.sector_file(snapshot, format, filename)
     except Exception:
         _markets_logger.exception("Report rendering failed for %s", comparison_id)
         raise HTTPException(status_code=503, detail="The report could not be generated.")
-    custom = "_custom" if _sector_comparison.snapshot_type(snapshot) == "custom" else ""
-    filename = (
-        f"InsightIQ_{snapshot['market']}_{snapshot['sector_key']}{custom}_"
-        f"{snapshot['generated_at_utc'][:10]}.{extension}"
-    )
     return _MarketsResponse(
         content=content,
         media_type=media_type,
@@ -1757,7 +1769,12 @@ def operations_overview(hours: int = Query(default=24, ge=1, le=24 * 30), days: 
     if not telemetry.enabled():
         _operations_unavailable()
     telemetry.evaluate_alerts()
+    from app.services import errors as _errors
+    from app.services import governance as _governance
+
     return {
+        "governance": _governance.summary(days=days),
+        "errors": _errors.recent(limit=20),
         "latency": telemetry.latency_summary(hours=hours),
         "runs": telemetry.run_metrics(days=days),
         "tokens": telemetry.token_usage(days=days),
@@ -1882,6 +1899,17 @@ def auth_logout(request: Request, response: Response):
     return {"signed_out": True}
 
 
+@app.get("/api/v1/saved-reports", dependencies=[Depends(require_api_key)])
+def saved_reports_catalog():
+    """All saved research reports (stored data only; no AI or provider calls)."""
+    from app.services import report_history
+
+    try:
+        return {"reports": report_history.saved_report_catalog()}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Saved reports are temporarily unavailable.")
+
+
 @app.get("/api/v1/research/companies", dependencies=[Depends(require_api_key)])
 def research_companies():
     """Companies (US and India) with at least one completed run that has a saved report."""
@@ -1891,3 +1919,143 @@ def research_companies():
         return {"companies": report_history.companies_with_reports()}
     except Exception:
         raise HTTPException(status_code=503, detail="Research history unavailable.")
+
+
+# ==========================================================
+# Company-research chatbot (signed-in users only)
+# ==========================================================
+
+from typing import Literal as _ChatLiteral
+
+
+class ChatAction(_AuthModel):
+    model_config = _AuthConfig(extra="forbid")
+
+    type: _ChatLiteral["confirm_research", "cancel", "select_company"]
+    ticker: str | None = _AuthField(default=None, max_length=20, pattern=r"^[A-Za-z0-9][A-Za-z0-9&.\-]{0,19}$")
+    nonce: str | None = _AuthField(default=None, max_length=64, pattern=r"^[A-Za-z0-9_\-]+$")
+
+
+class ChatTurn(_AuthModel):
+    model_config = _AuthConfig(extra="forbid")
+
+    # Over-long text is accepted here and rejected politely by the chatbot guard.
+    text: str | None = _AuthField(default=None, max_length=4000)
+    action: ChatAction | None = None
+
+
+def _chat_user(request: Request):
+    """Chat is per user: a signed-in session is required (the server-to-server
+    key has no user and cannot read or write conversations)."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=403, detail="Sign in to use the research assistant.")
+    return user
+
+
+def _chat_call(func, *args, **kwargs):
+    from app.services import chatbot
+
+    try:
+        return func(*args, **kwargs)
+    except chatbot.ChatError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    except HTTPException:
+        raise
+    except Exception:
+        logging.getLogger("insightiq.api.chat").error("chat_request_failed", exc_info=True)
+        raise HTTPException(status_code=503, detail="The research assistant is temporarily unavailable.")
+
+
+def _chat_submit_research(ticker):
+    """Start research through the same path as POST /api/v1/jobs (same lock,
+    duplicate-run check and worker limit). Returns the new or active run."""
+    try:
+        receipt = submit_research_job(ResearchSubmission(ticker=ticker))
+        return {"run_id": receipt["run_id"], "status": receipt["status"], "created": True}
+    except HTTPException as exc:
+        if exc.status_code == 409 and exc.headers and exc.headers.get("X-Active-Run-Id"):
+            return {"run_id": exc.headers["X-Active-Run-Id"], "status": "running", "created": False}
+        return {"error": str(exc.detail)}
+
+
+class ChatScope(_AuthModel):
+    model_config = _AuthConfig(extra="forbid")
+
+    ticker: str = _AuthField(max_length=20, pattern=r"^[A-Za-z0-9][A-Za-z0-9&.\-]{0,19}$")
+    run_id: str = _AuthField(min_length=36, max_length=36, pattern=r"^[0-9a-fA-F-]{36}$")
+
+
+class NewChat(_AuthModel):
+    model_config = _AuthConfig(extra="forbid")
+
+    # Optional: bind the chat to one saved report's executive summary.
+    scope: ChatScope | None = None
+
+
+@app.get("/api/v1/chat/conversations", dependencies=[Depends(require_api_key)])
+def chat_conversations(request: Request, run_id: str | None = Query(default=None, max_length=36)):
+    from app.services import chatbot
+
+    user = _chat_user(request)
+    return {"conversations": _chat_call(chatbot.list_conversations, user["id"], run_id=run_id)}
+
+
+@app.post("/api/v1/chat/conversations", dependencies=[Depends(require_api_key)])
+def chat_new_conversation(request: Request, payload: NewChat | None = None):
+    from app.services import chatbot
+
+    user = _chat_user(request)
+    scope = payload.scope.model_dump() if payload and payload.scope else None
+    return _chat_call(chatbot.create_conversation, user["id"], scope)
+
+
+@app.get("/api/v1/chat/conversations/{conversation_id}/messages", dependencies=[Depends(require_api_key)])
+def chat_messages(conversation_id: str, request: Request):
+    from app.services import chatbot
+
+    user = _chat_user(request)
+    return _chat_call(chatbot.get_messages, user["id"], conversation_id)
+
+
+@app.post("/api/v1/chat/conversations/{conversation_id}/messages", dependencies=[Depends(require_api_key)])
+def chat_send(conversation_id: str, payload: ChatTurn, request: Request):
+    from app.services import chatbot
+
+    user = _chat_user(request)
+    if (payload.text is None) == (payload.action is None):
+        raise HTTPException(status_code=422, detail="Send a message or an action.")
+    return _chat_call(chatbot.handle_turn, user["id"], conversation_id, text=payload.text,
+                      action=payload.action.model_dump() if payload.action else None,
+                      submit_research=_chat_submit_research)
+
+
+# ==========================================================
+# Built frontend (single same-origin container). Registered last, so every
+# /api and /health route takes precedence. Off unless INSIGHTIQ_STATIC_DIR
+# points at a build (the Vite dev server is used locally).
+# ==========================================================
+
+def _mount_frontend():
+    static_dir = os.getenv("INSIGHTIQ_STATIC_DIR", "").strip()
+    if not static_dir or not os.path.isfile(os.path.join(static_dir, "index.html")):
+        return False
+    from starlette.staticfiles import StaticFiles
+
+    ui_csp = ("default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
+              "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+    class _Frontend(StaticFiles):
+        async def get_response(self, path, scope):
+            response = await super().get_response(path, scope)
+            response.headers["Content-Security-Policy"] = ui_csp
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-store")
+            return response
+
+    app.mount("/", _Frontend(directory=static_dir, html=True), name="frontend")
+    return True
+
+
+_mount_frontend()
+
