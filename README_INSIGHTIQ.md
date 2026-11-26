@@ -1,6 +1,6 @@
 # InsightIQ
 
-InsightIQ is a full-stack business research application built with FastAPI, React, and a three-agent research workflow.
+InsightIQ is a full-stack business research application built with FastAPI, React, and a three-agent research workflow. It is deployed on Microsoft Azure as a complete cloud-hosted application; see the [root README](README.md) for the project definition, architecture and Azure deployment. This file is the detailed feature reference.
 
 ## Features
 
@@ -10,7 +10,7 @@ InsightIQ is a full-stack business research application built with FastAPI, Reac
 - Financial, News, and Strategic research agents
 - Saved research jobs and reports
 - Execution tracing and reliability monitoring
-- SQLite persistence and verified Google Drive backups
+- PostgreSQL persistence with verified backups
 - Responsive dashboard with dark and light themes
 - US and Indian markets: top companies, company search and provider data
 - Sector-wise comparison with an explainable ranking and PDF/DOCX reports
@@ -29,11 +29,11 @@ InsightIQ is a full-stack business research application built with FastAPI, Reac
 2. Start the backend: `.\.venv\Scripts\python.exe scripts\run_backend.py`. It applies the database migrations and recovers interrupted jobs.
 3. Start the dashboard: `cd frontend; npm run dev`, then open http://127.0.0.1:5173.
 
-`scripts\start_all.ps1` starts both. The dashboard connects with the `API_ACCESS_KEY` from `.env`.
+`scripts\start_all.ps1` starts both. Sign in with an email and password created by `scripts\provision_users.py`; `API_ACCESS_KEY` is used only for server-to-server calls and tests.
 
 ## Markets and Sector-wise Comparison
 
-After connecting with the access key, use **Markets → United States / India** or **Sector-wise Comparison** in the sidebar.
+After signing in, use **Markets → United States / India** or **Sector-wise Comparison** in the sidebar.
 
 ### What it does
 
@@ -106,7 +106,7 @@ On a sector page, switch from **Entire sector** to **Selected companies** to com
 
 **Companies from other sectors.** These cannot be added. Weights are set per sector (Banking, for example, scores price-to-book instead of leverage), so ranking a company from another sector against these peers would be misleading. A company found through provider search *is* selectable when its provider sector maps to this sector, because it then appears in the sector's list (marked "added").
 
-### AI research for any company (Phase B)
+### AI research for any company
 
 Open a company from the market page. After its data is loaded, click **Research this company** to run the same Financial, News and Strategic agents. The summary agent then writes the executive summary sidecar.
 
@@ -283,4 +283,4 @@ pgAdmin steps, backup and restore, rollback and cloud prerequisites: `docs/POSTG
 
 ## Current status
 
-See `docs/FINAL_READINESS_REPORT.md` for the latest validation results, known limitations and external blockers, and `docs/DEMO_RUNBOOK.md` for running a demo.
+Limitations and the Azure deployment are summarised in the [root README](README.md). Validation evidence is in `docs/validation_evidence/`, and `docs/DEMO_RUNBOOK.md` explains how to run a demo.
