@@ -1,5 +1,7 @@
 # InsightIQ deployment package: setup on another Windows PC
 
+InsightIQ is deployed on Microsoft Azure as a complete cloud-hosted application (see the [root README](README.md#15-azure-deployment)). This guide sets up an additional local copy from the deployment package.
+
 This package contains the complete application source, a consistent SQLite snapshot made with SQLite's backup API, saved research reports, the forecast cache, the verified recovery points, and configuration templates. **It contains no credentials**: no `.env`, no `.env.test`, and no API keys.
 
 ## Requirements
@@ -19,7 +21,7 @@ This package contains the complete application source, a consistent SQLite snaps
    ```
 
    This creates `.venv`, installs the pinned Python packages and the frontend packages, and creates `.env` with a new access key. Report and backup paths recorded on another PC or folder are rebased onto this folder automatically (`INSIGHTIQ_LEGACY_PROJECT_ROOTS` is optional).
-3. Open `.env` and fill in `GROQ_API_KEY`, `NEWSDATA_API_KEY` and `SEC_USER_AGENT` (an app name plus a contact email). Save the file.
+3. Open `.env` and fill in `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `LLM_MODEL`, `NEWSDATA_API_KEY` and `SEC_USER_AGENT` (an app name plus a contact email). `GROQ_API_KEY` and `GROQ_MODEL` are an optional fallback. Save the file.
 4. Prepare the database. InsightIQ uses PostgreSQL (see `docs/POSTGRES_MIGRATION.md` for pgAdmin steps).
    1. Add the `DB_*` values to `.env`.
    2. Create the schema.
@@ -47,6 +49,6 @@ This package contains the complete application source, a consistent SQLite snaps
 
 ## Notes
 
-- Clicking **Start research** or **Refresh news** uses your Groq or NewsData.io quota.
+- Clicking **Start research** or **Refresh news** uses your Azure OpenAI and NewsData.io quota.
 - `deployment_manifest.json` lists every file's SHA-256, the database row counts and the research runs at packaging time.
 - Documentation: `migration_reports\` (start with `MIGRATION_SUMMARY.md` and `LOCAL_STARTUP_GUIDE.md`).

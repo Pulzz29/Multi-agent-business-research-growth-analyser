@@ -106,4 +106,4 @@ The JSON file lists accepted and hidden examples for every company. Hidden count
 
 - The rules are deterministic pattern rules, not language understanding. Unusual phrasing can still be misjudged in either direction. The design prefers hiding a borderline article to showing an unrelated one.
 - Headline search depends on NewsData.io's coverage. Several Indian companies currently have no qualifying recent news.
-- Finnhub company news needs a valid Finnhub key (see the provider verification in `FINAL_READINESS_REPORT.md`).
+- Finnhub company news needs a valid Finnhub key (see `docs/validation_evidence/provider_verification.json`).

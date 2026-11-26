@@ -6,7 +6,7 @@ InsightIQ stores its data in PostgreSQL. Company data is cached in the database 
 
 | | Before | Now |
 |---|---|---|
-| Engine | One SQLite file, copied to `%TEMP%\insightiq_sqlite\…` at startup | Any PostgreSQL-compatible server (local PostgreSQL 16 today) |
+| Engine | One SQLite file, copied to `%TEMP%\insightiq_sqlite\…` at startup | Any PostgreSQL-compatible server (cloud PostgreSQL on Azure; local PostgreSQL for development) |
 | Access | Raw `sqlite3` in about 50 modules, with no pooling | One access layer, `backend/app/database/db.py`: psycopg 3 with a connection pool, timeouts and SSL options. Existing calls keep `with connect() as conn` |
 | Schema | `CREATE TABLE IF NOT EXISTS` statements in 7 modules | Versioned SQL migrations in `backend/app/database/migrations/` (recorded in `db_schema_migrations`, applied once even when several instances start together) |
 | Backups | SQLite file snapshots and verified file copies | `pg_dump` / `pg_restore` (section 6). The file mechanisms run only with `DB_BACKEND=sqlite` |

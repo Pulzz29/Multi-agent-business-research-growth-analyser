@@ -1,6 +1,6 @@
-# Deploying InsightIQ (prepared, not executed)
+# Deploying InsightIQ on AKS (alternative path)
 
-Nothing in this folder has been applied to any cloud resource. Each step below needs separate approval.
+InsightIQ is deployed on Microsoft Azure as a complete cloud-hosted application (see the [root README](../README.md#15-azure-deployment)). This folder documents an alternative Kubernetes (AKS) deployment path. Each step below needs separate approval.
 
 ## Images
 ```powershell

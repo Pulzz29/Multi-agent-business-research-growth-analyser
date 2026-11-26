@@ -80,7 +80,7 @@ Historical reports, summaries and sector snapshots are never rewritten.
 | Tokens (input / output / reasoning / total) | 87 / 57 / 16 / 144 |
 | Duration | 16.2 s |
 
-The live research runs through the browser are recorded in `docs/FINAL_READINESS_REPORT.md`.
+Live research evidence is recorded in `docs/validation_evidence/live_research/`.
 
 ## Cost note
 
