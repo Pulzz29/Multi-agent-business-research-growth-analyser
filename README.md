@@ -1,6 +1,10 @@
 # InsightIQ — AI-Powered Multi-Agent Business Research & Growth Analyser
 
-InsightIQ is deployed on Microsoft Azure as a complete cloud-hosted application. It researches listed US and Indian companies. Financial figures come from filings and market-data providers and are calculated deterministically. Three AI research agents (Financial, News and Strategic) then write findings that must be grounded in that evidence. The app produces executive summaries, saved reports, PDF downloads and evidence-scoped chatbots.
+**InsightIQ** is an AI-powered multi-agent business research and growth analysis platform designed to deliver reliable, data-driven insights into publicly listed companies across the US and Indian markets.
+
+The platform integrates financial data from regulatory filings, market-data providers and news sources with deterministic financial calculations and SARIMAX-based forecasting. Three specialised AI agents — Financial Analyst, News Intelligence and Strategic Analysis — work collaboratively to generate comprehensive, evidence-grounded business insights.
+
+InsightIQ provides an interactive research dashboard, executive summaries, sector-wise company comparisons, downloadable PDF reports and context-aware AI chatbots. By combining advanced statistical modelling, multi-agent intelligence and robust AI governance and guardrails, the platform enables transparent, traceable and informed business research through a unified and intuitive experience.
 
 > Forecasts are statistical estimates, not reported results. InsightIQ does not give investment advice.
 
@@ -36,7 +40,13 @@ InsightIQ is a full-stack application with a FastAPI backend, a React (Vite) das
 
 ## 2. Problem Statement and Business Objectives
 
-**Problem.** Company research means pulling figures from filings, market data and news, reconciling them, and turning them into a narrative. Doing this by hand is slow and inconsistent. Generic AI assistants speed it up, but they invent figures, mix up periods and cannot show where a number came from.
+**Problem Statement**
+
+Business research and growth analysis require collecting, consolidating and interpreting large volumes of financial data, regulatory filings, market information and business news from multiple sources. Traditional manual research is time-consuming, resource-intensive and susceptible to inconsistencies and calculation inaccuracies.
+
+Although conventional AI tools can accelerate research, they often lack reliable source attribution, financial accuracy, contextual understanding and effective validation mechanisms, increasing the risk of unsupported insights and misleading conclusions.
+
+There is a need for an intelligent, unified research platform that combines reliable financial data, deterministic calculations, statistical forecasting and specialised AI agents to deliver accurate, transparent, evidence-grounded and actionable business insights.
 
 **Business objectives**
 
