@@ -1,0 +1,23 @@
+# Never send secrets, environments, databases or local data to the build.
+.env
+.env.*
+!.env.example
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+frontend/node_modules
+frontend/dist
+data/
+logs/
+releases/
+migration_inputs/
+migration_reports/
+docs/validation_evidence/
+pg_dumps/
+*.dump
+*.sqlite3*
+reports/*
+!reports/financial_evidence_reconciliation_final.json
+!reports/forecast_uncertainty_quality_review.json

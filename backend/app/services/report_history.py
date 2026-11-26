@@ -71,9 +71,12 @@ def canonical_run_id(value):
 
 
 def _read_json(path):
+    from app.services import document_store
+
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
+        text = document_store.read_text(path)
+        return json.loads(text) if text is not None else None
+    except (OSError, ValueError, TypeError, document_store.DocumentIntegrityError):
         return None
 
 
@@ -87,11 +90,11 @@ def report_metadata(path):
     run_id = canonical_run_id(path.stem)
     if run_id is None:
         return None
-    try:
-        stat = path.stat()
-    except OSError:
+    from app.services import document_store
+
+    key = document_store.version(path)
+    if key is None:
         return None
-    key = (stat.st_mtime_ns, stat.st_size)
 
     with _META_LOCK:
         cached = _META_CACHE.get(path)
@@ -133,7 +136,7 @@ def report_metadata(path):
 
 def read_summary(run_id, root=None):
     path = summaries_directory(root) / f"{run_id}.json"
-    doc = _read_json(path) if path.is_file() else None
+    doc = _read_json(path)
     if isinstance(doc, dict) and doc.get("run_id") == run_id:
         return doc
     return None
@@ -160,7 +163,9 @@ def _db_rows(ticker=None):
 
 def _journal_rows(root, ticker=None):
     out = {}
-    for path in (Path(root) / "data" / "research_job_journal").glob("*.json"):
+    from app.services import document_store
+
+    for path in document_store.list_paths(Path(root) / "data" / "research_job_journal", root=root):
         run_id = canonical_run_id(path.stem)
         doc = _read_json(path) if run_id else None
         if not isinstance(doc, dict) or doc.get("run_id") != run_id:
@@ -183,7 +188,9 @@ def list_runs(ticker=None, limit=100):
 
     reports = {}
     skipped = 0
-    for path in reports_directory(root).glob("*.json"):
+    from app.services import document_store
+
+    for path in document_store.list_paths(reports_directory(root), root=root):
         meta = report_metadata(path)
         if meta is None:
             if canonical_run_id(path.stem):
@@ -282,10 +289,10 @@ def read_report(ticker, run_id):
     if row is not None and row.get("status") != "completed":
         raise ReportUnavailable("Research report is not completed.")
 
-    if not path.is_file():
+    doc = _read_json(path)
+    if doc is None:
         raise ReportHistoryError("Research report not found.")
 
-    doc = _read_json(path)
     if (
         not isinstance(doc, dict)
         or doc.get("run_id") != run_id
@@ -351,3 +358,36 @@ def news_evidence_resolution(doc):
             return {eid: resolve_news_evidence(conn, ticker, a) for eid, a in articles.items()}
     except Exception:
         return {eid: {"status": "unknown", "database_id": None} for eid in articles}
+
+
+def companies_with_reports():
+    """Distinct companies (US and India) with at least one completed run whose
+    report is saved, from the same merged history as list_runs. Each entry:
+    ticker, name, market, saved report count and latest report time."""
+    history = list_runs(limit=1_000_000)
+    by_ticker = {}
+    for run in history["runs"]:
+        if not run["report_available"] or not run["ticker"]:
+            continue
+        entry = by_ticker.setdefault(run["ticker"], {"ticker": run["ticker"], "report_count": 0,
+                                                     "latest_report_at_utc": None})
+        entry["report_count"] += 1
+        stamp = run["report_generated_at_utc"] or run["created_at_utc"]
+        if stamp and (entry["latest_report_at_utc"] is None or stamp > entry["latest_report_at_utc"]):
+            entry["latest_report_at_utc"] = stamp
+    if not by_ticker:
+        return []
+    tickers = sorted(by_ticker)
+    marks = ",".join("?" for _ in tickers)
+    with connect() as conn:
+        market_rows = {r["symbol"]: dict(r) for r in conn.execute(
+            f"SELECT symbol, name, market FROM market_companies WHERE symbol IN ({marks})", tickers).fetchall()}
+        names = {r["ticker"]: r["name"] for r in conn.execute(
+            f"SELECT ticker, name FROM companies WHERE ticker IN ({marks})", tickers).fetchall()}
+    out = []
+    for ticker in tickers:
+        stored = market_rows.get(ticker) or {}
+        market = stored.get("market") or ("IN" if ticker.endswith((".NS", ".BO")) else "US")
+        out.append({**by_ticker[ticker], "name": stored.get("name") or names.get(ticker) or ticker,
+                    "market": market, "sec_validated": ticker in SUPPORTED_TICKERS})
+    return out

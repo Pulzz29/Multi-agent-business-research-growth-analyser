@@ -1,4 +1,8 @@
 """
+SQLITE-ONLY TOOL: works on the SQLite database file (DB_BACKEND=sqlite, rollback and
+file recovery). With PostgreSQL use scripts/setup_postgres.py, pg_dump/pg_restore and
+scripts/migrate_sqlite_to_postgres.py instead (docs/POSTGRES_MIGRATION.md).
+
 Additive recovery: copy rows that exist in a verified backup but are missing
 from the current runtime database. Nothing existing is updated or deleted.
 

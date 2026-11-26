@@ -128,6 +128,16 @@ def _reconciliation_status(ticker):
     return {"status": status.get("status"), "reason": status.get("reason")}
 
 
+def _engine_independent_order(rows):
+    """Rows in the order SQLite returned them for ``ORDER BY period_end,
+    filed_at`` (NULL first, ties by id), on every database engine, so the
+    fingerprint does not depend on how a server breaks ties."""
+    return sorted(rows, key=lambda r: (
+        r["period_end"] is not None, r["period_end"] or "",
+        r["filed_at"] is not None, r["filed_at"] or "", r["id"],
+    ))
+
+
 def source_fingerprint(ticker, metric):
     if metric not in SUPPORTED_METRICS:
         raise ValueError("Unsupported financial metric.")
@@ -183,7 +193,7 @@ def source_fingerprint(ticker, metric):
         "all_sec_fact_inputs_sha256": sha256_text(canonical_json([
             [r["id"], r["concept"], r["period_start"], r["period_end"], r["value_text"],
              r["filed_at"], r["accession"], r["form"]]
-            for r in fin.load_financial_rows(ticker)
+            for r in _engine_independent_order(fin.load_financial_rows(ticker))
         ])),
         "financial_normalization_code_sha256": sha256_file(
             module_root / "financial_normalization.py"
@@ -252,16 +262,28 @@ def validate_cached_result(result, ticker, metric):
     return True
 
 
+def read_envelope(ticker, metric):
+    """The stored cache envelope (database on PostgreSQL, file on SQLite), or None."""
+    from app.services import document_store
+
+    text = document_store.read_text(cache_path(ticker, metric))
+    return json.loads(text) if text is not None else None
+
+
 def read_cached_forecast(ticker, metric, fingerprint):
+    from app.services import document_store
+
     path = cache_path(ticker, metric)
 
-    if not path.is_file():
+    try:
+        text = document_store.read_text(path)
+    except document_store.DocumentIntegrityError:
+        return None, "cache_integrity_mismatch"
+    if text is None:
         return None, "cache_miss"
 
     try:
-        envelope = json.loads(
-            path.read_text(encoding="utf-8")
-        )
+        envelope = json.loads(text)
 
         if envelope["version"] != CACHE_VERSION:
             return None, "cache_version_changed"
@@ -336,25 +358,10 @@ def write_cached_forecast(
 
     content = canonical_json(envelope)
 
-    # Unique temporary file avoids filename collisions.
-    temporary = path.with_name(
-        f"{path.name}.{os.getpid()}."
-        f"{time.time_ns()}.tmp"
-    )
+    # Atomic replace (database row on PostgreSQL, temp file + rename on SQLite).
+    from app.services import document_store
 
-    try:
-        with temporary.open(
-            "x", encoding="utf-8"
-        ) as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-
-        os.replace(temporary, path)
-
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+    document_store.write_text(path, content)
 
     # Verify that the actual persisted result is readable.
     restored, status = read_cached_forecast(

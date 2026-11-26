@@ -96,7 +96,7 @@
   }
  },
  "generation": {
-  "model": "openai/gpt-oss-120b",
+  "model": "legacy/test-model",
   "ai_analysis_status": {
    "financial": "completed",
    "news": "unavailable",
@@ -106,7 +106,7 @@
    {
     "agent": "financial",
     "call": "financial_analysis",
-    "model": "openai/gpt-oss-120b",
+    "model": "legacy/test-model",
     "status": "completed",
     "profile_used": "full",
     "provider_requests": 1,
@@ -152,7 +152,7 @@
    {
     "agent": "strategic",
     "call": "strategic_analysis",
-    "model": "openai/gpt-oss-120b",
+    "model": "legacy/test-model",
     "status": "completed",
     "profile_used": "full",
     "provider_requests": 1,
@@ -187,7 +187,7 @@
   "verified_claims": {
    "ticker": "RELIANCE.NS",
    "generated_at_utc": "2026-11-23T12:37:43.571098+00:00",
-   "model": "openai/gpt-oss-120b",
+   "model": "legacy/test-model",
    "verified_claims": [
     {
      "evidence_id": "YF_revenue_Q20250331",
@@ -860,7 +860,7 @@
   "groq_diagnostics": {
    "agent": "strategic",
    "call": "strategic_analysis",
-   "model": "openai/gpt-oss-120b",
+   "model": "legacy/test-model",
    "status": "completed",
    "started_at_utc": "2026-11-23T12:37:43.588114+00:00",
    "request_token_budget": 7000,

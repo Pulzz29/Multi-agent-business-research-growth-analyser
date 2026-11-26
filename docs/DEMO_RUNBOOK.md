@@ -17,9 +17,9 @@ Alternatively, `scripts\start_all.ps1` opens both windows.
 
 | Check | URL / result |
 |---|---|
-| Backend ready | `http://127.0.0.1:8000/health/ready` reports `"status":"ready"` and `"ai_provider":{"provider":"azure_openai","deployment":"gpt-5.4-pro","configured":true}` |
+| Backend ready | `http://127.0.0.1:8000/health/ready` reports `"status":"ready"` and `"ai_provider":{"provider":"azure_openai","model":"<LLM_MODEL from .env>","api":"auto","configured":true}` |
 | Application | `http://127.0.0.1:5173` |
-| Sign in | paste the `API_ACCESS_KEY` value from `.env` into the password field and click **Connect**. The key is kept only for that browser tab. |
+| Sign in | enter a provisioned email and password and click **Log in**. The session survives page refreshes; **Logout** in the top bar ends it. |
 
 ## 2. Suggested demo path (about 10 minutes)
 
@@ -30,13 +30,13 @@ Alternatively, `scripts\start_all.ps1` opens both windows.
    - **News tab:** only headlines in which Oracle Corporation is the subject.
 3. **Nvidia forecasts (`#/companies/NVDA/forecasts`):** an example of an interval **withheld**. The interval covered only 3 of 12 out-of-sample quarters, and the page says so.
 4. **Microsoft research (`#/companies/MSFT/research`):**
-   - Open **Report history**: older reports are labelled "Groq · openai/gpt-oss-120b".
-   - The new report is labelled "Azure OpenAI · gpt-5.4-pro", with response IDs and token usage under *Generation and refresh details*.
+   - Open **Report history**: older reports keep their original label ("Groq · <model>").
+   - The new report is labelled "Azure OpenAI · <served model>", with response IDs and token usage under *Generation and refresh details*.
    - **Executive summary:** the AI summary plus **Thorough research** (seven sections), "Generated on … · based on data as of …", the **Sources** list, and **Regenerate**, which costs tokens.
    - **Charts:** revenue and net income, margins, growth rates, and ratios vs the Technology median. The price chart is an explained empty state, because price history is not stored.
    - **Growth analysis:** metrics, trend label and rule.
    - **Download report** gives the PDF with charts.
-   - **Start research** creates a new run. GPT-5.4-Pro can take several minutes per step; the run can be cancelled.
+   - **Start research** creates a new run. Reasoning models can take several minutes per step; the run can be cancelled.
 5. **Growth Analyser fixes:**
    - `#/companies/RIVN/financials`: net-profit growth is "n/a: base is a loss" instead of a meaningless percentage.
    - `#/companies/JPM`: a warning that the latest stored SEC quarter is from 2014.

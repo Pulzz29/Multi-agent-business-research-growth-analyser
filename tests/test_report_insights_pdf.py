@@ -25,7 +25,9 @@ def api(isolated_runtime, monkeypatch):
         pytest.skip("saved MSFT report not present")
     target = isolated_runtime.root / "reports" / "research_runs"
     target.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target / source.name)
+    from research_v2_support import put_doc
+
+    put_doc(target / source.name, source.read_text(encoding="utf-8"))
     ai = install_fake_ai(monkeypatch)
     headers = {"Authorization": "Bearer " + os.environ["API_ACCESS_KEY"]}
     with TestClient(app) as http:
@@ -61,9 +63,12 @@ def test_insights_endpoint_is_frozen_and_complete(api):
     assert all(s["url"] and s["publisher"] for s in data["sources"])
     assert {r["key"] for r in data["ratios"]["rows"]} >= {"pe_ratio", "roe_pct", "debt_to_equity"}
     path = root / "reports" / "research_runs" / "insights" / f"{RUN}.json"
-    before = path.read_bytes()
+    from research_v2_support import get_doc
+
+    before = get_doc(path)
+    assert before is not None
     second = http.get(url, headers=headers).json()
-    assert path.read_bytes() == before and second["computed_at_utc"] == data["computed_at_utc"]
+    assert get_doc(path) == before and second["computed_at_utc"] == data["computed_at_utc"]
     assert not ai.requests  # no AI calls
 
 

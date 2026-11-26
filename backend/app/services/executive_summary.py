@@ -500,11 +500,14 @@ def summary_profiles():
 # ------------------------------------------------------------ generation
 
 def _load_report(root, run_id):
+    from app.services import document_store
+
     path = reports_directory(root) / f"{run_id}.json"
-    if not path.is_file():
+    text = document_store.read_text(path)
+    if text is None:
         raise ExecutiveSummaryError("The saved report was not found.")
-    raw = path.read_bytes()
-    report = json.loads(raw.decode("utf-8"))
+    raw = text.encode("utf-8")
+    report = json.loads(text)
     if (
         report.get("run_id") != run_id
         or report.get("status") != "completed"
@@ -515,13 +518,10 @@ def _load_report(root, run_id):
 
 
 def _write_sidecar(root, record):
-    directory = summaries_directory(root)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{record['run_id']}.json"
-    temporary = path.with_name(path.name + ".tmp-" + uuid.uuid4().hex)
-    temporary.write_text(json.dumps(record, indent=2, ensure_ascii=False, allow_nan=False),
-                         encoding="utf-8")
-    os.replace(temporary, path)
+    from app.services import document_store
+
+    path = summaries_directory(root) / f"{record['run_id']}.json"
+    document_store.write_text(path, json.dumps(record, indent=2, ensure_ascii=False, allow_nan=False))
     return path
 
 
@@ -547,12 +547,19 @@ FAILURE_MESSAGES = {
     "credential_missing": "The Azure OpenAI credential is not configured.",
     "authentication_failed": "Azure OpenAI rejected the credential.",
     "deployment_unavailable": (
-        "The configured Azure OpenAI deployment was not found. Check that AZURE_OPENAI_DEPLOYMENT "
-        "in .env matches the deployment name in Microsoft Foundry (Deployments), then restart the backend."
+        "The configured model was not found on Azure OpenAI. Check that LLM_MODEL in .env matches "
+        "the deployment name in Microsoft Foundry (Deployments), then restart the backend."
     ),
     "rate_limit_exhausted": "Azure OpenAI rate limits were reached; try again later.",
     "deadline_exceeded": "The summary request did not finish within its time limit.",
-    "unexpected_model": "Azure OpenAI answered with a different model than configured.",
+    "unexpected_model": (
+        "Azure OpenAI answered with a different model than configured. If the deployment name "
+        "differs from the model name, set LLM_EXPECTED_MODEL_PREFIX in .env."
+    ),
+    "invalid_schema": "The model's answer was not valid structured output, even after one retry.",
+    "timeout": "The AI request timed out after its retries; try again later.",
+    "provider_server_error": "Azure OpenAI returned a server error after its retries; try again later.",
+    "bad_request": "Azure OpenAI rejected the request for the configured model (LLM_MODEL).",
     "cancelled": "The summary request was cancelled.",
     "validation_rejected": "The generated summary failed evidence validation and was not stored.",
     "output_token_limit": "The summary reached its output limit before completing.",
@@ -943,6 +950,12 @@ def generate_brief(root, run_id, ticker=None, *, force=False, record_failure=Tru
         )
     except AICallFailed as failure:
         reason = FAILURE_MESSAGES.get(failure.reason, "The summary service is unavailable.")
+        fallback_from = (failure.diagnostics or {}).get("fallback_from")
+        if fallback_from:
+            reason = (
+                f"Azure OpenAI was unavailable ({fallback_from.get('reason')}), and the Groq fallback "
+                f"also failed ({failure.reason})."
+            )
         logger.warning("Research brief for %s failed: %s", run_id, failure.reason)
         attempt = {"status": "failed", "started_at_utc": started, "finished_at_utc": _now(),
                    "forced": bool(force), "trigger": trigger, "reason": reason,

@@ -161,8 +161,10 @@ def test_build_comparison_ranks_explains_and_saves(isolated_runtime, fake_ai):
     assert snapshot["narrative"]["status"] == "completed", snapshot["narrative"]["withheld"]
     assert snapshot["narrative"]["companies"]["MSFT"]["source"] == "ai"
     assert len(fake_ai.requests) == 1
+    from research_v2_support import get_doc
+
     path = isolated_runtime.root / "reports" / "sector_comparisons" / f"{snapshot['comparison_id']}.json"
-    assert json.loads(path.read_text(encoding="utf-8"))["comparison_id"] == snapshot["comparison_id"]
+    assert json.loads(get_doc(path))["comparison_id"] == snapshot["comparison_id"]
 
 
 def test_invalid_ai_text_falls_back_per_company(isolated_runtime, fake_ai):
@@ -441,8 +443,10 @@ def test_custom_comparison_validation_errors(api, fake_ai, monkeypatch, isolated
     assert client.post("/api/v1/markets/US/sectors/technology/comparison",
                        json={"companies": "MSFT"}, headers=headers).status_code == 422
     # No snapshot was written for rejected selections.
+    from app.services import document_store
+
     saved = isolated_runtime.root / "reports" / "sector_comparisons"
-    assert not saved.is_dir() or not list(saved.glob("*.json"))
+    assert not document_store.list_paths(saved)
 
 
 def test_custom_comparison_refreshes_only_selected_companies(isolated_runtime, fake_ai):

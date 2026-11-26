@@ -460,6 +460,7 @@ def write_narrative(ranking, sector_label, market, market_label, currency, clien
 
     narrative["diagnostics"] = diagnostics
     narrative["model"] = diagnostics.get("model")
+    narrative["provider"] = diagnostics.get("provider") or PROVIDER
     known = {c["symbol"]: c for c in ranking["companies"]}
 
     try:
@@ -505,27 +506,25 @@ def write_narrative(ranking, sector_label, market, market_label, currency, clien
 # -------------------------------------------------------------- snapshots
 
 def _write_snapshot(snapshot, root=None):
-    directory = comparisons_dir(root)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{snapshot['comparison_id']}.json"
-    if path.exists():
+    from app.services import document_store
+
+    path = comparisons_dir(root) / f"{snapshot['comparison_id']}.json"
+    created = document_store.write_once(
+        path, json.dumps(snapshot, indent=2, ensure_ascii=False, allow_nan=False), root=root)
+    if not created:
         raise ComparisonError("Refusing to overwrite a saved comparison.")
-    temporary = path.with_name(path.name + ".tmp-" + uuid.uuid4().hex)
-    with temporary.open("x", encoding="utf-8") as stream:
-        stream.write(json.dumps(snapshot, indent=2, ensure_ascii=False, allow_nan=False))
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
     return path
 
 
 def read_snapshot(comparison_id, root=None):
     if not UUID_RE.match(str(comparison_id or "")):
         raise SnapshotNotFound("Invalid comparison ID.")
-    path = comparisons_dir(root) / f"{comparison_id}.json"
-    if not path.is_file():
+    from app.services import document_store
+
+    text = document_store.read_text(comparisons_dir(root) / f"{comparison_id}.json", root=root)
+    if text is None:
         raise SnapshotNotFound("Comparison not found.")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(text)
 
 
 def snapshot_type(doc):
@@ -534,14 +533,16 @@ def snapshot_type(doc):
 
 
 def list_snapshots(market=None, sector_key=None, root=None, limit=50, comparison_type=None):
+    from app.services import document_store
+
     directory = comparisons_dir(root)
-    if not directory.is_dir():
-        return []
     items = []
-    for path in directory.glob("*.json"):
+    for path in document_store.list_paths(directory, root=root):
         try:
-            doc = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            doc = json.loads(document_store.read_text(path, root=root) or "null")
+        except (OSError, ValueError, document_store.DocumentIntegrityError):
+            continue
+        if not isinstance(doc, dict):
             continue
         if market and doc.get("market") != market:
             continue

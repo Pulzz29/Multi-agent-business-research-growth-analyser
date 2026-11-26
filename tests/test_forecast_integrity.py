@@ -131,7 +131,7 @@ def test_old_cache_versions_are_never_shown_as_current(isolated_runtime):
 
     # An entry written by an earlier method version, wherever it is found,
     # is never presented as a current forecast.
-    if not forecast_cache.cache_path("MSFT", "revenue").is_file():
+    if forecast_cache.read_envelope("MSFT", "revenue") is None:
         forecast_cache.forecast_financial_metric_cached("MSFT", "revenue")
     make_cache_stale("MSFT", "revenue")
     shown = company_profile.read_forecast("MSFT", "revenue")

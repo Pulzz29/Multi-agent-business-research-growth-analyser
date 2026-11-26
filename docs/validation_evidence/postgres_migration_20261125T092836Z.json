@@ -1,0 +1,293 @@
+{
+  "check": "sqlite_to_postgres_migration",
+  "finished_at_utc": "2026-11-25T09:28:49.935857+00:00",
+  "source": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\2\\insightiq_sqlite\\InsightIQ\\insightiq.sqlite3",
+  "verified_backup": "C:\\Users\\Administrator\\Downloads\\InsightIQ_Capstone_Project (2)\\InsightIQ_Capstone_Project\\InsightIQ\\data\\backups\\pre_postgres_20261125T092836Z.sqlite3",
+  "target": {
+    "backend": "postgres",
+    "host": "localhost",
+    "port": "5432",
+    "database": "capstone_project",
+    "schema": "public",
+    "sslmode": "prefer"
+  },
+  "migrations_applied_now": [],
+  "copy": {
+    "companies": {
+      "status": "copied",
+      "source_rows": 95,
+      "inserted": 95
+    },
+    "sec_facts": {
+      "status": "copied",
+      "source_rows": 75283,
+      "inserted": 75283
+    },
+    "news_articles": {
+      "status": "copied",
+      "source_rows": 525,
+      "inserted": 525
+    },
+    "source_refreshes": {
+      "status": "copied",
+      "source_rows": 628,
+      "inserted": 628
+    },
+    "research_jobs": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "research_reports": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "forecast_cache": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "ai_runs": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "ai_trace_events": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "observability_alerts": {
+      "status": "copied",
+      "source_rows": 0,
+      "inserted": 0
+    },
+    "schema_migrations": {
+      "status": "copied",
+      "source_rows": 3,
+      "inserted": 3
+    },
+    "market_companies": {
+      "status": "copied",
+      "source_rows": 95,
+      "inserted": 95
+    },
+    "market_quotes": {
+      "status": "copied",
+      "source_rows": 205,
+      "inserted": 205
+    },
+    "market_statements": {
+      "status": "copied",
+      "source_rows": 3657,
+      "inserted": 3657
+    },
+    "provider_usage": {
+      "status": "copied",
+      "source_rows": 9,
+      "inserted": 9
+    },
+    "research_execution_migrations": {
+      "status": "copied",
+      "source_rows": 1,
+      "inserted": 1
+    },
+    "research_execution_runs": {
+      "status": "copied",
+      "source_rows": 40,
+      "inserted": 40
+    },
+    "observability_schema_migrations": {
+      "status": "copied",
+      "source_rows": 1,
+      "inserted": 1
+    },
+    "research_observability_events": {
+      "status": "copied",
+      "source_rows": 135,
+      "inserted": 135
+    },
+    "reliability_monitor_evaluations": {
+      "status": "copied",
+      "source_rows": 1,
+      "inserted": 1
+    },
+    "sec_company_validation": {
+      "status": "copied",
+      "source_rows": 47,
+      "inserted": 47
+    }
+  },
+  "validation": {
+    "companies": {
+      "sqlite_rows": 95,
+      "postgres_rows": 95,
+      "sqlite_sha256": "b4ecbd5efa8b0c4bb65e06b270214746202f35c71c30461d776153cb31c37d45",
+      "postgres_sha256": "b4ecbd5efa8b0c4bb65e06b270214746202f35c71c30461d776153cb31c37d45",
+      "match": true,
+      "order_by": "\"ticker\""
+    },
+    "sec_facts": {
+      "sqlite_rows": 75283,
+      "postgres_rows": 75283,
+      "sqlite_sha256": "4d6e6b8467144c641fe4e388b6866987ba6c995c5401264cda4a27046a8c4544",
+      "postgres_sha256": "4d6e6b8467144c641fe4e388b6866987ba6c995c5401264cda4a27046a8c4544",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "news_articles": {
+      "sqlite_rows": 525,
+      "postgres_rows": 525,
+      "sqlite_sha256": "c6ecfc21a2e972f68771e23303d3cf481fbe805eb1bada7ac069afff8734c21d",
+      "postgres_sha256": "c6ecfc21a2e972f68771e23303d3cf481fbe805eb1bada7ac069afff8734c21d",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "source_refreshes": {
+      "sqlite_rows": 628,
+      "postgres_rows": 628,
+      "sqlite_sha256": "1aa8524a84dd7f3b913c9362937fcec883142ddbf49fb08dc66c6af32cc7a565",
+      "postgres_sha256": "1aa8524a84dd7f3b913c9362937fcec883142ddbf49fb08dc66c6af32cc7a565",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "research_jobs": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"job_id\""
+    },
+    "research_reports": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"report_id\""
+    },
+    "forecast_cache": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"cache_key\""
+    },
+    "ai_runs": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"run_id\""
+    },
+    "ai_trace_events": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"event_id\""
+    },
+    "observability_alerts": {
+      "sqlite_rows": 0,
+      "postgres_rows": 0,
+      "sqlite_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "postgres_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "order_by": "\"alert_id\""
+    },
+    "schema_migrations": {
+      "sqlite_rows": 3,
+      "postgres_rows": 3,
+      "sqlite_sha256": "a2cc69bf43f2b20b8d1432cafbc03f064c5bad166bc52595a812d92dda2e843f",
+      "postgres_sha256": "a2cc69bf43f2b20b8d1432cafbc03f064c5bad166bc52595a812d92dda2e843f",
+      "match": true,
+      "order_by": "\"version\""
+    },
+    "market_companies": {
+      "sqlite_rows": 95,
+      "postgres_rows": 95,
+      "sqlite_sha256": "39a90e14219256de3f19ee1ea803e03d145b0748354b39125ce13e8aee777345",
+      "postgres_sha256": "39a90e14219256de3f19ee1ea803e03d145b0748354b39125ce13e8aee777345",
+      "match": true,
+      "order_by": "\"symbol\""
+    },
+    "market_quotes": {
+      "sqlite_rows": 205,
+      "postgres_rows": 205,
+      "sqlite_sha256": "de8b71ebcf2cd8255c9c19cd7ae670d9b17ca1cd5eff5c12e28550a71273102f",
+      "postgres_sha256": "de8b71ebcf2cd8255c9c19cd7ae670d9b17ca1cd5eff5c12e28550a71273102f",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "market_statements": {
+      "sqlite_rows": 3657,
+      "postgres_rows": 3657,
+      "sqlite_sha256": "23147d1c907419d98587429eb4474734ca1eac3657f4ab971038e65c202d499b",
+      "postgres_sha256": "23147d1c907419d98587429eb4474734ca1eac3657f4ab971038e65c202d499b",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "provider_usage": {
+      "sqlite_rows": 9,
+      "postgres_rows": 9,
+      "sqlite_sha256": "33eca305a008efb8705e0c62f66583576ff2b589895b8e463e20bc52ad409f57",
+      "postgres_sha256": "33eca305a008efb8705e0c62f66583576ff2b589895b8e463e20bc52ad409f57",
+      "match": true,
+      "order_by": "\"provider\", \"usage_day\""
+    },
+    "research_execution_migrations": {
+      "sqlite_rows": 1,
+      "postgres_rows": 1,
+      "sqlite_sha256": "266ad27ce732e7486f8f6dab75e6edc6ec2028d5b582675cc445d940b5590b19",
+      "postgres_sha256": "266ad27ce732e7486f8f6dab75e6edc6ec2028d5b582675cc445d940b5590b19",
+      "match": true,
+      "order_by": "\"version\""
+    },
+    "research_execution_runs": {
+      "sqlite_rows": 40,
+      "postgres_rows": 40,
+      "sqlite_sha256": "62d32beaea246686cbcd43ddbb8a882c8cc12a244350c9880c6bac6afaff23dc",
+      "postgres_sha256": "62d32beaea246686cbcd43ddbb8a882c8cc12a244350c9880c6bac6afaff23dc",
+      "match": true,
+      "order_by": "\"run_id\""
+    },
+    "observability_schema_migrations": {
+      "sqlite_rows": 1,
+      "postgres_rows": 1,
+      "sqlite_sha256": "b4fc22adcc842f6924078795399f9868ab28594feee2f961ddb59359301afe76",
+      "postgres_sha256": "b4fc22adcc842f6924078795399f9868ab28594feee2f961ddb59359301afe76",
+      "match": true,
+      "order_by": "\"version\""
+    },
+    "research_observability_events": {
+      "sqlite_rows": 135,
+      "postgres_rows": 135,
+      "sqlite_sha256": "cec16f51647d13f3e0bd78d0dc4042acab80bcac7512a921492430f9d39c4720",
+      "postgres_sha256": "cec16f51647d13f3e0bd78d0dc4042acab80bcac7512a921492430f9d39c4720",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "reliability_monitor_evaluations": {
+      "sqlite_rows": 1,
+      "postgres_rows": 1,
+      "sqlite_sha256": "571b8db0774a6f0089c6958a541bac40549891e6b28b6f277bec90afcba259ca",
+      "postgres_sha256": "571b8db0774a6f0089c6958a541bac40549891e6b28b6f277bec90afcba259ca",
+      "match": true,
+      "order_by": "\"id\""
+    },
+    "sec_company_validation": {
+      "sqlite_rows": 47,
+      "postgres_rows": 47,
+      "sqlite_sha256": "437341654dba7ac3079c2b222bed3c410c4062cbaa87ce910135709cbdf65532",
+      "postgres_sha256": "437341654dba7ac3079c2b222bed3c410c4062cbaa87ce910135709cbdf65532",
+      "match": true,
+      "order_by": "\"ticker\""
+    }
+  },
+  "all_tables_match": true
+}

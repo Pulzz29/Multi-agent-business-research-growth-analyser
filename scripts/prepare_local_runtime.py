@@ -1,4 +1,8 @@
 """One-time (idempotent) preparation of the local runtime after moving InsightIQ off Colab.
+SQLITE-ONLY TOOL: works on the SQLite database file (DB_BACKEND=sqlite, rollback and
+file recovery). With PostgreSQL use scripts/setup_postgres.py, pg_dump/pg_restore and
+scripts/migrate_sqlite_to_postgres.py instead (docs/POSTGRES_MIGRATION.md).
+
 
 What it does, using only the application's own functions:
 1. Writes data/server_startup_config.json for this computer (the Colab version is kept

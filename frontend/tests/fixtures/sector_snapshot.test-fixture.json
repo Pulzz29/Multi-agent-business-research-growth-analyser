@@ -1145,7 +1145,7 @@
   "ties": []
  },
  "narrative": {
-  "model": "openai/gpt-oss-120b",
+  "model": "legacy/test-model",
   "label": "AI-written explanation (Groq). Every number was checked against the comparison data and causal or advisory wording was rejected; the ranking itself is computed deterministically and is not investment advice.",
   "overview": "The companies in this sector were compared on profitability, growth, returns, leverage, valuation and risk metrics. Scores are relative positions within the sector and the leader combines strong profitability with solid growth on the available data. Some metrics may be imputed where provider data was missing.",
   "overview_source": "ai",
@@ -1203,7 +1203,7 @@
   "diagnostics": {
    "agent": "sector",
    "call": "sector_comparison",
-   "model": "openai/gpt-oss-120b",
+   "model": "legacy/test-model",
    "status": "completed",
    "started_at_utc": "2026-11-23T11:53:11.688703+00:00",
    "request_token_budget": 7000,

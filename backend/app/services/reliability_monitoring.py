@@ -24,6 +24,15 @@ def utc_now():
 
 
 def initialize_monitoring():
+    from app.database import db
+
+    if db.is_postgres():
+        # Created by the versioned PostgreSQL migrations (app/database/migrations).
+        from app.database.migrations import run_migrations
+
+        run_migrations()
+        return True
+
     with connect() as conn:
         conn.execute(
             """
@@ -380,6 +389,7 @@ def save_monitoring_evaluation(
                 result_json
             )
             VALUES (?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 result["evaluated_at_utc"],
@@ -393,7 +403,7 @@ def save_monitoring_evaluation(
             ),
         )
 
-        evaluation_id = cursor.lastrowid
+        evaluation_id = cursor.fetchone()[0]
 
     return {
         "evaluation_id": evaluation_id,

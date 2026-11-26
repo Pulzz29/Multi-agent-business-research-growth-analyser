@@ -205,13 +205,57 @@ def _billions(text):
     return (Decimal(str(text)) / Decimal(1_000_000_000)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def build_package(symbol, records, currency, forecasts):
+RATIO_EVIDENCE = (
+    "gross_margin_pct", "operating_margin_pct", "net_margin_pct", "roe_pct", "roa_pct",
+    "current_ratio", "quick_ratio", "debt_to_equity", "interest_coverage", "revenue_growth_pct",
+    "earnings_growth_pct", "ocf_growth_pct", "pe_ratio", "pb_ratio", "ev_to_ebitda", "dividend_yield_pct",
+)
+
+
+def ratio_items(fundamentals, symbol):
+    """Validated, deterministic ratios (services/fundamentals.py) as citable evidence."""
+    if not fundamentals:
+        return []
+    code = PROVIDER_CODES.get(fundamentals.get("statement_provider") or "", "PRV")
+    period = (fundamentals.get("period_end") or "").replace("-", "")
+    out = []
+    for metric in fundamentals.get("metrics") or []:
+        if metric["key"] not in RATIO_EVIDENCE or not metric["available"]:
+            continue
+        value = round(float(metric["value"]), 2)
+        percent = metric["unit"] == "pct"
+        out.append({
+            "evidence_id": f"{code}_ratio_{metric['key']}_{period or 'LATEST'}",
+            "kind": "provider_ratio",
+            "metric": metric["key"],
+            "label": metric["label"],
+            "value": value,
+            "unit": "percent" if percent else "ratio",
+            "formula": metric["formula"],
+            "period_end": metric.get("period_end"),
+            "currency": metric.get("currency"),
+            "computed_by": "InsightIQ (deterministic, from stored provider statements and quote)",
+            "_allow": build_item_allowance(
+                percentages=[value] if percent else [], decimals=[] if percent else [value],
+                dates=[metric["period_end"]] if metric.get("period_end") else []),
+        })
+    return out
+
+
+def build_package(symbol, records, currency, forecasts, market=None, fundamentals=None, unavailable=None):
+    from app.services import fiscal
+
+    market = market or ("IN" if symbol.endswith((".NS", ".BO")) else "US")
     items, by_metric = [], {}
     for record in records:
         end = _d(record["period_end"])
-        fiscal_label = (
-            f"FY{record.get('fiscal_year') or end.year}" if record["period_type"] == "annual" else None
-        )
+        if record["period_type"] == "annual":
+            fiscal_label = f"FY{record.get('fiscal_year') or end.year}"
+        elif market == "IN":
+            # Indian fiscal year April-March: the quarter ending 31 Mar 2025 is FY2025 Q4.
+            fiscal_label = f"FY{fiscal.indian_fiscal_year(end)} Q{fiscal.indian_quarter(end)}"
+        else:
+            fiscal_label = None
         calendar_label = f"{end.year} Q{(end.month - 1) // 3 + 1}" if record["period_type"] == "quarterly" else None
         item = {
             "evidence_id": record["evidence_id"],
@@ -307,23 +351,32 @@ def build_package(symbol, records, currency, forecasts):
             "_allow": build_item_allowance(decimals=decimals, dates=[item["last_reported_period"]]),
         })
 
+    ratios = ratio_items(fundamentals, symbol)
     all_items = {i["evidence_id"]: i for i in items}
     all_items.update({c["comparison_id"]: c for c in comparisons})
     all_items.update({f["evidence_id"]: f for f in forecast_items})
+    all_items.update({r["evidence_id"]: r for r in ratios})
+    limitations = [
+        "Amounts are as reported by the data provider; they are not SEC-validated.",
+        "Period starts are derived from the previous reported period end.",
+        "Comparisons were computed by InsightIQ only between adjacent or one-year-apart periods.",
+        "The evidence contains no segment, guidance or management-commentary data.",
+    ]
+    if market == "IN":
+        limitations.append("Indian fiscal years run April to March (FY2025 = Apr 2024 - Mar 2025).")
+    for metric, reason in (unavailable or {}).items():
+        limitations.append(f"No statistical forecast for {METRIC_LABELS.get(metric, metric)}: {reason}")
     return {
         "package_version": packages.PACKAGE_VERSION,
         "ticker": symbol,
+        "market": market,
         "currency": currency,
         "records": items,
         "comparisons": comparisons,
         "forecasts": forecast_items,
+        "ratios": ratios,
         "items": all_items,
-        "limitations": [
-            "Amounts are as reported by the data provider; they are not SEC-validated.",
-            "Period starts are derived from the previous reported period end.",
-            "Comparisons were computed by InsightIQ only between adjacent or one-year-apart periods.",
-            "The evidence contains no segment, margin, guidance or management-commentary data.",
-        ],
+        "limitations": limitations,
     }
 
 
@@ -352,6 +405,10 @@ def prompt_evidence(package, options):
                                "interval_status")} | {"predictions": f["predictions"][:options.get("forecast_quarters", 4)]}
             for f in package["forecasts"]
         ],
+        "validated_ratios": [
+            {k: r[k] for k in ("evidence_id", "metric", "label", "value", "unit", "formula", "period_end")}
+            for r in package.get("ratios") or []
+        ],
         "known_limitations": package["limitations"],
     }
 
@@ -378,8 +435,9 @@ def build_messages(symbol, package, profile):
         f"1) claims: select four observations from reported_periods covering {', '.join(available)}. "
         "Copy evidence_id, metric, period_start, period_end and value_usd exactly. "
         f"2) findings: write {profile.options['findings_min']} to {profile.options['findings_max']} "
-        "distinct findings. Each: title (max 12 words); evidence_ids (the reported-period or "
-        "FORECAST_ ids it relies on); comparison_ids (CMP_ ids whose change_pct it quotes, else "
+        "distinct findings. Each: title (max 12 words); evidence_ids (the reported-period, "
+        "validated_ratios or FORECAST_ ids it relies on; quote a ratio only with the exact value "
+        "of a validated_ratios id you cite); comparison_ids (CMP_ ids whose change_pct it quotes, else "
         "empty); interpretation (3 to 5 sentences); business_significance (1 to 2 sentences); "
         "limitations (1 to 2 sentences on what these figures cannot establish)."
     )
@@ -532,7 +590,17 @@ def provider_financial_agent_node(state, client=None):
         else:
             unavailable[metric] = reason
 
-    package = build_package(symbol, records, currency, forecasts)
+    fundamentals = None
+    try:
+        from app.services import fundamentals as fundamentals_service
+
+        stored = storage.get_company(symbol) or {}
+        fundamentals = fundamentals_service.compute(stored.get("market") or registry.market_of(symbol), symbol)
+    except Exception:
+        fundamentals = None  # ratios are optional evidence; statements remain authoritative
+    package = build_package(symbol, records, currency, forecasts,
+                            market=(storage.get_company(symbol) or {}).get("market"),
+                            fundamentals=fundamentals, unavailable=unavailable)
     brief, analysis, diagnostics = analyze(symbol, package, records, client=client)
 
     provider = next(iter({r["provider"] for r in records}), None)

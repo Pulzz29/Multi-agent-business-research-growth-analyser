@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { ArrowUpRight, Database, FileText, Newspaper, ShieldCheck } from "lucide-react";
 import { Sparkline } from "../components/charts.jsx";
+import { MarketOverview } from "../components/MarketOverview.jsx";
+import { MARKET_NAMES, readStoredMarket, resolveMarket, storeMarket } from "../lib/marketOverviewModel.js";
 import { Badge, Card, CompanyMark, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "../components/ui.jsx";
 import {
   exactUsd,
@@ -47,7 +50,7 @@ function CompanyCard({ row, onOpen }) {
   return (
     <button type="button" className="company-card" onClick={onOpen} aria-label={`Open ${company?.name} company dashboard`}>
       <div className="company-card-head">
-        <CompanyMark ticker={row.ticker} />
+        <CompanyMark ticker={row.ticker} name={row.name} />
         <div className="company-card-name">
           <p className="company-name">{company?.name}</p>
           <p className="company-ticker">{row.ticker}</p>
@@ -84,30 +87,67 @@ function CompanyCard({ row, onOpen }) {
   );
 }
 
-export function OverviewPage({ summary, dashboard, runs, loading, error, onRetry, navigate }) {
+export function OverviewPage({ token, market: routeMarket, summary, dashboard, runs, loading, error, onRetry, navigate, onAuthError }) {
+  const market = resolveMarket(routeMarket, readStoredMarket());
+  useEffect(() => storeMarket(market), [market]);
   const rows = summary?.companies || [];
   const completed = runs?.completed_report_count;
   const reliability = dashboard?.reliability;
   const backups = dashboard?.backup_health;
-  const recent = (runs?.runs || []).slice(0, 6);
+  const recent = (runs?.runs || []).filter((r) => !/\.(NS|BO)$/i.test(r.ticker)).slice(0, 6);
+
+  const toggle = (
+    <div className="market-toggle-lg" role="group" aria-label="Market">
+      {["US", "IN"].map((m) => (
+        <button key={m} type="button" aria-pressed={market === m} onClick={() => navigate({ page: "overview", market: m })}>
+          {MARKET_NAMES[m]}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (market === "IN") {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <div>
+            <p className="eyebrow">Portfolio overview · {MARKET_NAMES.IN}</p>
+            <h1>Company intelligence</h1>
+            <p className="page-lede">
+              Indian (NSE/BSE) companies from the provider data stored in InsightIQ. Amounts are in INR with Indian units; fiscal years run
+              April to March.
+            </p>
+          </div>
+          {toggle}
+        </header>
+        <MarketOverview token={token} market="IN" navigate={navigate} onAuthError={onAuthError} showRuns showSectors={false} />
+      </div>
+    );
+  }
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
-          <p className="eyebrow">Portfolio overview</p>
+          <p className="eyebrow">Portfolio overview · {MARKET_NAMES.US}</p>
           <h1>Company intelligence</h1>
           <p className="page-lede">
-            Stored SEC financials, statistical forecasts, company news and saved multi-agent research for six companies.
-            Opening a company shows what is already stored — no new AI research is started.
+            Stored SEC financials, statistical forecasts, company news and saved multi-agent research for {formatCount(rows.length || null)} SEC-validated
+            companies, plus the wider US market data below. Opening a company shows what is already stored — no new AI research is started.
           </p>
         </div>
+        {toggle}
       </header>
 
       {error && <ErrorState message={error} onRetry={onRetry} />}
 
       <div className="stats-row">
-        <Stat label="Companies covered" value="6" icon={ShieldCheck} sub="AAPL · AMZN · GOOGL · META · MSFT · NVDA" />
+        <Stat
+          label="SEC-validated companies"
+          value={summary ? formatCount(rows.length) : "…"}
+          icon={ShieldCheck}
+          sub={rows.slice(0, 6).map((r) => r.ticker).join(" · ") + (rows.length > 6 ? " …" : "")}
+        />
         <Stat label="Saved research reports" value={completed === undefined ? "…" : formatCount(completed)} icon={FileText} sub={runs ? `${formatCount(runs.run_count)} research runs recorded` : null} />
         <Stat label="SEC financial facts" value={dashboard ? formatCount(dashboard.source_data?.sec_fact_count) : "…"} icon={Database} sub="Stored EDGAR company facts" />
         <Stat label="Stored news articles" value={dashboard ? formatCount(dashboard.source_data?.news_article_count) : "…"} icon={Newspaper} sub="NewsData.io records" />
@@ -135,6 +175,16 @@ export function OverviewPage({ summary, dashboard, runs, loading, error, onRetry
             ))}
           </div>
         )}
+      </section>
+
+      <section aria-labelledby="us-market-heading">
+        <div className="section-heading">
+          <div>
+            <h2 id="us-market-heading">US market</h2>
+            <p>All stored US companies (provider data), sector coverage and the largest companies by market cap.</p>
+          </div>
+        </div>
+        <MarketOverview token={token} market="US" navigate={navigate} onAuthError={onAuthError} />
       </section>
 
       <div className="grid-2">

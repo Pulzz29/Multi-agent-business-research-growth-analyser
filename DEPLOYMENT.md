@@ -18,13 +18,19 @@ This package contains the complete application source, a consistent SQLite snaps
    powershell -ExecutionPolicy Bypass -File .\scripts\setup_remote.ps1
    ```
 
-   This creates `.venv`, installs the pinned Python packages and the frontend packages, and creates `.env` with a new access key. `.env` also gets `INSIGHTIQ_LEGACY_PROJECT_ROOTS`, which lets paths recorded on the source PC resolve to this folder.
+   This creates `.venv`, installs the pinned Python packages and the frontend packages, and creates `.env` with a new access key. Report and backup paths recorded on another PC or folder are rebased onto this folder automatically (`INSIGHTIQ_LEGACY_PROJECT_ROOTS` is optional).
 3. Open `.env` and fill in `GROQ_API_KEY`, `NEWSDATA_API_KEY` and `SEC_USER_AGENT` (an app name plus a contact email). Save the file.
-4. Prepare the runtime database. This seeds it from `data\insightiq.sqlite3` and creates a verified recovery point for this PC:
+4. Prepare the database. InsightIQ uses PostgreSQL (see `docs/POSTGRES_MIGRATION.md` for pgAdmin steps).
+   1. Add the `DB_*` values to `.env`.
+   2. Create the schema.
+   3. Copy the packaged data into PostgreSQL, which validates every table.
 
    ```powershell
-   .\.venv\Scripts\python.exe scripts\prepare_local_runtime.py
+   .\.venv\Scripts\python.exe scripts\setup_postgres.py
+   .\.venv\Scripts\python.exe scripts\migrate_sqlite_to_postgres.py --source data\insightiq.sqlite3
    ```
+
+   For the original SQLite mode (`DB_BACKEND=sqlite`), run `scripts\prepare_local_runtime.py` instead.
 
 5. Start InsightIQ:
 
@@ -32,7 +38,7 @@ This package contains the complete application source, a consistent SQLite snaps
    .\scripts\start_all.ps1
    ```
 
-   Open http://127.0.0.1:5173 and enter `API_ACCESS_KEY` from `.env`.
+   Create login accounts once: `.\.venv\Scripts\python.exe scripts\provision_users.py <email> ...` (hidden password prompt; `--reset` rotates a password). Open http://127.0.0.1:5173 and sign in with email and password. `API_ACCESS_KEY` remains for server-to-server calls and tests only.
 
 ## Checks
 

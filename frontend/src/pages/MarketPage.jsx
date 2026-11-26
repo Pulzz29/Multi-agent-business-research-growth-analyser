@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Building2, Globe2, Layers, RefreshCw, Search } from "lucide-react";
-import { Badge, Card, EmptyState, ErrorState, Notice, Skeleton } from "../components/ui.jsx";
+import { Badge, Card, CompanyMark, EmptyState, ErrorState, Notice, Skeleton } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { formatDateTime } from "../lib/format.js";
 import { MARKET_LABELS, formatMetric } from "../lib/sectorModel.js";
@@ -108,6 +108,7 @@ function TopCompanies({ token, market, navigate, onAuthError }) {
               onClick={() => navigate({ page: "market-company", market, symbol: c.symbol })}
             >
               <span className="top-rank">#{i + 1}</span>
+              <CompanyMark ticker={c.symbol} name={c.name} size="sm" />
               <span className="top-name">{c.name}</span>
               <span className="top-meta">
                 {c.symbol} · {c.sector_label || "Unclassified"}
@@ -204,6 +205,7 @@ function CompanySearch({ token, market, navigate, onAuthError }) {
           {local.results.map((r) => (
             <li key={r.symbol}>
               <button type="button" className="result-item" onClick={() => navigate({ page: "market-company", market, symbol: r.symbol })}>
+                <CompanyMark ticker={r.symbol} name={r.name} size="sm" />
                 <span className="result-name">{r.name}</span>
                 <span className="muted small">
                   {r.symbol}

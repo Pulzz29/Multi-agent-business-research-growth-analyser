@@ -90,11 +90,9 @@ def test_dashboard_overview(client, auth):
 
 
 def test_backup_health(client, auth):
-    from app.database.sqlite_manager import working_database_path
-    import sqlite3
-    con = sqlite3.connect(working_database_path().resolve().as_uri() + "?mode=ro", uri=True)
-    completed = con.execute("SELECT COUNT(*) FROM research_execution_runs WHERE status='completed'").fetchone()[0]
-    con.close()
+    from research_v2_support import live_db_scalar
+
+    completed = live_db_scalar("SELECT COUNT(*) FROM research_execution_runs WHERE status='completed'")
     body = client.get("/api/v1/system/backup-health", headers=auth).json()
     assert body["status"] == "healthy"
     assert body["completed_jobs_checked"] == completed >= 5 and body["unverified_backup_count"] == 0
@@ -141,11 +139,9 @@ def test_news_status(client, auth, ticker, baseline):
     assert r.status_code == 200
     body = r.json()
     assert body["ticker"] == ticker
-    import sqlite3
-    from app.database.sqlite_manager import working_database_path
-    con = sqlite3.connect(working_database_path().resolve().as_uri() + "?mode=ro", uri=True)
-    stored = con.execute("SELECT COUNT(*) FROM news_articles WHERE company_ticker = ?", (ticker,)).fetchone()[0]
-    con.close()
+    from research_v2_support import live_db_scalar
+
+    stored = live_db_scalar("SELECT COUNT(*) FROM news_articles WHERE company_ticker = ?", (ticker,))
     # Every stored article is accounted for: verified + hidden (strict relevance rules).
     assert body["stored_article_count"] == stored >= baseline["primary_detail"]["news_by_ticker"].get(ticker, 0)
     assert body["article_count"] + body["hidden_article_count"] == stored

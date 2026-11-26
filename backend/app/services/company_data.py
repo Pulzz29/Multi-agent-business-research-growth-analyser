@@ -14,12 +14,21 @@ A refresh is successful when profile, quote and statements all refreshed
 ``stale: true`` and ``refresh_error``, or raises NoCompanyData when nothing is
 stored. Concurrent requests for the same company share one refresh: later
 callers wait for and reuse the first one's result (no second provider round).
+
+24-hour cache (company_cache, table company_data_cache): in "auto" mode a
+valid cached payload is returned first, with no provider, AI or recompute
+work. A successful refresh stores the complete payload with
+``expires_at = fetched_at + CACHE_TTL_HOURS``; cache hits never extend it.
+The fetch lease in the database makes one request the fetcher across
+processes and instances; the others wait for its result. Failed refreshes
+are never cached.
 """
 
 import logging
 import threading
 from datetime import timedelta
 
+from app.services import company_cache as cache
 from app.services import market_registry as registry
 from app.services import market_storage as storage
 from app.services.data_freshness import configured_ttl_hours, needs_refresh, parse_utc, utc_now
@@ -168,6 +177,18 @@ def _shared_refresh(market, symbol, name, clients, now, refresh_fn):
 
 # --------------------------------------------------------------------- API
 
+def _cache_info(entry, status):
+    return {"status": status, "fetched_at": entry["fetched_at"].isoformat(),
+            "expires_at": entry["expires_at"].isoformat()}
+
+
+def _from_cache(entry, info, status="hit"):
+    payload = dict(entry["payload"])
+    payload["data_refresh"] = {**info, "cache": _cache_info(entry, status),
+                               "last_refreshed_at": payload.get("last_refreshed_at")}
+    return payload
+
+
 def get_company_data(market, symbol, mode="auto", name=None, clients=None, now=None, refresh_fn=None):
     if mode not in MODES:
         raise ValueError("mode must be 'auto' or 'force'.")
@@ -177,19 +198,28 @@ def get_company_data(market, symbol, mode="auto", name=None, clients=None, now=N
     if refresh_fn is None:
         from app.services.market_ingestion import refresh_company as refresh_fn
 
+    key = cache.company_key(market, symbol)
+    ttl = configured_ttl_hours()
+    info = {
+        "mode": mode, "ttl_hours": ttl, "decision": None, "refreshed": False,
+        "stale": False, "refresh_error": None, "warnings": [], "message": None,
+        "joined_in_progress_refresh": False, "cooldown_seconds_remaining": 0,
+        "sources": None, "cache": None,
+    }
+
+    if mode == "auto":
+        entry = cache.get_valid(cache.COMPANY, key, now)
+        if entry is not None:
+            info["decision"] = "served_from_cache"
+            logger.info("company_data symbol=%s mode=auto decision=served_from_cache expires_at=%s",
+                        symbol, entry["expires_at"].isoformat())
+            return _from_cache(entry, info)
+
     summary = registry.company_summary(market, symbol)
     if summary is None and not name:
         raise UnknownCompany("Company not found. Search providers to add it.")
     stored = storage.get_company(symbol) if summary and summary["registered"] else None
     last = (stored or {}).get("last_refreshed_at")
-    ttl = configured_ttl_hours()
-
-    info = {
-        "mode": mode, "ttl_hours": ttl, "decision": None, "refreshed": False,
-        "stale": False, "refresh_error": None, "warnings": [], "message": None,
-        "joined_in_progress_refresh": False, "cooldown_seconds_remaining": 0,
-        "sources": None,
-    }
 
     if mode == "force":
         remaining = cooldown_remaining(symbol, now)
@@ -220,8 +250,38 @@ def get_company_data(market, symbol, mode="auto", name=None, clients=None, now=N
         None if age_hours is None else round(age_hours, 2), ttl,
     )
 
+    if not do_refresh and mode == "auto":
+        # Fetched within the TTL but not cached (for example data migrated
+        # from SQLite): serve it from the database and cache it until
+        # last_refreshed_at + TTL; no provider call.
+        payload = build_payload(market, symbol, now)
+        if _has_data(payload):
+            entry = cache.store(cache.COMPANY, key, market, symbol, payload, fetched_at=parse_utc(last))
+            info["decision"] = "served_from_database"
+            return _from_cache(entry, info, status="stored")
+
     if do_refresh:
-        outcome, joined = _shared_refresh(market, symbol, name, clients, now, refresh_fn)
+        owner = cache.new_owner()
+        if cache.acquire_lease(cache.COMPANY, key, market, symbol, owner, now=cache.utc_now()):
+            try:
+                outcome, joined = _shared_refresh(market, symbol, name, clients, now, refresh_fn)
+            except BaseException:
+                cache.release_lease(cache.COMPANY, key, owner, "refresh_exception")
+                raise
+            if not outcome.get("success"):
+                cache.release_lease(cache.COMPANY, key, owner, outcome.get("error"))
+        else:
+            # Another request (possibly another instance) is fetching: wait
+            # for its result instead of calling the providers again.
+            entry = cache.wait_for(cache.COMPANY, key, now=now, timeout=JOIN_TIMEOUT_SECONDS)
+            if entry is not None:
+                info["joined_in_progress_refresh"] = True
+                info["refreshed"] = True
+                logger.info("company_data symbol=%s outcome=joined_other_fetcher", symbol)
+                return _from_cache(entry, info, status="joined")
+            outcome = {"success": False, "results": {},
+                       "error": "A refresh for this company is still running."}
+            joined = True
         info["joined_in_progress_refresh"] = joined
         info["sources"] = outcome.get("results")
         info["warnings"] = list(outcome.get("warnings") or [])
@@ -244,5 +304,14 @@ def get_company_data(market, symbol, mode="auto", name=None, clients=None, now=N
     payload = build_payload(market, symbol, now)
     if payload is None or (not _has_data(payload) and not payload.get("registered")):
         raise NoCompanyData(f"No data is stored for {symbol} yet.")
+    if info["refreshed"] and not info["joined_in_progress_refresh"] and _has_data(payload):
+        # Only a complete, successful fetch becomes a valid cache entry.
+        entry = cache.store(cache.COMPANY, key, market, symbol, payload, fetched_at=now)
+        info["cache"] = _cache_info(entry, "stored")
+    elif info["refreshed"]:
+        entry = cache.get_valid(cache.COMPANY, key, now)
+        info["cache"] = _cache_info(entry, "joined") if entry else None
+    else:
+        info["cache"] = {"status": "not_cached", "fetched_at": None, "expires_at": None}
     payload["data_refresh"] = {**info, "last_refreshed_at": payload.get("last_refreshed_at")}
     return payload

@@ -2791,3 +2791,116 @@ a {
   display: grid;
   gap: 4px;
 }
+
+/* Operations panel */
+.section-title {
+  margin: 28px 0 12px;
+  font-size: 1.15rem;
+}
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+}
+
+/* Company logos (CompanyMark): verified image or initials badge */
+.mark {
+  letter-spacing: -0.02em;
+}
+.mark-sm {
+  font-size: 0.62rem;
+}
+.mark-logo {
+  background: #fff;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  overflow: hidden;
+  padding: 3px;
+}
+.mark-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Overview market toggle and market sections */
+.market-toggle-lg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+}
+.market-toggle-lg button {
+  border: 0;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-weight: 650;
+  cursor: pointer;
+  color: inherit;
+}
+.market-toggle-lg button[aria-pressed="true"] {
+  background: var(--accent, #2f6fe0);
+  color: #fff;
+}
+.fund-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+.fund-metric {
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.fund-metric .fund-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 4px 0;
+}
+.fund-metric.unavailable .fund-value {
+  color: var(--muted, #888);
+  font-size: 1rem;
+}
+.top-company-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.top-company-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.top-company-card:hover {
+  border-color: var(--accent, #2f6fe0);
+}
+
+/* Indian Overview: full-width company search, two result columns on wide screens. */
+.search-results-wide {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 4px 16px;
+}
+
+.topbar-user {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-report-unavailable {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}

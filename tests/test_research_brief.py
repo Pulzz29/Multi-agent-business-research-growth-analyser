@@ -28,7 +28,9 @@ def report_root(isolated_runtime):
         pytest.skip("saved MSFT report not present")
     target = isolated_runtime.root / "reports" / "research_runs"
     target.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target / source.name)
+    from research_v2_support import put_doc
+
+    put_doc(target / source.name, source.read_text(encoding="utf-8"))
     return isolated_runtime.root
 
 
@@ -37,7 +39,9 @@ def brief_client(**overrides):
 
 
 def sidecar(root):
-    return json.loads((root / "reports" / "research_runs" / "summaries" / f"{RUN}.json").read_text(encoding="utf-8"))
+    from research_v2_support import get_doc
+
+    return json.loads(get_doc(root / "reports" / "research_runs" / "summaries" / f"{RUN}.json"))
 
 
 def test_brief_is_generated_validated_and_reused_without_an_ai_call(report_root):
@@ -72,9 +76,11 @@ def test_regenerates_when_the_underlying_dataset_changes(report_root):
     es.generate_brief(report_root, RUN, ticker="MSFT", client=client)
     # Simulate the report's dataset being rebuilt from refreshed data.
     path = report_root / "reports" / "research_runs" / "insights" / f"{RUN}.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
+    from research_v2_support import get_doc, put_doc
+
+    data = json.loads(get_doc(path))
     data["dataset_sha256"] = "0" * 64
-    path.write_text(json.dumps(data), encoding="utf-8")
+    put_doc(path, json.dumps(data))
     assert not es.is_current(report_root, RUN)
     es.generate_brief(report_root, RUN, ticker="MSFT", client=client)
     assert len(client.requests) == 2
@@ -86,10 +92,12 @@ def test_old_summary_without_research_is_readable_and_not_current(report_root):
 
     directory = report_root / "reports" / "research_runs" / "summaries"
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{RUN}.json").write_text(json.dumps({
+    from research_v2_support import put_doc
+
+    put_doc(directory / f"{RUN}.json", json.dumps({
         "run_id": RUN, "ticker": "MSFT", "status": "completed", "word_count": 80,
         "sections": [{"section": "financial_position", "text": "Older summary.", "evidence_ids": []}],
-    }), encoding="utf-8")
+    }))
     state = es.brief_state(report_root, RUN, "MSFT")
     assert state["status"] == "completed" and state["job_status"] == "done"
     assert state["research"] is None and state["is_current"] is False
@@ -188,7 +196,9 @@ def test_interrupted_attempt_is_reported_as_failed(report_root):
     record = sidecar(report_root)
     record["attempt"] = {"status": "running", "started_at_utc": "2026-11-24T00:00:00+00:00"}
     path = report_root / "reports" / "research_runs" / "summaries" / f"{RUN}.json"
-    path.write_text(json.dumps(record), encoding="utf-8")
+    from research_v2_support import put_doc
+
+    put_doc(path, json.dumps(record))
     state = es.brief_state(report_root, RUN, "MSFT")
     assert state["job_status"] == "failed" and "interrupted" in state["error"]
     assert state["status"] == "completed"  # the previous version stays visible
@@ -197,7 +207,9 @@ def test_interrupted_attempt_is_reported_as_failed(report_root):
 def test_brief_prompt_fits_the_input_budget(report_root):
     from app.services import ai_provider, executive_summary as es, report_insights
 
-    report = json.loads((report_root / "reports" / "research_runs" / f"{RUN}.json").read_text(encoding="utf-8"))
+    from research_v2_support import get_doc
+
+    report = json.loads(get_doc(report_root / "reports" / "research_runs" / f"{RUN}.json"))
     insights = report_insights.load_or_build(report, report_root)
     context = es.build_brief_context(report, insights)
     instructions, items = ai_provider.split_messages(es.build_brief_messages(context))

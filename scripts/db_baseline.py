@@ -1,4 +1,8 @@
 """Read-only InsightIQ data baseline: SQLite integrity, row counts, report and cache hashes.
+SQLITE-ONLY TOOL: works on the SQLite database file (DB_BACKEND=sqlite, rollback and
+file recovery). With PostgreSQL use scripts/setup_postgres.py, pg_dump/pg_restore and
+scripts/migrate_sqlite_to_postgres.py instead (docs/POSTGRES_MIGRATION.md).
+
 
 Usage: python scripts/db_baseline.py <project_root> <output_json>
 Opens every database with mode=ro; never writes to the data directory.

@@ -3,10 +3,12 @@
 Safety:
 * every test runs with outbound network access blocked (loopback only), so no
   Azure OpenAI, NewsData.io, Finnhub, FMP, Yahoo Finance or SEC request can be made;
-* only API_ACCESS_KEY (to call the locally running backend) and SEC_USER_AGENT
-  (a non-secret identity) are read from the env file. Every provider credential is
-  replaced by an obviously fake test value, so a real key never enters the test
-  process, its output or a test artifact.
+* only API_ACCESS_KEY (to call the locally running backend), SEC_USER_AGENT
+  (a non-secret identity) and the local PostgreSQL connection values (DB_HOST,
+  DB_PORT, DB_USER, DB_PASSWORD, DB_SSLMODE; used only for the separate test
+  database "<DB_NAME>_test") are read from the env file. Every provider
+  credential is replaced by an obviously fake test value, so a real key never
+  enters the test process, its output or a test artifact.
 API tests target the locally running backend (default http://127.0.0.1:8000).
 """
 import json
@@ -33,11 +35,12 @@ BASELINE = PROJECT_ROOT / "migration_reports" / "artifacts" / "baseline_original
 # Read only what tests genuinely need from the env file (see module docstring).
 # Non-secret settings tests need: the access key for the local API, the SEC identity,
 # and the legacy project roots used to rebase paths recorded on earlier machines.
-ENV_KEYS_FROM_FILE = ("API_ACCESS_KEY", "SEC_USER_AGENT", "INSIGHTIQ_LEGACY_PROJECT_ROOTS")
+ENV_KEYS_FROM_FILE = ("API_ACCESS_KEY", "SEC_USER_AGENT")
 TEST_PROVIDER_ENV = {
     "AZURE_OPENAI_API_KEY": "TEST_ONLY_NOT_A_REAL_AZURE_KEY",
     "AZURE_OPENAI_ENDPOINT": "https://insightiq-test.openai.azure.com/openai/v1/",
-    "AZURE_OPENAI_DEPLOYMENT": "gpt-5.4-pro",
+    # Neutral test model name: the real model always comes from LLM_MODEL in .env.
+    "LLM_MODEL": "test-model",
     "NEWSDATA_API_KEY": "TEST_ONLY_NOT_A_REAL_NEWSDATA_KEY",
     "FINNHUB_API_KEY": "TEST_ONLY_NOT_A_REAL_FINNHUB_KEY",
     "FMP_API_KEY": "TEST_ONLY_NOT_A_REAL_FMP_KEY",
@@ -48,8 +51,57 @@ for key in ENV_KEYS_FROM_FILE:
         os.environ.setdefault(key, _file_values[key])
 for key, value in TEST_PROVIDER_ENV.items():
     os.environ[key] = value
+# A real Groq key in the shell must never turn a test's Azure failure into a live call,
+# and LLM tuning values from the shell must not change test behaviour.
+for key in (
+    "GROQ_API_KEY", "GROQ_MODEL", "AZURE_OPENAI_DEPLOYMENT", "LLM_API", "LLM_TEMPERATURE",
+    "LLM_MAX_OUTPUT_TOKENS", "LLM_TIMEOUT_SECONDS", "LLM_MAX_RETRIES", "LLM_REASONING_EFFORT",
+    "LLM_EXPECTED_MODEL_PREFIX", "INSIGHTIQ_AZURE_REASONING_EFFORT",
+    "INSIGHTIQ_AZURE_EXPECTED_MODEL_PREFIX", "INSIGHTIQ_AZURE_HTTP_TIMEOUT_SECONDS",
+):
+    os.environ.pop(key, None)
 os.environ.setdefault("SEC_USER_AGENT", "InsightIQ tests test@example.invalid")
+
+# ---- Test database --------------------------------------------------------
+# PostgreSQL: the separate test database "<DB_NAME>_test" on the server from
+# the env file (never the application database; created by
+# scripts/setup_postgres.py --with-test-db). Each isolated test gets its own
+# schema there. When PostgreSQL is unreachable (or INSIGHTIQ_TEST_DB_BACKEND=
+# sqlite) the suite uses isolated SQLite copies, as before.
+for key in ("DATABASE_URL", "DB_SCHEMA", "DB_BACKEND", "CACHE_TTL_HOURS", "DATA_REFRESH_TTL_HOURS",
+            "CACHE_CLEANUP_INTERVAL_MINUTES"):
+    os.environ.pop(key, None)
+APP_DB_NAME = (_file_values.get("DB_NAME") or "").strip()
+for key in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_SSLMODE"):
+    if _file_values.get(key) is not None:
+        os.environ[key] = _file_values[key]
+TEST_DB_NAME = f"{APP_DB_NAME}_test" if APP_DB_NAME else ""
+os.environ["DB_NAME"] = TEST_DB_NAME
 del _file_values
+
+
+def _postgres_test_database_available():
+    if os.getenv("INSIGHTIQ_TEST_DB_BACKEND", "").strip().lower() == "sqlite" or not TEST_DB_NAME:
+        return False
+    try:
+        import psycopg
+
+        psycopg.connect(host=os.getenv("DB_HOST"), port=os.getenv("DB_PORT") or 5432, dbname=TEST_DB_NAME,
+                        user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD") or None,
+                        connect_timeout=3).close()
+        return True
+    except Exception:
+        return False
+
+
+TEST_DB_BACKEND = "postgres" if _postgres_test_database_available() else "sqlite"
+os.environ["DB_BACKEND"] = TEST_DB_BACKEND
+if TEST_DB_BACKEND == "postgres":
+    assert TEST_DB_NAME.endswith("_test") and TEST_DB_NAME != APP_DB_NAME
+    # Tests that are not isolated read the copy of the live runtime data.
+    os.environ["DB_SCHEMA"] = "seed_live"
+else:
+    print("[tests] PostgreSQL test database unavailable: using isolated SQLite copies.")
 os.environ.setdefault("INSIGHTIQ_PROJECT_ROOT", str(PROJECT_ROOT))
 sys.path.insert(0, str(BACKEND))
 
@@ -75,6 +127,32 @@ def _guarded_getaddrinfo(host, *args, **kwargs):
 def block_external_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
     monkeypatch.setattr(socket, "getaddrinfo", _guarded_getaddrinfo)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def seeded_test_database():
+    """PostgreSQL only: copy the SQLite data into the test database once
+    (re-seeded when the SQLite files change)."""
+    if TEST_DB_BACKEND != "postgres":
+        yield None
+        return
+    from research_v2_support import ensure_seed_schemas
+
+    ensure_seed_schemas()
+    yield TEST_DB_NAME
+    from app.database import db
+
+    db.close_pools()
+
+
+@pytest.fixture(autouse=True)
+def fresh_model_quirks():
+    """Each test starts without model behaviour learned by an earlier test."""
+    from app.services import ai_provider
+
+    ai_provider.reset_model_quirks()
+    yield
+    ai_provider.reset_model_quirks()
 
 
 @pytest.fixture(scope="session")

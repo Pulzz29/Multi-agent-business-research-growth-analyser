@@ -1,4 +1,8 @@
 """Isolated BUG B1 recovery test: does refreshed news survive runtime-database restoration?
+SQLITE-ONLY TOOL: works on the SQLite database file (DB_BACKEND=sqlite, rollback and
+file recovery). With PostgreSQL use scripts/setup_postgres.py, pg_dump/pg_restore and
+scripts/migrate_sqlite_to_postgres.py instead (docs/POSTGRES_MIGRATION.md).
+
 
 For each scenario a throwaway copy of data/ and reports/ is made in a temp directory, and
 INSIGHTIQ_PROJECT_ROOT and TEMP point into it, so the real project database is never opened for
@@ -132,7 +136,7 @@ def run_scenario(scenario, base):
     env = {k: v for k, v in os.environ.items() if not k.startswith("INSIGHTIQ_")}
     env.update({
         "INSIGHTIQ_PROJECT_ROOT": str(root), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
-        "API_ACCESS_KEY": "isolated-test-access-key", "AZURE_OPENAI_API_KEY": "isolated-test-placeholder", "AZURE_OPENAI_ENDPOINT": "https://isolated-test.openai.azure.com/", "AZURE_OPENAI_DEPLOYMENT": "isolated-test-deployment",
+        "API_ACCESS_KEY": "isolated-test-access-key", "AZURE_OPENAI_API_KEY": "isolated-test-placeholder", "AZURE_OPENAI_ENDPOINT": "https://isolated-test.openai.azure.com/", "LLM_MODEL": "isolated-test-deployment",
         "NEWSDATA_API_KEY": "isolated-test-placeholder", "SEC_USER_AGENT": "InsightIQ-isolated-test test@example.invalid",
         # The copy lives at a different root: paths stored by the real project are rebased,
         # exactly as for a moved project folder (see BUG_REPORT B11). Legacy roots already

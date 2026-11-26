@@ -1,0 +1,68 @@
+{
+  "started_at_utc": "2026-11-25T11:24:13.404553+00:00",
+  "python": {
+    "ran": true,
+    "packages": 117,
+    "vulnerable": [
+      {
+        "name": "opentelemetry-api",
+        "version": "1.42.1",
+        "ids": [
+          "CVE-2026-114603",
+          "CVE-2026-126360"
+        ],
+        "fix_versions": [
+          "1.45.1",
+          "1.45.2"
+        ]
+      },
+      {
+        "name": "pip",
+        "version": "25.3",
+        "ids": [
+          "PYSEC-2026-1796",
+          "PYSEC-2026-2875",
+          "PYSEC-2026-2876",
+          "PYSEC-2026-196",
+          "PYSEC-2026-1796",
+          "PYSEC-2026-196",
+          "PYSEC-2026-2875",
+          "PYSEC-2026-2876",
+          "PYSEC-2026-3721",
+          "PYSEC-2026-3721"
+        ],
+        "fix_versions": [
+          "26.0",
+          "26.1",
+          "26.1.2",
+          "26.2",
+          "26.2.0"
+        ]
+      },
+      {
+        "name": "pytest",
+        "version": "8.4.2",
+        "ids": [
+          "PYSEC-2026-1845",
+          "PYSEC-2026-1845"
+        ],
+        "fix_versions": [
+          "9.0.3"
+        ]
+      }
+    ]
+  },
+  "frontend": {
+    "ran": true,
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "packages": []
+  },
+  "finished_at_utc": "2026-11-25T11:24:36.634434+00:00"
+}

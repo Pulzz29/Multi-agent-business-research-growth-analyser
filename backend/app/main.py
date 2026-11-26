@@ -9,6 +9,8 @@ from fastapi import (
     Depends,
     FastAPI,
     HTTPException,
+    Request,
+    Response,
     status,
 )
 from fastapi.security import (
@@ -43,6 +45,32 @@ app = FastAPI(
     openapi_url=None,
 )
 
+from app.core.security import HardeningMiddleware as _HardeningMiddleware, install_redaction as _install_redaction
+
+_install_redaction()
+app.add_middleware(_HardeningMiddleware)
+
+
+def _database_error_types():
+    from app.database import db
+
+    return (db.DatabaseUnavailable, *db.OperationalError)
+
+
+@app.exception_handler(Exception)
+async def _database_unavailable_handler(request, exc):
+    """A database outage is reported as 503 with a plain message; any other
+    unexpected error keeps FastAPI's standard 500 response."""
+    from fastapi.responses import JSONResponse
+
+    if isinstance(exc, _database_error_types()):
+        import logging
+
+        logging.getLogger("insightiq.db").error("request_failed database_unavailable %s",
+                                                type(exc).__name__)
+        return JSONResponse(status_code=503, content={"detail": "The database is unavailable. Try again shortly."})
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 
 def project_root():
     return Path(
@@ -50,31 +78,54 @@ def project_root():
     ).resolve()
 
 
+SESSION_COOKIE = "insightiq_session"
+CSRF_COOKIE = "insightiq_csrf"
+UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+
+
 def require_api_key(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(
         security_scheme
     ),
 ):
+    """Authentication for every private route.
+
+    Users: a valid server-side session (HttpOnly cookie from /auth/login);
+    state-changing requests must also send the CSRF token (X-CSRF-Token).
+    Server-to-server (scripts, health checks, automated tests): the
+    API_ACCESS_KEY Bearer token, which the web UI no longer uses.
+    """
     expected = os.getenv("API_ACCESS_KEY")
 
     if (
-        not expected
-        or credentials is None
-        or credentials.scheme.lower() != "bearer"
-        or not hmac.compare_digest(
-            credentials.credentials,
-            expected,
-        )
+        expected
+        and credentials is not None
+        and credentials.scheme.lower() == "bearer"
+        and hmac.compare_digest(credentials.credentials, expected)
     ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required.",
-            headers={
-                "WWW-Authenticate": "Bearer"
-            },
-        )
+        return True
 
-    return True
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        from app.services import auth as _auth
+
+        session = _auth.validate_session(token)
+        if session is not None:
+            if request.method in UNSAFE_METHODS and not _auth.csrf_matches(
+                session, request.headers.get("X-CSRF-Token")
+            ):
+                raise HTTPException(status_code=403, detail="Security token missing or invalid. Reload the page.")
+            request.state.user = {"id": session["id"], "email": session["email"]}
+            return True
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required.",
+        headers={
+            "WWW-Authenticate": "Bearer"
+        },
+    )
 
 
 def validate_job_id(run_id):
@@ -149,16 +200,9 @@ def health_ready():
                 "SELECT 1"
             ).fetchone()
 
-            tables = {
-                row["name"]
-                for row in conn.execute(
-                    """
-                    SELECT name
-                    FROM sqlite_master
-                    WHERE type = 'table'
-                    """
-                ).fetchall()
-            }
+            from app.database.db import table_names
+
+            tables = set(table_names(conn))
 
         required_tables = {
             "sec_facts",
@@ -178,7 +222,11 @@ def health_ready():
                 "Project storage unavailable."
             )
 
-        if not (
+        from app.database import db as _journal_db
+
+        # SQLite: the journal folder must exist. PostgreSQL: journals are
+        # rows in stored_documents.
+        if not _journal_db.is_postgres() and not (
             root / "data" / "research_job_journal"
         ).is_dir():
             raise RuntimeError(
@@ -196,21 +244,32 @@ def health_ready():
             detail="Research service not ready.",
         )
 
-    # Configuration only (no AI request): whether the Azure deployment is set.
+    # Configuration only (no AI request): which model is configured.
     try:
         from app.services.ai_provider import ai_runtime_settings
 
         ai = ai_runtime_settings()
-        ai_status = {"provider": "azure_openai", "deployment": ai["deployment"], "configured": True}
+        ai_status = {"provider": "azure_openai", "model": ai["model"], "deployment": ai["deployment"],
+                     "api": ai["api"], "configured": True}
     except Exception:
-        ai_status = {"provider": "azure_openai", "deployment": None, "configured": False}
+        ai_status = {"provider": "azure_openai", "model": None, "deployment": None, "api": None,
+                     "configured": False}
+    from app.services.ai_provider import fallback_settings
+
+    fallback = fallback_settings() or {}
+    ai_fallback = {"provider": fallback.get("provider"), "model": fallback.get("model"),
+                   "configured": bool(fallback.get("configured"))}
+
+    from app.database import db as _db
 
     return {
         "status": "ready",
         "service": "insightiq-api",
         "database": "available",
+        "database_backend": _db.backend(),
         "research_job_journal": "available",
         "ai_provider": ai_status,
+        "ai_fallback": ai_fallback,
     }
 
 
@@ -278,10 +337,10 @@ def get_report(run_id: str):
         )
 
     try:
+        from app.services import document_store
+
         document = json.loads(
-            expected_report.read_text(
-                encoding="utf-8"
-            )
+            document_store.read_text(expected_report) or "null"
         )
 
         if (
@@ -293,7 +352,7 @@ def get_report(run_id: str):
                 "Stored report identity mismatch."
             )
 
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, AttributeError):
         raise HTTPException(
             status_code=503,
             detail="Research report unavailable.",
@@ -302,7 +361,7 @@ def get_report(run_id: str):
     return document
 
 # ==========================================================
-# Background research submission — Colab worker
+# Background research submission — in-process worker
 # ==========================================================
 
 import threading
@@ -361,7 +420,7 @@ def resolve_research_options(request):
     }
 
 
-# Colab development executor:
+# In-process research executor:
 # one running task, up to three accepted tasks.
 _WORKER_CAPACITY = 3
 
@@ -1309,6 +1368,23 @@ def _initialise_market_storage():
         _market_storage.ensure_market_storage()
     except Exception:  # storage is created lazily on first write instead
         _markets_logger.warning("Market storage could not be initialised at startup.")
+    # Expired company-cache rows are deleted periodically (any instance may run it).
+    from app.services import cache_cleanup
+
+    cache_cleanup.start()
+    # Correlated tracing of model calls, agents, calculations, forecasts and PDFs.
+    from app.services import telemetry
+
+    telemetry.install()
+
+
+@app.on_event("shutdown")
+def _stop_background_database_work():
+    from app.database import db
+    from app.services import cache_cleanup
+
+    cache_cleanup.stop()
+    db.close_pools()
 
 
 _MarketsSymbol = _MarketsAnnotated[str, _Field(min_length=1, max_length=24)]
@@ -1394,6 +1470,15 @@ async def market_provider_search(market: str, request: MarketSearchRequest):
     market = _market_or_404(market)
     from app.services.market_providers.common import ProviderError
 
+    from app.services import company_cache
+
+    key = company_cache.search_key(market, request.q)
+    cached = company_cache.get_valid(company_cache.SEARCH, key)
+    if cached is not None:
+        return {"market": market, "query": request.q, "results": cached["payload"]["results"],
+                "source": "cache", "cached_at": cached["fetched_at"].isoformat(),
+                "expires_at": cached["expires_at"].isoformat()}
+
     def run():
         clients, missing = _market_ingestion.default_clients(market)
         if market == "US":
@@ -1410,7 +1495,77 @@ async def market_provider_search(market: str, request: MarketSearchRequest):
         raise HTTPException(status_code=502, detail=exc.safe_message)
     except Exception:
         raise HTTPException(status_code=502, detail="Provider search is unavailable.")
+    if results:
+        # Only a successful, non-empty result is cached (24 hours).
+        try:
+            company_cache.store(company_cache.SEARCH, key, market, None, {"results": results})
+        except Exception:
+            _markets_logger.warning("Search result could not be cached.")
     return {"market": market, "query": request.q, "results": results, "source": "provider"}
+
+
+@app.get("/api/v1/markets/{market}/overview", dependencies=[Depends(require_api_key)])
+def market_overview_endpoint(market: str):
+    """Home Overview for one market from stored data (no provider calls)."""
+    market = _market_or_404(market)
+    from app.services import market_overview
+
+    try:
+        return market_overview.overview(market)
+    except Exception:
+        _markets_logger.exception("Market overview failed for %s", market)
+        raise HTTPException(status_code=503, detail="Market overview unavailable.")
+
+
+def _stored_company_or_404(market, symbol):
+    summary = _market_registry.company_summary(market, symbol)
+    if summary is None or not summary.get("registered"):
+        raise HTTPException(status_code=404, detail="Company data not loaded yet. Open the company to load it.")
+    return summary
+
+
+@app.get("/api/v1/markets/{market}/companies/{symbol}/fundamentals", dependencies=[Depends(require_api_key)])
+def market_company_fundamentals(market: str, symbol: str):
+    """Deterministic fundamentals from stored statements and the latest quote."""
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    _stored_company_or_404(market, symbol)
+    from app.services import fundamentals
+
+    return fundamentals.compute(market, symbol)
+
+
+@app.get("/api/v1/markets/{market}/companies/{symbol}/financials", dependencies=[Depends(require_api_key)])
+def market_company_financials(market: str, symbol: str):
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    _stored_company_or_404(market, symbol)
+    from app.services import fundamentals
+
+    return fundamentals.financial_series(market, symbol)
+
+
+@app.get("/api/v1/markets/{market}/companies/{symbol}/forecasts", dependencies=[Depends(require_api_key)])
+def market_company_forecasts(market: str, symbol: str):
+    """Forecast qualification checks with the genuine historical series."""
+    market = _market_or_404(market)
+    symbol = _symbol_or_422(symbol)
+    _stored_company_or_404(market, symbol)
+    from app.services import market_forecasts
+
+    return market_forecasts.qualify(market, symbol)
+
+
+@app.get("/api/v1/logos", dependencies=[Depends(require_api_key)])
+def company_logos(symbols: str = CompanyQuery(default="", max_length=2000)):
+    """Logo candidates for up to 100 symbols, from each company's own stored profile."""
+    from app.services import logos
+
+    requested = [s for s in symbols.split(",") if s.strip()]
+    try:
+        return {"logos": logos.resolve_many(requested)}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Logo metadata unavailable.")
 
 
 @app.get("/api/v1/markets/{market}/companies/{symbol}", dependencies=[Depends(require_api_key)])
@@ -1584,3 +1739,155 @@ def download_sector_report(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ==========================================================
+# Operations: traces, latency, run metrics, tokens, alerts, audit
+# ==========================================================
+
+def _operations_unavailable():
+    raise HTTPException(status_code=404, detail="Operational telemetry needs the PostgreSQL backend.")
+
+
+@app.get("/api/v1/operations/overview", dependencies=[Depends(require_api_key)])
+def operations_overview(hours: int = Query(default=24, ge=1, le=24 * 30), days: int = Query(default=30, ge=1, le=365)):
+    """Measured latency percentiles, research-run outcomes, token usage and open alerts."""
+    from app.services import db_backup, telemetry
+
+    if not telemetry.enabled():
+        _operations_unavailable()
+    telemetry.evaluate_alerts()
+    return {
+        "latency": telemetry.latency_summary(hours=hours),
+        "runs": telemetry.run_metrics(days=days),
+        "tokens": telemetry.token_usage(days=days),
+        "alerts": telemetry.alerts(),
+        "recent_traces": telemetry.recent_traces(limit=20),
+        "last_backup": db_backup.latest_backup_status(),
+    }
+
+
+@app.get("/api/v1/operations/traces/{trace_id}", dependencies=[Depends(require_api_key)])
+def operations_trace(trace_id: str):
+    from app.services import telemetry
+
+    if not telemetry.enabled():
+        _operations_unavailable()
+    try:
+        detail = telemetry.trace_detail(trace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid trace id.")
+    if not detail["spans"]:
+        raise HTTPException(status_code=404, detail="Trace not found.")
+    return detail
+
+
+@app.get("/api/v1/operations/alerts", dependencies=[Depends(require_api_key)])
+def operations_alerts(include_resolved: bool = False):
+    from app.services import telemetry
+
+    if not telemetry.enabled():
+        _operations_unavailable()
+    return {"alerts": telemetry.alerts(include_resolved=include_resolved)}
+
+
+@app.get("/api/v1/operations/audit", dependencies=[Depends(require_api_key)])
+def operations_audit(limit: int = Query(default=50, ge=1, le=500)):
+    from app.services import telemetry
+
+    if not telemetry.enabled():
+        _operations_unavailable()
+    return {"events": telemetry.audit_events(limit=limit)}
+
+
+# ==========================================================
+# User authentication (email + password, server-side sessions)
+# ==========================================================
+
+from pydantic import BaseModel as _AuthModel, ConfigDict as _AuthConfig, Field as _AuthField
+
+from app.core.security import RateLimiter as _RateLimiter
+
+_LOGIN_LIMITER = _RateLimiter()
+_LOGIN_WINDOW_SECONDS = 900.0
+
+
+class LoginRequest(_AuthModel):
+    model_config = _AuthConfig(extra="forbid")
+
+    email: str = _AuthField(min_length=3, max_length=320)
+    password: str = _AuthField(min_length=1, max_length=256)
+
+
+def _cookie_options(request, max_age):
+    # Secure when the request arrived over HTTPS (directly, or via trusted
+    # proxies' X-Forwarded-Proto) or always with SESSION_COOKIE_SECURE=true
+    # (set in production so cookies never depend on proxy header handling).
+    forced = os.getenv("SESSION_COOKIE_SECURE", "").strip().lower() in ("1", "true", "yes")
+    return {
+        "max_age": max_age,
+        "path": "/",
+        "samesite": "strict",
+        "secure": forced or request.url.scheme == "https",
+    }
+
+
+@app.post("/api/v1/auth/login")
+def auth_login(payload: LoginRequest, request: Request, response: Response):
+    """Email + password login. One generic error for any wrong email/password."""
+    from app.services import auth as _auth
+
+    limit = int(os.getenv("LOGIN_ATTEMPTS_PER_15_MINUTES", "10"))
+    client = request.client.host if request.client else "unknown"
+    email_key = str(payload.email).strip().lower()[:320]
+    for key in (f"login-ip|{client}", f"login-email|{email_key}"):
+        allowed, retry = _LOGIN_LIMITER.check(key, limit, window=_LOGIN_WINDOW_SECONDS)
+        if not allowed:
+            raise HTTPException(status_code=429, detail="Too many sign-in attempts. Try again later.",
+                                headers={"Retry-After": str(retry)})
+
+    user = _auth.authenticate(payload.email, payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    token, csrf, expires = _auth.create_session(user)
+    max_age = int((expires - _auth.utc_now()).total_seconds())
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, **_cookie_options(request, max_age))
+    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, **_cookie_options(request, max_age))
+    return {"user": {"email": user["email"]}, "csrf_token": csrf, "expires_at": expires.isoformat()}
+
+
+@app.get("/api/v1/auth/me")
+def auth_me(request: Request):
+    """The signed-in user (session cookie only)."""
+    from app.services import auth as _auth
+
+    session = _auth.validate_session(request.cookies.get(SESSION_COOKIE))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Not signed in.")
+    return {"user": {"email": session["email"]}}
+
+
+@app.post("/api/v1/auth/logout")
+def auth_logout(request: Request, response: Response):
+    """Revoke the session and clear the cookies (CSRF-checked when signed in)."""
+    from app.services import auth as _auth
+
+    token = request.cookies.get(SESSION_COOKIE)
+    session = _auth.validate_session(token) if token else None
+    if session is not None and not _auth.csrf_matches(session, request.headers.get("X-CSRF-Token")):
+        raise HTTPException(status_code=403, detail="Security token missing or invalid. Reload the page.")
+    _auth.revoke_session(token)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(CSRF_COOKIE, path="/")
+    return {"signed_out": True}
+
+
+@app.get("/api/v1/research/companies", dependencies=[Depends(require_api_key)])
+def research_companies():
+    """Companies (US and India) with at least one completed run that has a saved report."""
+    from app.services import report_history
+
+    try:
+        return {"companies": report_history.companies_with_reports()}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Research history unavailable.")

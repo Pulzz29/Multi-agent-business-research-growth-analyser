@@ -62,21 +62,26 @@ def test_settings_load_and_project_root():
 
     settings = get_settings()
     assert Path(settings.project_root).resolve() == PROJECT_ROOT
-    assert settings.azure_openai_deployment == "gpt-5.4-pro"
+    assert settings.llm_model == os.environ["LLM_MODEL"]
     assert settings.azure_openai_endpoint.endswith("/openai/v1/")
-    assert settings.azure_reasoning_effort in {"minimal", "low", "medium", "high", "xhigh"}
+    assert settings.llm_reasoning_effort in {None, "none", "minimal", "low", "medium", "high", "xhigh"}
 
 
-def test_groq_is_fully_removed():
-    """No runtime code, dependency or setting refers to Groq any more."""
+def test_groq_is_fallback_only():
+    """Groq is only the key/config fallback in ai_provider (via the openai SDK, no groq package)."""
     import importlib.util
 
     assert importlib.util.find_spec("groq") is None
-    offenders = [
-        str(path.relative_to(APP)) for path in APP.rglob("*.py")
-        if re.search(r"groq", path.read_text(encoding="utf-8"), re.I)
-    ]
-    assert not offenders
+    # core/security.py names GROQ_API_KEY only to redact its value from logs.
+    allowed = {"core/config.py", "services/ai_provider.py", "agents/research_workflow.py",
+               "services/executive_summary.py", "core/security.py"}
+    offenders = {
+        path.relative_to(APP).as_posix() for path in APP.rglob("*.py")
+        if re.search(r"groq", path.read_text(encoding="utf-8"), re.I)
+    }
+    assert offenders <= allowed, offenders
+    provider_code = (APP / "services" / "ai_provider.py").read_text(encoding="utf-8")
+    assert not re.search(r"^\s*(import|from)\s+groq\b", provider_code, re.M)
     requirements = (PROJECT_ROOT / "backend" / "requirements.txt").read_text(encoding="utf-8")
     assert "groq" not in requirements.lower() and "openai" in requirements.lower()
 
@@ -129,6 +134,17 @@ def test_localize_stored_path():
     # Paths outside the legacy root are not rebased, so path-safety checks still reject them.
     other = localize_stored_path("/content/drive/MyDrive/elsewhere/x.json", PROJECT_ROOT)
     assert not str(other).startswith(str(PROJECT_ROOT))
+    # Any earlier copy of the project (other machine/folder), no configuration needed.
+    for stored in ("C:\\Users\\someone\\Documents\\InsightIQ\\reports\\research_runs\\y.json",
+                   "/home/dev/old-copy/reports/research_runs/y.json"):
+        assert localize_stored_path(stored, PROJECT_ROOT) == (
+            PROJECT_ROOT / "reports" / "research_runs" / "y.json").resolve()
+    backup = localize_stored_path("D:/old/InsightIQ/data/sqlite_backups/b.sqlite3", PROJECT_ROOT)
+    assert backup == (PROJECT_ROOT / "data" / "sqlite_backups" / "b.sqlite3").resolve()
+    # Only the project's own directories are anchors; traversal is never rebased.
+    for stored in ("C:/elsewhere/secrets.json", "/etc/passwd",
+                   "C:/x/reports/research_runs/../../../etc/passwd"):
+        assert not localize_stored_path(stored, PROJECT_ROOT).is_relative_to(PROJECT_ROOT.resolve())
 
 
 def test_exclusive_file_lock(tmp_path):

@@ -203,12 +203,18 @@ def read_forecast(ticker, metric):
     """Read the persisted forecast cache envelope without recomputation."""
     from app.services.forecast_cache import cache_directory_name
 
+    from app.services import document_store
+
     path = project_root() / "data" / cache_directory_name() / f"{ticker}_{metric}.json"
-    if not path.is_file():
+    try:
+        text = document_store.read_text(path)  # database on PostgreSQL, file on SQLite
+    except document_store.DocumentIntegrityError:
+        return {"available": False, "reason": "Stored forecast could not be read."}
+    if text is None:
         return {"available": False, "reason": "No stored forecast for this metric."}
 
     try:
-        envelope = json.loads(path.read_text(encoding="utf-8"))
+        envelope = json.loads(text)
         result = envelope["result"]
     except (OSError, ValueError, KeyError, TypeError):
         return {"available": False, "reason": "Stored forecast could not be read."}

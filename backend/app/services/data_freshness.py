@@ -3,10 +3,10 @@ Freshness decision shared by features that cache provider data.
 
 Rule (UTC only):
     no timestamp / unreadable timestamp  -> refresh ("never_refreshed")
-    age strictly greater than the TTL    -> refresh ("stale")
-    otherwise (age <= TTL)               -> serve stored data ("fresh")
+    age equal to or greater than the TTL -> refresh ("stale"); data is invalid exactly TTL after it was fetched
+    otherwise (age < TTL)                -> serve stored data ("fresh")
 
-Exactly the TTL (e.g. 6:00:00) is still fresh; 6:00:01 is stale.
+With a 24-hour TTL, 23:59:59 is fresh and exactly 24:00:00 is stale.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -52,6 +52,6 @@ def needs_refresh(last_refreshed_at, now=None, ttl_hours=None):
 
     age = now.astimezone(timezone.utc) - last
     age_hours = age.total_seconds() / 3600
-    if age > timedelta(hours=ttl_hours):
+    if age >= timedelta(hours=ttl_hours):  # invalid exactly TTL after the fetch
         return True, "stale", age_hours
     return False, "fresh", age_hours

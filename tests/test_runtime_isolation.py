@@ -29,7 +29,13 @@ def test_isolated_runtime_uses_a_temporary_root(isolated_runtime):
 
     root = os.path.realpath(str(get_settings().project_root))
     assert root != os.path.realpath(str(PROJECT_ROOT))
-    assert os.path.realpath(str(working_database_path())) == os.path.realpath(str(isolated_runtime.db))
+    from app.database import db
+
+    if db.is_postgres():
+        target = db.describe_target()
+        assert target["schema"] == isolated_runtime.schema and target["database"].endswith("_test")
+    else:
+        assert os.path.realpath(str(working_database_path())) == os.path.realpath(str(isolated_runtime.db))
 
 
 from research_v2_support import isolated_runtime  # noqa: E402,F401  (fixture import)

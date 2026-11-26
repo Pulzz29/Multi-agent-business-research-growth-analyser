@@ -29,6 +29,18 @@ COMPANIES = [t.strip().upper() for t in os.getenv("INSIGHTIQ_LIVE_RESEARCH", "")
 JOB_TIMEOUT_SECONDS = int(os.getenv("INSIGHTIQ_LIVE_RESEARCH_TIMEOUT", "3600"))
 
 
+def _expected_model_prefix():
+    """The running backend's model, from the real .env (non-secret values only)."""
+    from dotenv import dotenv_values
+
+    values = dotenv_values(PROJECT_ROOT / ".env")
+    return (values.get("LLM_EXPECTED_MODEL_PREFIX") or values.get("LLM_MODEL")
+            or values.get("AZURE_OPENAI_DEPLOYMENT") or "").strip().lower()
+
+
+EXPECTED_MODEL_PREFIX = _expected_model_prefix()
+
+
 def _key():
     return os.environ["API_ACCESS_KEY"]
 
@@ -110,7 +122,7 @@ def test_start_research_generates_a_new_azure_report(ticker):
         record["source_freshness"] = report.get("source_freshness")
         assert report["run_id"] == run_id and report["ticker"] == ticker
         assert generation["provider"] == "azure_openai"
-        assert all(m.startswith("gpt-5.4-pro") for m in generation["models_served"]), generation["models_served"]
+        assert all(m.lower().startswith(EXPECTED_MODEL_PREFIX) for m in generation["models_served"]), generation["models_served"]
         completed_calls = [c for c in generation["calls"] if c.get("status") == "completed"]
         assert completed_calls and all(c.get("response_id") for c in completed_calls)
         # Every cited news article belongs to the selected company.
@@ -180,7 +192,7 @@ def test_completed_live_run_is_genuine_and_rendered(ticker, run_id):
     report, generation = doc["report"], doc["report"]["generation"]
     assert report["run_id"] == run_id and report["ticker"] == ticker
     assert generation["provider"] == "azure_openai"
-    assert generation["models_served"] and all(m.startswith("gpt-5.4-pro") for m in generation["models_served"])
+    assert generation["models_served"] and all(m.lower().startswith(EXPECTED_MODEL_PREFIX) for m in generation["models_served"])
     calls = generation["calls"]
     completed = [c for c in calls if c.get("status") == "completed"]
     assert completed and all(c.get("response_id") for c in completed)

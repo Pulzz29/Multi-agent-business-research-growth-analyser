@@ -1,9 +1,10 @@
 """
 Test-only support for the research-intelligence (report schema v2) tests.
 
-* ``isolated_runtime`` gives a test its own project root and its own SQLite
-  working database (seeded through a read-only backup of the stored
-  snapshot), so no test writes to the real runtime database, reports or
+* ``isolated_runtime`` gives a test its own project root and its own
+  database: on PostgreSQL a fresh schema in the test database (seeded from
+  the stored snapshot), on SQLite a working copy seeded through a read-only
+  backup of the snapshot. No test writes to the real database, reports or
   forecast cache.
 * ``FakeAIClient`` and the ``respond_*`` helpers are deterministic stand-ins
   for Azure OpenAI used ONLY inside tests. They write content derived from the
@@ -51,6 +52,10 @@ def isolated_runtime(tmp_path, monkeypatch):
         shutil.copy2(PROJECT_ROOT / rel, target)
     for cache_dir in sorted((PROJECT_ROOT / "data").glob("forecast_cache_v*")):
         shutil.copytree(cache_dir, root / "data" / cache_dir.name)
+
+    if os.environ.get("DB_BACKEND") == "postgres":
+        yield from _isolated_postgres(root, monkeypatch)
+        return
 
     working_dir = Path(tempfile.gettempdir()) / "insightiq_sqlite" / name
     working_dir.mkdir(parents=True, exist_ok=True)
@@ -133,6 +138,191 @@ def isolated_runtime(tmp_path, monkeypatch):
 
 
 TEST_DB_PREFIX = "InsightIQ_v2test_"
+SIX = ("AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA")
+
+
+def _baseline_deletes(conn):
+    """The same known starting state as the SQLite copies (test data only)."""
+    for table in ("market_quotes", "market_statements", "market_companies", "provider_usage"):
+        conn.execute(f"DELETE FROM {table}")
+    marks = ",".join("?" for _ in SIX)
+    conn.execute("DELETE FROM source_refreshes WHERE source NOT IN ('SEC', 'NEWSDATA') "
+                 f"OR company_ticker NOT IN ({marks})", SIX)
+    conn.execute(f"DELETE FROM news_articles WHERE company_ticker NOT IN ({marks})", SIX)
+    conn.execute("DELETE FROM news_articles WHERE provider = 'FINNHUB'")
+    conn.execute(f"DELETE FROM research_execution_runs WHERE ticker NOT IN ({marks})", SIX)
+    conn.execute(f"DELETE FROM sec_facts WHERE company_ticker NOT IN ({marks})", SIX)
+    conn.execute("DELETE FROM sec_company_validation")
+    conn.execute(f"DELETE FROM companies WHERE ticker NOT IN ({marks})", SIX)
+    conn.execute("DELETE FROM source_refreshes WHERE started_at >= ?", (TEST_DATA_CUTOFF,))
+    conn.execute("DELETE FROM news_articles WHERE retrieved_at >= ?", (TEST_DATA_CUTOFF,))
+
+
+class PostgresTestSchema:
+    """Handle of one isolated PostgreSQL test schema (isolated_runtime.db)."""
+
+    def __init__(self, schema):
+        self.schema = schema
+
+    def connect(self):
+        from app.database import db
+
+        return db.direct_connect(schema=self.schema)
+
+    def __repr__(self):
+        return f"PostgresTestSchema({self.schema!r})"
+
+
+def open_db(handle):
+    """Connection to a test database handle (PostgreSQL schema or SQLite path)."""
+    if isinstance(handle, PostgresTestSchema):
+        return handle.connect()
+    from app.database.db import Connection
+
+    con = sqlite3.connect(str(handle))
+    con.row_factory = sqlite3.Row
+    return Connection(con, False)
+
+
+def _seed_fingerprint(path):
+    stat = Path(path).stat()
+    return f"{Path(path).resolve()}|{stat.st_size}|{stat.st_mtime_ns}"
+
+
+def _seed_schema(schema, source):
+    """(Re)create schema in the test database from the SQLite file source."""
+    from app.database import db
+    from app.database.migrations import run_migrations
+    from app.database.sqlite_to_postgres import copy_database
+
+    fingerprint = _seed_fingerprint(source)
+    admin = db.direct_connect(schema="public", autocommit=True)
+    try:
+        exists = admin.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = '_seed_meta'",
+            (schema,),
+        ).fetchone()
+        if exists:
+            row = admin.execute(f'SELECT fingerprint FROM "{schema}"._seed_meta').fetchone()
+            if row and row[0] == fingerprint:
+                existing = db.direct_connect(schema=schema)
+                try:
+                    run_migrations(existing)  # newer migrations only
+                finally:
+                    existing.close()
+                return False
+        admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+    finally:
+        admin.close()
+    conn = db.direct_connect(schema=schema)
+    try:
+        run_migrations(conn)
+        copy_database(source, conn)
+        conn.execute("CREATE TABLE _seed_meta (fingerprint TEXT NOT NULL)")
+        conn.execute("INSERT INTO _seed_meta VALUES (?)", (fingerprint,))
+        conn.commit()
+    finally:
+        conn.close()
+    return True
+
+
+def ensure_seed_schemas():
+    """seed_snapshot: data/insightiq.sqlite3 (isolated tests start from it).
+    seed_live: the runtime working copy (what non-isolated tests read)."""
+    from app.database.sqlite_manager import working_database_path
+
+    snapshot = PROJECT_ROOT / "data" / "insightiq.sqlite3"
+    _seed_schema("seed_snapshot", snapshot)
+    live = working_database_path()
+    _seed_schema("seed_live", live if live.is_file() else snapshot)
+    # Saved reports, journals and forecast caches of the project (test copy).
+    from app.services import document_store
+
+    document_store.import_files(PROJECT_ROOT, overwrite=True)
+
+
+def _isolated_postgres(root, monkeypatch):
+    from app.core.config import get_settings
+    from app.database import db
+    from app.database.migrations import run_migrations
+    from app.database.sqlite_to_postgres import TABLE_ORDER, reset_sequences
+
+    schema = "t_" + uuid.uuid4().hex[:12]
+    admin = db.direct_connect(schema="public", autocommit=True)
+    try:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+    finally:
+        admin.close()
+    conn = db.direct_connect(schema=schema)
+    try:
+        run_migrations(conn)
+        six = ",".join(f"'{t}'" for t in SIX)
+        # Copy only the rows the baseline keeps (same result as copy + _baseline_deletes).
+        keep = {
+            "market_quotes": "FALSE", "market_statements": "FALSE", "market_companies": "FALSE",
+            "provider_usage": "FALSE", "sec_company_validation": "FALSE",
+            "companies": f"ticker IN ({six})",
+            "sec_facts": f"company_ticker IN ({six})",
+            "news_articles": f"company_ticker IN ({six}) AND provider <> 'FINNHUB'",
+            "research_execution_runs": f"ticker IN ({six})",
+            "source_refreshes": f"source IN ('SEC', 'NEWSDATA') AND company_ticker IN ({six})",
+        }
+        for table in TABLE_ORDER:
+            conn.execute(f'INSERT INTO "{schema}"."{table}" SELECT * FROM seed_snapshot."{table}" '
+                         f'WHERE {keep.get(table, "TRUE")}')
+        reset_sequences(conn)
+        _baseline_deletes(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+    from app.services import market_storage, sec_coverage
+
+    sec_coverage.invalidate_cache()
+    previous_root = os.environ.get("INSIGHTIQ_PROJECT_ROOT")
+    os.environ["INSIGHTIQ_PROJECT_ROOT"] = str(root)
+    monkeypatch.setenv("INSIGHTIQ_NEWS_MAX_AGE_DAYS", "3650")
+    previous_schema = os.environ.get("DB_SCHEMA")
+    monkeypatch.setenv("DB_SCHEMA", schema)
+    get_settings.cache_clear()
+    db.close_pools()
+    market_storage._INITIALISED.clear()
+
+    # The forecast caches copied into the temporary root (stored in the database).
+    from app.services import document_store
+
+    document_store.import_files(root, overwrite=True)
+
+    from app.services import market_ingestion, news_ingestion, sec_ingestion
+
+    for module in (sec_ingestion, news_ingestion):
+        monkeypatch.setattr(module, "sync_snapshot_to_drive", lambda *a, **k: {"integrity_ok": True})
+        monkeypatch.setattr(module, "create_recovery_point", lambda *a, **k: {"verified": True})
+    monkeypatch.setattr(market_ingestion, "create_recovery_point", lambda *a, **k: {"verified": True})
+    try:
+        yield SimpleNamespace(root=root, db=PostgresTestSchema(schema), schema=schema)
+    finally:
+        if previous_root is None:
+            os.environ.pop("INSIGHTIQ_PROJECT_ROOT", None)
+        else:
+            os.environ["INSIGHTIQ_PROJECT_ROOT"] = previous_root
+        db.close_pools()
+        # Restore the session schema now: later code in this teardown (and the
+        # next test) must not cache settings that point at the dropped schema.
+        if previous_schema is None:
+            monkeypatch.delenv("DB_SCHEMA", raising=False)
+        else:
+            monkeypatch.setenv("DB_SCHEMA", previous_schema)
+        get_settings.cache_clear()
+        sec_coverage.invalidate_cache()
+        market_storage._INITIALISED.clear()
+        admin = db.direct_connect(schema="public", autocommit=True)
+        try:
+            assert schema.startswith("t_")
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        finally:
+            admin.close()
 
 
 def remove_test_database_dir(path):
@@ -152,22 +342,42 @@ def remove_test_database_dir(path):
 
 
 def db_rows(db_path, sql, params=()):
-    con = sqlite3.connect(str(db_path))
-    con.row_factory = sqlite3.Row
+    con = open_db(db_path)
     try:
         return [dict(r) for r in con.execute(sql, params).fetchall()]
     finally:
         con.close()
 
 
+def live_db_scalar(sql, params=()):
+    """Read the database the running backend uses (live API tests only)."""
+    if os.environ.get("DB_BACKEND") == "postgres":
+        from app.database import db
+        from conftest import APP_DB_NAME
+
+        con = db.direct_connect(dbname=APP_DB_NAME, schema="public")
+        try:
+            return con.execute(sql, params).fetchone()[0]
+        finally:
+            con.close()
+    from app.database.sqlite_manager import working_database_path
+
+    con = sqlite3.connect(working_database_path().resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        return con.execute(sql, params).fetchone()[0]
+    finally:
+        con.close()
+
+
 # ------------------------------------------------- fake Azure OpenAI client
-# TEST-ONLY stand-in for the Responses API (create / retrieve / cancel). It
+# TEST-ONLY stand-in for Chat Completions and the Responses API (create / retrieve / cancel). It
 # never reaches the network; responses are built by a per-test handler.
 
 # Isolated tests start from the stored data as of this time (see isolated_runtime).
 TEST_DATA_CUTOFF = "2026-11-24T00:00:00+00:00"
 
-TEST_MODEL = "gpt-5.4-pro-2026-03-05"
+# Served-model id the fake returns: the configured test model (LLM_MODEL=test-model) plus a version.
+TEST_MODEL = "test-model-2026-01-01"
 
 
 def completion(content, finish_reason="stop", usage=(1200, 900), status=None,
@@ -231,7 +441,77 @@ class FakeAIClient:
                 stored.status = "cancelled"
             return stored
 
+        def chat_create(**kwargs):
+            # Chat Completions request -> the Responses-shaped kwargs the handlers
+            # read; the handler's Responses-shaped answer -> a chat completion.
+            self.chat_requests.append(kwargs)
+            return _as_chat(create(**_chat_to_responses_kwargs(kwargs)))
+
+        self.chat_requests = []
         self.responses = SimpleNamespace(create=create, retrieve=retrieve, cancel=cancel)
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=chat_create))
+
+
+def _chat_to_responses_kwargs(kwargs):
+    messages = kwargs["messages"]
+    fmt = kwargs.get("response_format") or {}
+    if fmt.get("type") == "json_schema":
+        text = {"format": {"type": "json_schema", **fmt["json_schema"]}}
+    else:
+        text = {"format": dict(fmt)}
+    out = {
+        "model": kwargs["model"],
+        "instructions": "\n\n".join(m["content"] for m in messages if m["role"] in ("system", "developer")),
+        "input": [m for m in messages if m["role"] not in ("system", "developer")],
+        "text": text,
+        "max_output_tokens": kwargs.get("max_completion_tokens", kwargs.get("max_tokens")),
+    }
+    if "reasoning_effort" in kwargs:
+        out["reasoning"] = {"effort": kwargs["reasoning_effort"]}
+    if "temperature" in kwargs:
+        out["temperature"] = kwargs["temperature"]
+    return out
+
+
+def _as_chat(response):
+    """A Responses-shaped fake answer re-shaped as a Chat Completions answer."""
+    import httpx
+    import openai
+
+    status = getattr(response, "status", "completed")
+    if status == "failed":
+        request = httpx.Request("POST", "https://insightiq-test.openai.azure.com/openai/v1/chat/completions")
+        raise openai.InternalServerError("server error", response=httpx.Response(500, request=request), body=None)
+    refusal = None
+    text = ""
+    for item in getattr(response, "output", None) or []:
+        for part in getattr(item, "content", None) or []:
+            if getattr(part, "type", None) == "refusal":
+                refusal = getattr(part, "refusal", None) or "refused"
+            elif getattr(part, "type", None) == "output_text":
+                text += getattr(part, "text", "") or ""
+    text = text or getattr(response, "output_text", "") or ""
+    finish = "stop"
+    if status == "incomplete":
+        reason = getattr(getattr(response, "incomplete_details", None), "reason", None)
+        finish = "length" if reason == "max_output_tokens" else reason or "length"
+    usage = getattr(response, "usage", None)
+    chat_usage = None
+    if usage is not None:
+        chat_usage = SimpleNamespace(
+            prompt_tokens=usage.input_tokens,
+            completion_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+            completion_tokens_details=SimpleNamespace(
+                reasoning_tokens=getattr(getattr(usage, "output_tokens_details", None), "reasoning_tokens", None)),
+            prompt_tokens_details=SimpleNamespace(
+                cached_tokens=getattr(getattr(usage, "input_tokens_details", None), "cached_tokens", None)),
+        )
+    return SimpleNamespace(
+        id=response.id, model=getattr(response, "model", None), usage=chat_usage,
+        choices=[SimpleNamespace(finish_reason=finish,
+                                 message=SimpleNamespace(content=text or None, refusal=refusal))],
+    )
 
 
 def payload_of(kwargs):
@@ -470,7 +750,23 @@ def make_cache_stale(ticker, metric):
     from app.services import forecast_cache
 
     path = forecast_cache.cache_path(ticker, metric)
-    if path.is_file():
-        envelope = json.loads(path.read_text(encoding="utf-8"))
+    text = get_doc(path)
+    if text is not None:
+        envelope = json.loads(text)
         envelope["version"] = forecast_cache.CACHE_VERSION - 1
-        path.write_text(json.dumps(envelope), encoding="utf-8")
+        put_doc(path, json.dumps(envelope))
+
+
+def put_doc(path, text):
+    """Store a document the way the application does (database on
+    PostgreSQL, file on SQLite) - test setup only."""
+    from app.services import document_store
+
+    document_store.write_text(path, text)
+
+
+def get_doc(path):
+    """Read a stored document (database on PostgreSQL, file on SQLite)."""
+    from app.services import document_store
+
+    return document_store.read_text(path)

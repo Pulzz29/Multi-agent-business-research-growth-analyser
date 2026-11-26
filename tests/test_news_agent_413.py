@@ -59,7 +59,9 @@ def news_agent(monkeypatch):
 
     from app.services import ai_provider
 
-    stub = SimpleNamespace(responses=SimpleNamespace(create=capture))
+    from research_v2_support import FakeAIClient
+
+    stub = FakeAIClient(lambda kwargs, n: capture(**kwargs))
     monkeypatch.setattr(ai_provider, "default_client", lambda timeout=None: stub)
     module._captured = captured
     return module
@@ -189,7 +191,9 @@ def test_oversize_input_is_reported_sanitized(news_agent, monkeypatch, caplog):
             body={"error": {"code": "context_length_exceeded", "param": "input"}},
         )
 
-    stub = SimpleNamespace(responses=SimpleNamespace(create=raise_400))
+    from research_v2_support import FakeAIClient
+
+    stub = FakeAIClient(lambda kwargs, n: raise_400(**kwargs))
     monkeypatch.setattr(ai_provider, "default_client", lambda timeout=None: stub)
     with caplog.at_level("INFO"):
         with pytest.raises(ai_provider.AICallFailed) as info:
@@ -264,7 +268,7 @@ def test_failed_news_agent_keeps_accurate_agent_statuses():
         env.update({"INSIGHTIQ_PROJECT_ROOT": str(root), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
                     "API_ACCESS_KEY": "x" * 20, "AZURE_OPENAI_API_KEY": "isolated-placeholder",
                     "AZURE_OPENAI_ENDPOINT": "https://isolated-test.openai.azure.com/",
-                    "AZURE_OPENAI_DEPLOYMENT": "gpt-5.4-pro",
+                    "LLM_MODEL": "test-model", "DB_BACKEND": "sqlite",
                     "NEWSDATA_API_KEY": "isolated-placeholder", "SEC_USER_AGENT": "InsightIQ-test test@example.invalid"})
         proc = subprocess.run([sys.executable, "-I", str(script), str(PROJECT_ROOT / "backend")],
                               capture_output=True, text=True, env=env, timeout=300)

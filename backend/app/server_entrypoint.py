@@ -60,13 +60,22 @@ def main():
         )
 
     missing_ai = [
-        name for name in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT")
+        name for name in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT")
         if not os.getenv(name, "").strip()
     ]
+    if not (os.getenv("LLM_MODEL", "").strip() or os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()):
+        missing_ai.append("LLM_MODEL")
     if missing_ai:
         raise RuntimeError(
-            "Azure OpenAI configuration is incomplete: " + ", ".join(missing_ai)
+            "LLM configuration is incomplete. Set in .env: " + ", ".join(missing_ai)
         )
+
+    from app.database import db
+
+    if db.is_postgres():
+        _start_postgres_runtime()
+        _run_server()
+        return
 
     # The per-session temp folder can change between Windows logins;
     # realign the configured runtime database path before recovery.
@@ -111,6 +120,35 @@ def main():
         startup["interrupted_jobs_reconciled"],
     )
 
+    _run_server()
+
+
+def _start_postgres_runtime():
+    """PostgreSQL: apply schema migrations, then reset interrupted jobs.
+
+    The SQLite-file steps (temp-folder realignment, restore from verified
+    file backups) do not apply; PostgreSQL keeps committed data durable.
+    """
+    from app.database import db
+    from app.database.migrations import run_migrations
+    from app.services.startup_recovery import reconcile_interrupted_jobs
+
+    target = db.describe_target()
+    try:
+        applied = run_migrations()
+    except db.DatabaseUnavailable as exc:
+        raise RuntimeError(
+            f"{exc} (target {target['host']}:{target['port']}, database {target['database']}). "
+            "Check DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD in .env, and that the "
+            "PostgreSQL service is running."
+        ) from exc
+    print("Database: PostgreSQL", f"{target['host']}:{target['port']}/{target['database']}",
+          f"schema={target['schema']}")
+    print("Schema migrations applied now:", applied or "none")
+    print("Interrupted jobs reconciled:", len(reconcile_interrupted_jobs(None)))
+
+
+def _run_server():
     # Do not import the FastAPI application until
     # database restoration and reconciliation
     # have successfully completed.
@@ -128,12 +166,16 @@ def main():
             "Invalid API port."
         )
 
+    from app.core.security import install_redaction, uvicorn_options
+
+    install_redaction()
+    # Host, trusted proxies (X-Forwarded-*) and optional TLS from the environment.
     uvicorn.run(
         "app.main:app",
-        host="127.0.0.1",
         port=port,
         workers=1,
         reload=False,
+        **uvicorn_options(),
     )
 
 

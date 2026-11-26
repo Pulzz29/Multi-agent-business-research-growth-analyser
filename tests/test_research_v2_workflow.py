@@ -1,11 +1,12 @@
 """
 End-to-end research workflow (report schema v2) on an isolated runtime.
 
-Azure OpenAI is replaced by a deterministic test-only fake; SEC and NewsData.io are
+The LLM (Azure OpenAI) is replaced by a deterministic test-only fake; SEC and NewsData.io are
 unreachable (network guard) or replaced by test-only runners. No real
 provider request is made and the real database / reports are untouched.
 """
 import json
+import os
 
 import pytest
 
@@ -71,24 +72,25 @@ def test_v2_report_for_every_company(isolated_runtime, monkeypatch, ticker):
     assert freshness["sec"]["data_cutoff_period_end"]
     assert freshness["news"]["latest_cited_publication_date"]
 
-    # Every request used the Responses API with the configured deployment,
-    # background mode, strict structured output and the configured caps.
+    # Every request used Chat Completions with the model from LLM_MODEL,
+    # strict structured output and the configured caps.
     from app.services.ai_provider import ai_runtime_settings
+    from research_v2_support import TEST_MODEL
 
     settings = ai_runtime_settings()
     caps = {settings[k] for k in settings if k.startswith("max_output_")}
-    for request in client.requests:
-        assert request["model"] == "gpt-5.4-pro"
-        assert request["background"] is True and request["store"] is True
-        assert request["text"]["format"]["strict"] is True
-        assert request["reasoning"] == {"effort": settings["reasoning_effort"]}
-        assert request["max_output_tokens"] in caps
-        assert "temperature" not in request and "messages" not in request
+    assert client.chat_requests and len(client.chat_requests) == len(client.requests)
+    for request in client.chat_requests:
+        assert request["model"] == os.environ["LLM_MODEL"]
+        assert request["response_format"]["json_schema"]["strict"] is True
+        assert request["max_completion_tokens"] in caps
+        assert request["temperature"] == settings["temperature"]
+        assert "reasoning_effort" not in request  # LLM_REASONING_EFFORT unset
 
     generation = report["generation"]
     assert generation["provider"] == "azure_openai"
-    assert generation["deployment"] == "gpt-5.4-pro"
-    assert generation["models_served"] == ["gpt-5.4-pro-2026-03-05"]
+    assert generation["deployment"] == os.environ["LLM_MODEL"]
+    assert generation["models_served"] == [TEST_MODEL]
     assert calls["financial_analysis"]["response_id"].startswith("resp_test_")
     assert calls["financial_analysis"]["reasoning_tokens"] == 300
 
@@ -228,7 +230,9 @@ def test_failing_workflow_fails_job_cleanly(isolated_runtime, monkeypatch):
     stored = research_jobs.read_job(job["run_id"])
     assert stored["status"] == "failed"
     assert stored["error_code"] == "research_execution_failed"
-    assert not (root / "reports" / "research_runs" / (job["run_id"] + ".json")).exists()
+    from research_v2_support import get_doc
+
+    assert get_doc(root / "reports" / "research_runs" / (job["run_id"] + ".json")) is None
 
 
 def test_completed_job_persists_new_immutable_report(isolated_runtime, monkeypatch):
@@ -255,12 +259,14 @@ def test_completed_job_persists_new_immutable_report(isolated_runtime, monkeypat
 
     assert run_ids[0] != run_ids[1]
     paths = [root / "reports" / "research_runs" / f"{r}.json" for r in run_ids]
-    docs = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    from research_v2_support import get_doc
+
+    docs = [json.loads(get_doc(p)) for p in paths]
     assert docs[0]["run_id"] != docs[1]["run_id"]
     assert all(research_jobs.read_job(r)["status"] == "completed" for r in run_ids)
 
     # Reading a saved report makes no provider call and changes nothing.
-    before = paths[0].read_bytes()
+    before = get_doc(paths[0])
 
     def forbidden(*a, **k):
         raise AssertionError("provider call during read")
@@ -271,7 +277,7 @@ def test_completed_job_persists_new_immutable_report(isolated_runtime, monkeypat
     document = report_history.read_report("AMZN", run_ids[0])
     assert document["report"]["run_id"] == run_ids[0]
     assert document["report"]["report_schema_version"] == 2
-    assert paths[0].read_bytes() == before
+    assert get_doc(paths[0]) == before
 
 
 # ------------------------------------------------- report compatibility

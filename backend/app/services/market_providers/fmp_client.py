@@ -32,14 +32,23 @@ STATEMENTS = {
         # Per-share; the stable API names it epsDiluted (older: epsdiluted).
         "epsDiluted": "eps_diluted",
         "epsdiluted": "eps_diluted",
+        "interestExpense": "interest_expense",
+        "ebitda": "ebitda",
+        "depreciationAndAmortization": "depreciation_amortization",
+        "weightedAverageShsOutDil": "shares_outstanding",
     }),
     "balance": ("/balance-sheet-statement", {
         "totalAssets": "total_assets",
         "totalStockholdersEquity": "total_equity",
         "totalDebt": "total_debt",
+        "cashAndCashEquivalents": "cash",
+        "totalCurrentAssets": "current_assets",
+        "totalCurrentLiabilities": "current_liabilities",
+        "inventory": "inventory",
     }),
     "cash_flow": ("/cash-flow-statement", {
         "operatingCashFlow": "operating_cash_flow",
+        "capitalExpenditure": "capital_expenditure",
     }),
 }
 
@@ -96,6 +105,8 @@ class FmpClient:
             "cik": cik.zfill(10) if cik.isdigit() else None,
             "website": item.get("website"),
             "description": item.get("description"),
+            # Logo hosted by FMP for exactly this symbol (provider-licensed asset).
+            "logo_url": item.get("image"),
             "market_cap": to_decimal_text(item.get("marketCap") or item.get("mktCap")),
             "beta": to_decimal_text(item.get("beta")),
             "price": to_decimal_text(item.get("price")),

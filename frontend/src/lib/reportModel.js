@@ -39,8 +39,8 @@ export const companyByTicker = (ticker) => COMPANIES.find((c) => c.ticker === ti
 
 /**
  * Which AI provider wrote a saved report, from its own metadata. Reports made
- * before the Azure migration have no provider field; their model identifies
- * them as Groq-generated, and they are never relabelled.
+ * before the Azure migration have no provider field and were Groq-generated;
+ * they are never relabelled. Model names come only from the report itself.
  */
 export function aiProviderLabel(generation) {
   if (!generation) return null;
@@ -48,7 +48,12 @@ export function aiProviderLabel(generation) {
   if (generation.provider === "azure_openai") {
     return `Azure OpenAI · ${model || "deployment not recorded"}`;
   }
-  if (!generation.provider && model && /gpt-oss/i.test(model)) return `Groq · ${model}`;
+  if (generation.provider === "groq") return `Groq fallback · ${model || "model not recorded"}`;
+  if (generation.provider === "azure_openai, groq") {
+    return `Azure OpenAI + Groq fallback · ${model || "model not recorded"}`;
+  }
+  // Every report since the Azure migration records its provider.
+  if (!generation.provider && model) return `Groq · ${model}`;
   if (generation.provider) return `${generation.provider} · ${model || "model not recorded"}`;
   return model || null;
 }

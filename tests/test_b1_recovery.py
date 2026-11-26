@@ -4,7 +4,21 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 from conftest import PROJECT_ROOT
+
+
+@pytest.fixture(autouse=True)
+def sqlite_backend(monkeypatch):
+    """These tests cover the SQLite-file recovery points (DB_BACKEND=sqlite,
+    the rollback mode); PostgreSQL keeps committed data on the server."""
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("DB_BACKEND", "sqlite")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_ingestion_paths_create_recovery_points():

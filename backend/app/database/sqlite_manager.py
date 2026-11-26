@@ -7,7 +7,6 @@ import tempfile
 import threading
 from pathlib import Path
 from datetime import datetime, timezone
-from contextlib import contextmanager
 
 from app.core.config import get_settings
 
@@ -94,7 +93,8 @@ def restore_database_from_drive():
         }
 
 
-def connect():
+def sqlite_connect():
+    """Raw connection to the SQLite working database (DB_BACKEND=sqlite)."""
     path = working_database_path()
 
     conn = sqlite3.connect(
@@ -112,17 +112,33 @@ def connect():
     return conn
 
 
-@contextmanager
+def connect():
+    """Connection to the configured database (PostgreSQL or SQLite).
+
+    Kept here so existing ``from app.database.sqlite_manager import connect``
+    imports keep working; see app.database.db.
+    """
+    from app.database import db
+
+    return db.connect()
+
+
 def transaction():
-    conn = connect()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    from app.database import db
+
+    return db.transaction()
+
+
+def file_database_enabled():
+    """True when the SQLite file is the live database (DB_BACKEND=sqlite).
+
+    On PostgreSQL the file snapshots, verified file backups and file restores
+    below do not apply: backups are taken with pg_dump (see
+    docs/POSTGRES_MIGRATION.md).
+    """
+    from app.database import db
+
+    return not db.is_postgres()
 
 
 MIGRATIONS = {
@@ -325,6 +341,11 @@ MIGRATIONS = {
 
 
 def initialize_database():
+    if not file_database_enabled():
+        from app.database.migrations import run_migrations
+
+        return {"backend": "postgres", "applied_migrations": run_migrations()}
+
     with _DB_LOCK:
         restore_result = restore_database_from_drive()
 
@@ -379,6 +400,11 @@ def initialize_database():
 
 
 def sync_snapshot_to_drive(create_timestamped_backup=False):
+    if not file_database_enabled():
+        # PostgreSQL commits are durable on the server; there is no file
+        # snapshot to refresh (backups: pg_dump).
+        return {"synced": False, "integrity_ok": True, "reason": "postgres_backend"}
+
     with _DB_LOCK:
         source = working_database_path()
         destination = drive_database_path()
@@ -447,6 +473,8 @@ def sync_snapshot_to_drive(create_timestamped_backup=False):
 
 
 def database_summary():
+    from app.database import db
+
     with connect() as conn:
         migrations = [
             row["version"]
@@ -455,26 +483,19 @@ def database_summary():
             ).fetchall()
         ]
 
-        tables = [
-            row["name"]
-            for row in conn.execute(
-                """
-                SELECT name FROM sqlite_master
-                WHERE type = 'table'
-                  AND name NOT LIKE 'sqlite_%'
-                ORDER BY name
-                """
-            ).fetchall()
-        ]
+        tables = db.table_names(conn)
 
-        return {
-            "database_path": str(working_database_path()),
-            "migrations": migrations,
-            "tables": tables,
-            "integrity_ok": verify_sqlite_integrity(
-                working_database_path()
-            ),
-        }
+    if not file_database_enabled():
+        return {"database": db.describe_target(), "migrations": migrations, "tables": tables,
+                "integrity_ok": True}
+    return {
+        "database_path": str(working_database_path()),
+        "migrations": migrations,
+        "tables": tables,
+        "integrity_ok": verify_sqlite_integrity(
+            working_database_path()
+        ),
+    }
 
 
 # ----------------------------------------------------------
@@ -497,6 +518,10 @@ def create_recovery_point(reason):
     import logging
 
     logger = logging.getLogger(__name__)
+
+    if not file_database_enabled():
+        # PostgreSQL: committed data is already durable on the server.
+        return {"verified": True, "reason": reason, "backend": "postgres", "backup_file": None}
 
     try:
         from app.services.sqlite_recovery import create_verified_backup

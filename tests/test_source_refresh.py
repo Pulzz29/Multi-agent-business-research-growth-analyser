@@ -16,9 +16,9 @@ SECRET = "gsk_TEST_SECRET_IN_ERROR_MESSAGE"
 
 
 def insert_refresh(db, ticker, source, status, completed_at, started_at=None):
-    import sqlite3
+    from research_v2_support import open_db
 
-    con = sqlite3.connect(str(db))
+    con = open_db(db)
     try:
         con.execute(
             "INSERT INTO source_refreshes(company_ticker, source, started_at, completed_at, status) "
@@ -55,7 +55,9 @@ def test_freshness_reports_failures_and_never_refreshed(isolated_runtime):
 
     from app.services.source_refresh import freshness_snapshot
 
-    con = sqlite3.connect(str(isolated_runtime.db))
+    from research_v2_support import open_db
+
+    con = open_db(isolated_runtime.db)
     con.execute("DELETE FROM source_refreshes WHERE company_ticker='NVDA'")  # isolated copy only
     con.commit()
     con.close()

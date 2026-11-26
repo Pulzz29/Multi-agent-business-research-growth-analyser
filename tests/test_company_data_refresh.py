@@ -29,10 +29,12 @@ def clean_state():
 
 def purge_market_rows(db, symbol):
     """Remove one company's market data from the ISOLATED test copy only."""
-    import sqlite3
+    from research_v2_support import open_db
 
-    con = sqlite3.connect(str(db))
+    con = open_db(db)
     try:
+        for table in ("company_data_cache",):
+            con.execute(f"DELETE FROM {table} WHERE symbol = ?", (symbol,))
         for table in ("market_quotes", "market_statements", "market_companies"):
             con.execute(f"DELETE FROM {table} WHERE symbol = ?", (symbol,))
         con.commit()
@@ -59,7 +61,9 @@ def test_needs_refresh_rules_and_boundary():
     assert needs_refresh(None, T0, ttl)[:2] == (True, "never_refreshed")
     assert needs_refresh("not-a-date", T0, ttl)[:2] == (True, "never_refreshed")
     assert needs_refresh((T0 - timedelta(hours=5, minutes=59)).isoformat(), T0, ttl)[:2] == (False, "fresh")
-    assert needs_refresh((T0 - timedelta(hours=6)).isoformat(), T0, ttl)[:2] == (False, "fresh")
+    # Invalid exactly TTL after the fetch (requirement: 24 h cache expires at 24:00:00).
+    assert needs_refresh((T0 - timedelta(hours=5, minutes=59, seconds=59)).isoformat(), T0, ttl)[:2] == (False, "fresh")
+    assert needs_refresh((T0 - timedelta(hours=6)).isoformat(), T0, ttl)[:2] == (True, "stale")
     assert needs_refresh((T0 - timedelta(hours=6, minutes=1)).isoformat(), T0, ttl)[:2] == (True, "stale")
     # Naive timestamps are UTC; other offsets are converted to UTC.
     naive = (T0 - timedelta(hours=1)).replace(tzinfo=None).isoformat()
@@ -81,7 +85,14 @@ def test_ttl_comes_from_environment(monkeypatch):
     finally:
         monkeypatch.delenv("DATA_REFRESH_TTL_HOURS")
         get_settings.cache_clear()
-    assert configured_ttl_hours() == 6.0
+    assert configured_ttl_hours() == 24.0  # CACHE_TTL_HOURS default
+    monkeypatch.setenv("CACHE_TTL_HOURS", "12")
+    get_settings.cache_clear()
+    try:
+        assert configured_ttl_hours() == 12.0
+    finally:
+        monkeypatch.delenv("CACHE_TTL_HOURS")
+        get_settings.cache_clear()
 
 
 # ----------------------------------------------------------- auto decisions
@@ -98,7 +109,7 @@ def test_never_fetched_refreshes_and_records_utc_timestamp(isolated_runtime):
 
 def test_recent_data_is_served_without_provider_calls(isolated_runtime):
     get(clients=us_clients())
-    for offset in (timedelta(hours=5, minutes=59), timedelta(hours=6)):
+    for offset in (timedelta(hours=23, minutes=59), timedelta(hours=23, minutes=59, seconds=59)):
         clients = us_clients()
         data = get(clients=clients, now=T0 + offset)
         assert data["data_refresh"]["decision"] == "served_from_cache"
@@ -110,7 +121,7 @@ def test_recent_data_is_served_without_provider_calls(isolated_runtime):
 def test_older_than_ttl_refreshes(isolated_runtime):
     get(clients=us_clients())
     clients = us_clients()
-    later = T0 + timedelta(hours=6, minutes=1)
+    later = T0 + timedelta(hours=24)
     data = get(clients=clients, now=later)
     assert data["data_refresh"]["decision"] == "auto_refresh_stale"
     assert provider_calls(clients) > 0 and data["last_refreshed_at"] == later.isoformat()
@@ -141,7 +152,7 @@ def test_force_refreshes_fresh_data_then_cooldown(isolated_runtime):
 def test_failure_with_cached_data_returns_stale_and_keeps_timestamp(isolated_runtime):
     get(clients=us_clients())
     failing = {"fmp": FakeFmp(fail={"ORCL"}), "finnhub": FakeFinnhub()}
-    data = get(clients=failing, now=T0 + timedelta(hours=7))
+    data = get(clients=failing, now=T0 + timedelta(hours=25))
     info = data["data_refresh"]
     assert info["stale"] is True and info["refreshed"] is False
     assert "HTTP 503" in info["refresh_error"]

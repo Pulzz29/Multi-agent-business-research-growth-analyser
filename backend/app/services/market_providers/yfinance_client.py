@@ -37,14 +37,23 @@ ROW_MAP = {
         ("operating_income", ("Operating Income",)),
         ("net_income", ("Net Income", "Net Income Common Stockholders")),
         ("eps_diluted", ("Diluted EPS",)),
+        ("interest_expense", ("Interest Expense", "Interest Expense Non Operating")),
+        ("ebitda", ("EBITDA", "Normalized EBITDA")),
+        ("depreciation_amortization", ("Reconciled Depreciation", "Depreciation And Amortization In Income Statement")),
     ],
     "balance": [
         ("total_assets", ("Total Assets",)),
         ("total_equity", ("Stockholders Equity", "Common Stock Equity")),
         ("total_debt", ("Total Debt",)),
+        ("cash", ("Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments")),
+        ("current_assets", ("Current Assets",)),
+        ("current_liabilities", ("Current Liabilities",)),
+        ("inventory", ("Inventory",)),
+        ("shares_outstanding", ("Ordinary Shares Number", "Share Issued")),
     ],
     "cash_flow": [
         ("operating_cash_flow", ("Operating Cash Flow",)),
+        ("capital_expenditure", ("Capital Expenditure",)),
     ],
 }
 
@@ -113,6 +122,8 @@ class YFinanceClient:
             "country": info.get("country"),
             "website": info.get("website"),
             "description": info.get("longBusinessSummary"),
+            # Currency of the financial statements (can differ from the quote currency).
+            "financial_currency": info.get("financialCurrency"),
         }
         quote = {
             "price": to_decimal_text(price),
@@ -137,6 +148,27 @@ class YFinanceClient:
         if quote["price"] is None and quote["market_cap"] is None:
             raise ProviderNoData("Yahoo Finance returned no price data for this symbol.")
         return profile, quote
+
+    def announcement_dates(self, symbol, limit=60, exchange_tz="Asia/Kolkata"):
+        """Dates on which past quarterly results were announced (Yahoo earnings
+        calendar), as calendar dates in the exchange's time zone.
+
+        Only events with a reported EPS are kept (scheduled or estimated events
+        are not announcements). Yahoo timestamps are US Eastern; converting to
+        the exchange time zone avoids dating an evening announcement a day too
+        early. These are announcement dates, not regulatory filing records."""
+        frame = self._call(lambda: self._ticker(symbol).get_earnings_dates(limit=limit), "earnings dates")
+        if frame is None or getattr(frame, "empty", True) or "Reported EPS" not in getattr(frame, "columns", []):
+            return []
+        reported = frame[frame["Reported EPS"].notna()]
+        dates = set()
+        for stamp in reported.index:
+            try:
+                local = stamp.tz_convert(exchange_tz) if getattr(stamp, "tzinfo", None) else stamp
+                dates.add(local.date().isoformat())
+            except (AttributeError, TypeError, ValueError):
+                continue
+        return sorted(dates)
 
     def statements(self, symbol, currency=None):
         ticker = self._call(lambda: self._ticker(symbol), "ticker")

@@ -1,4 +1,8 @@
+import { csrfHeaders } from "./auth.js";
+
 const BASE = "/api/v1";
+
+const cookies = () => (typeof document === "undefined" ? "" : document.cookie);
 
 export class ApiError extends Error {
   constructor(message, status, code = null) {
@@ -10,7 +14,7 @@ export class ApiError extends Error {
 }
 
 const STATUS_MESSAGES = {
-  401: "The access key was not accepted.",
+  401: "Your session has ended. Sign in again.",
   404: "That record could not be found.",
   409: "The report is not ready yet.",
   422: "Please check the selected information.",
@@ -19,18 +23,18 @@ const STATUS_MESSAGES = {
   503: "The service is temporarily unavailable.",
 };
 
+// Authentication is the HttpOnly session cookie set by /auth/login; the
+// `token` argument kept in every call is unused (pages pass a signed-in flag).
 async function request(path, token, options = {}) {
-  if (!token) {
-    throw new ApiError("Connect your workspace first.", 401);
-  }
-
   let response;
+  const method = options.method || "GET";
 
   try {
     response = await fetch(`${BASE}${path}`, {
-      method: options.method || "GET",
+      method,
+      credentials: "same-origin",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...csrfHeaders(method, cookies()),
         Accept: "application/json",
         ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
@@ -75,12 +79,11 @@ async function request(path, token, options = {}) {
 
 const enc = encodeURIComponent;
 
-/** Authenticated file download (a plain link cannot carry the bearer key). */
-async function download(path, token) {
-  if (!token) throw new ApiError("Connect your workspace first.", 401);
+/** Authenticated file download (session cookie). */
+async function download(path) {
   let response;
   try {
-    response = await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    response = await fetch(`${BASE}${path}`, { credentials: "same-origin", cache: "no-store" });
   } catch {
     throw new ApiError("Could not connect to the server. Check that InsightIQ is running.", 0);
   }
@@ -100,6 +103,13 @@ async function download(path, token) {
 }
 
 export const api = {
+  // Sign-in (email + password; the session lives in an HttpOnly cookie)
+  login: (email, password) =>
+    request("/auth/login", null, { method: "POST", body: { email, password }, preferDetail: true }),
+  me: (signal) => request("/auth/me", null, { signal }),
+  logout: () => request("/auth/logout", null, { method: "POST" }),
+  // Companies with at least one completed run that has a saved report (US and India).
+  researchCompanies: (token, signal) => request("/research/companies", token, { signal }),
   // Portfolio / system (read-only)
   overview: (token, signal) => request("/dashboard/overview", token, { signal }),
   companiesSummary: (token, signal) => request("/companies/summary", token, { signal }),
@@ -107,6 +117,9 @@ export const api = {
     request(`/research/runs${ticker ? `?ticker=${enc(ticker)}` : ""}`, token, { signal }),
   traces: (token, id, signal) =>
     request(`/observability/runs/${enc(id)}/traces?limit=200`, token, { signal }),
+  // Measured operations telemetry (PostgreSQL): latency, runs, tokens, alerts, traces.
+  operations: (token, signal) => request("/operations/overview", token, { signal }),
+  operationsTrace: (token, traceId, signal) => request(`/operations/traces/${enc(traceId)}`, token, { signal }),
 
   // Company (read-only)
   company: (token, ticker, signal) => request(`/companies/${enc(ticker)}/overview`, token, { signal }),
@@ -144,6 +157,14 @@ export const api = {
     request(`/markets/${enc(market)}/companies?search=${enc(q)}`, token, { signal }),
   marketCompany: (token, market, symbol, signal) =>
     request(`/markets/${enc(market)}/companies/${enc(symbol)}`, token, { signal }),
+  marketOverview: (token, market, signal) => request(`/markets/${enc(market)}/overview`, token, { signal }),
+  fundamentals: (token, market, symbol, signal) =>
+    request(`/markets/${enc(market)}/companies/${enc(symbol)}/fundamentals`, token, { signal }),
+  marketFinancials: (token, market, symbol, signal) =>
+    request(`/markets/${enc(market)}/companies/${enc(symbol)}/financials`, token, { signal }),
+  marketForecasts: (token, market, symbol, signal) =>
+    request(`/markets/${enc(market)}/companies/${enc(symbol)}/forecasts`, token, { signal }),
+  logos: (token, symbols, signal) => request(`/logos?symbols=${symbols.map(enc).join(",")}`, token, { signal }),
   sectors: (token, market, search, signal) =>
     request(`/markets/${enc(market)}/sectors?search=${enc(search || "")}`, token, { signal }),
   latestComparison: (token, market, sector, signal) =>

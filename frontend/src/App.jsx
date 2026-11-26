@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { Sidebar, Topbar } from "./components/Layout.jsx";
-import { ThemeToggle } from "./components/ui.jsx";
 import { api } from "./lib/api.js";
 import { companyByTicker, setSecCompanies } from "./lib/reportModel.js";
+import { setLogoFetcher } from "./lib/logos.js";
 import { useHashRoute } from "./lib/router.js";
 import { ActivityPage } from "./pages/ActivityPage.jsx";
+import { LoginPage } from "./pages/LoginPage.jsx";
 import { CompanyPage } from "./pages/CompanyPage.jsx";
 import { MarketCompanyPage } from "./pages/MarketCompanyPage.jsx";
 import { MarketPage } from "./pages/MarketPage.jsx";
@@ -16,7 +16,6 @@ const PENDING = ["queued", "running"];
 
 // Indian (NSE/BSE) symbols carry an exchange suffix; everything else is US.
 const marketOf = (symbol) => (/\.(NS|BO)$/i.test(String(symbol || "")) ? "IN" : "US");
-const TOKEN_KEY = "insightiq-token";
 const THEME_KEY = "insightiq-theme";
 
 function readStorage(storage, key) {
@@ -36,73 +35,18 @@ function writeStorage(storage, key, value) {
   }
 }
 
-function ConnectCard({ onConnect, error, theme, onToggleTheme }) {
-  const [value, setValue] = useState("");
-  const [visible, setVisible] = useState(false);
-  return (
-    <main className="connect">
-      <div className="connect-theme">
-        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-      </div>
-      <form
-        className="connect-card card"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (value.trim()) onConnect(value.trim());
-        }}
-      >
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            IQ
-          </span>
-          <div>
-            <p className="brand-name">InsightIQ</p>
-            <p className="brand-tag">Multi-agent business intelligence</p>
-          </div>
-        </div>
-        <h1>Connect to your workspace</h1>
-        <p className="muted">
-          Enter the <code className="code-inline">API_ACCESS_KEY</code> from the environment file the backend was started with. The key is kept only for this browser tab.
-        </p>
-        <label className="field">
-          <span>Access key</span>
-          <span className="input-wrap">
-            <KeyRound size={16} aria-hidden="true" />
-            <input
-              type={visible ? "text" : "password"}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="Paste access key"
-              aria-invalid={Boolean(error)}
-            />
-            <button type="button" className="icon-btn icon-btn-sm" onClick={() => setVisible((v) => !v)} aria-label={visible ? "Hide key" : "Show key"}>
-              {visible ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </span>
-        </label>
-        {error && (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="btn btn-primary btn-block" disabled={!value.trim()}>
-          Connect
-        </button>
-        <p className="small muted">Research support only. Forecasts are statistical estimates; nothing here is investment advice.</p>
-      </form>
-    </main>
-  );
-}
-
 export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = readStorage("localStorage", THEME_KEY);
     if (saved === "light" || saved === "dark") return saved;
     return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
   });
-  const [token, setToken] = useState(() => readStorage("sessionStorage", TOKEN_KEY));
+  // Signed-in state comes from the server session (HttpOnly cookie), checked on
+  // load via /auth/me. `token` is only a signed-in flag passed to pages; no
+  // credential is kept in browser storage.
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const token = user ? "session" : "";
   const [route, navigate] = useHashRoute();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -127,8 +71,7 @@ export default function App() {
   const refresh = useCallback(() => setRefreshIndex((n) => n + 1), []);
 
   const disconnect = useCallback((message = "") => {
-    writeStorage("sessionStorage", TOKEN_KEY, "");
-    setToken("");
+    setUser(null);
     setSummary(null);
     setDashboard(null);
     setRuns(null);
@@ -136,7 +79,43 @@ export default function App() {
     setConnectError(message);
   }, []);
 
-  const onAuthError = useCallback(() => disconnect("The access key was not accepted. Connect again."), [disconnect]);
+  const onAuthError = useCallback(() => disconnect("Your session has ended. Sign in again."), [disconnect]);
+
+  // Restore the session after a page refresh.
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .me(controller.signal)
+      .then((body) => setUser(body.user))
+      .catch((error) => {
+        if (error?.name === "AbortError") return;
+        if (error?.status !== 401) setConnectError(error.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAuthChecked(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const login = useCallback(async (email, password) => {
+    const body = await api.login(email, password);
+    setConnectError("");
+    setUser(body.user);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      // The server session may already have ended; clear the UI either way.
+    }
+    disconnect("You have signed out.");
+  }, [disconnect]);
+
+  // Company logos: one batched metadata request for the symbols on screen.
+  useEffect(() => {
+    setLogoFetcher(token ? (symbols) => api.logos(token, symbols) : null);
+  }, [token]);
 
   // Portfolio-level data (overview + activity). Read-only endpoints only.
   useEffect(() => {
@@ -227,17 +206,21 @@ export default function App() {
     [token, activeJob?.status, onAuthError]
   );
 
+  if (!authChecked) {
+    return (
+      <main className="connect" aria-busy="true">
+        <p className="muted">Loading…</p>
+      </main>
+    );
+  }
+
   if (!token) {
     return (
-      <ConnectCard
-        error={connectError}
+      <LoginPage
+        notice={connectError}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-        onConnect={(value) => {
-          writeStorage("sessionStorage", TOKEN_KEY, value);
-          setConnectError("");
-          setToken(value);
-        }}
+        onLogin={login}
       />
     );
   }
@@ -255,11 +238,12 @@ export default function App() {
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
           onMenu={() => setMenuOpen(true)}
-          onDisconnect={() => disconnect("")}
+          onDisconnect={logout}
+          userEmail={user?.email}
         />
         <main id="main" className="content" tabIndex={-1}>
           {route.page === "overview" && (
-            <OverviewPage summary={summary} dashboard={dashboard} runs={runs} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} />
+            <OverviewPage token={token} market={route.market} summary={summary} dashboard={dashboard} runs={runs} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} onAuthError={onAuthError} />
           )}
           {route.page === "activity" && (
             <ActivityPage token={token} runs={runs} dashboard={dashboard} loading={loading} error={loadError} onRetry={refresh} navigate={navigate} />
@@ -273,7 +257,7 @@ export default function App() {
               market={route.market || marketOf(route.ticker)}
               symbol={route.symbol || route.ticker}
               runId={route.runId}
-              showResearch={route.page === "company"}
+              tab={route.tab || "overview"}
               navigate={navigate}
               activeJob={activeJob}
               jobError={jobError}

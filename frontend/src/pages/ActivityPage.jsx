@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { Badge, Card, CompanyMark, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "../components/ui.jsx";
+import { ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { Card, CompanyMark, EmptyState, ErrorState, Skeleton, Stat, StatusBadge } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { duration, formatCount, formatDateTime, formatSeconds, humanize, shortId } from "../lib/format.js";
-import { COMPANIES, companyByTicker } from "../lib/reportModel.js";
+import { companyByTicker } from "../lib/reportModel.js";
+import { runReportRoute } from "../lib/auth.js";
+import { OperationsPanel } from "../components/OperationsPanel.jsx";
 
 function TraceDetails({ token, run }) {
   const [state, setState] = useState({ loading: true, error: "", data: null });
@@ -92,6 +94,23 @@ function PerformanceRow({ label, component }) {
 export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, navigate }) {
   const [expanded, setExpanded] = useState(null);
   const [filter, setFilter] = useState("ALL");
+  // Filter options: companies (US and India) with a completed run that has a
+  // saved report, read from PostgreSQL by the backend (nothing hard-coded).
+  const [reportCompanies, setReportCompanies] = useState([]);
+  useEffect(() => {
+    if (!token) return undefined;
+    const controller = new AbortController();
+    api
+      .researchCompanies(token, controller.signal)
+      .then((body) => setReportCompanies(body.companies || []))
+      .catch(() => {
+        if (!controller.signal.aborted) setReportCompanies([]);
+      });
+    return () => controller.abort();
+  }, [token, runs]);
+  const names = Object.fromEntries(reportCompanies.map((c) => [c.ticker, c.name]));
+  const secValidated = new Set(reportCompanies.filter((c) => c.sec_validated).map((c) => c.ticker));
+  const isSecTicker = (ticker) => Boolean(companyByTicker(ticker)) || secValidated.has(ticker);
   const all = runs?.runs || [];
   const list = filter === "ALL" ? all : all.filter((r) => r.ticker === filter);
   const failed = all.filter((r) => r.status === "failed").length;
@@ -125,9 +144,9 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
             <span className="sr-only">Filter by company</span>
             <select value={filter} onChange={(e) => setFilter(e.target.value)}>
               <option value="ALL">All companies</option>
-              {COMPANIES.map((c) => (
+              {reportCompanies.map((c) => (
                 <option key={c.ticker} value={c.ticker}>
-                  {c.name}
+                  {c.name && c.name !== c.ticker ? `${c.name} (${c.ticker})` : c.ticker}
                 </option>
               ))}
             </select>
@@ -163,7 +182,7 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
                   <th scope="col" className="num">
                     Total
                   </th>
-                  <th scope="col">Records</th>
+                  <th scope="col">Previous report</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,6 +190,7 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
                   const open = expanded === run.run_id;
                   const timing = run.agent_timings_seconds || {};
                   const total = run.total_elapsed_seconds ?? duration(run.started_at_utc, run.finished_at_utc);
+                  const reportRoute = runReportRoute(run, isSecTicker);
                   return (
                     <Fragment key={run.run_id}>
                       <tr className={open ? "is-selected" : ""}>
@@ -187,12 +207,12 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
                         </td>
                         <td>
                           <span className="inline-company">
-                            <CompanyMark ticker={run.ticker} size="sm" /> {companyByTicker(run.ticker)?.name || run.ticker}
+                            <CompanyMark ticker={run.ticker} size="sm" /> {companyByTicker(run.ticker)?.name || names[run.ticker] || run.ticker}
                           </span>
                         </td>
                         <td>
-                          {run.report_available ? (
-                            <button type="button" className="link-btn" onClick={() => navigate({ page: "company", ticker: run.ticker, tab: "research", runId: run.run_id })}>
+                          {reportRoute ? (
+                            <button type="button" className="link-btn" onClick={() => navigate(reportRoute)}>
                               <code className="code-inline">{shortId(run.run_id)}</code>
                             </button>
                           ) : (
@@ -212,7 +232,22 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
                         ))}
                         <td className="num">{total !== null && total !== undefined ? formatSeconds(total) : "—"}</td>
                         <td className="small">
-                          {run.in_database ? "Database" : <Badge tone="warning">Not in database</Badge>}
+                          {reportRoute ? (
+                            // Opens this run's own saved report (stored data only; no AI or provider calls).
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => navigate(reportRoute)}
+                              aria-label={`View report for run ${shortId(run.run_id)} (${run.ticker})`}
+                            >
+                              <FileText size={14} aria-hidden="true" /> View report
+                            </button>
+                          ) : (
+                            <span className="run-report-unavailable muted">
+                              <span>No saved report</span>
+                              <span>{run.status === "completed" ? "Report file missing" : humanize(run.status)}</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                       {open && (
@@ -265,7 +300,7 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
               <PerformanceRow label="Financial Agent" component={perf?.financial} />
               <PerformanceRow label="News Agent" component={perf?.news} />
               <PerformanceRow label="Strategic Agent" component={perf?.strategic} />
-              <p className="small muted">Token usage and cost are not shown because they are not recorded for every run.</p>
+              <p className="small muted">Measured token usage per model is shown under Operations below.</p>
             </div>
           )}
         </Card>
@@ -292,6 +327,9 @@ export function ActivityPage({ token, runs, dashboard, loading, error, onRetry, 
           )}
         </Card>
       </div>
+
+      <h2 className="section-title">Operations</h2>
+      <OperationsPanel token={token} />
     </div>
   );
 }

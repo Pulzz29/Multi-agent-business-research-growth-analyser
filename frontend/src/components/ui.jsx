@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronRight, Inbox, Info, Moon, RefreshCw, Sun } from "lucide-react";
 import { humanize } from "../lib/format.js";
+import { initialsFor, markColor, subscribeLogo } from "../lib/logos.js";
 
 /** Long stored text (e.g. publisher feed descriptions) clamped to four lines, fully expandable. */
 export function ClampText({ label, text, limit = 360, className = "" }) {
@@ -212,10 +213,28 @@ function renderValue(value) {
   return String(value);
 }
 
-export function CompanyMark({ ticker, size = "md" }) {
+/**
+ * Company logo (shared everywhere): the backend's verified candidates for this
+ * exact symbol, tried in order, then a professional initials badge.
+ */
+export function CompanyMark({ ticker, size = "md", name }) {
+  const [meta, setMeta] = useState(null);
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    setIndex(0);
+    return subscribeLogo(ticker, setMeta);
+  }, [ticker]);
+  const url = meta?.candidates?.[index];
+  if (url) {
+    return (
+      <span className={`mark mark-logo mark-${size}`} aria-hidden="true">
+        <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setIndex((i) => i + 1)} />
+      </span>
+    );
+  }
   return (
-    <span className={`mark mark-${ticker} mark-${size}`} aria-hidden="true">
-      {ticker?.slice(0, 1)}
+    <span className={`mark mark-${ticker} mark-${size}`} style={{ background: markColor(ticker) }} aria-hidden="true">
+      {initialsFor(name, ticker)}
     </span>
   );
 }

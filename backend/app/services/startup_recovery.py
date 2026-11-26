@@ -136,6 +136,13 @@ def reconcile_interrupted_jobs(database_path):
     Do not invoke against a database with active
     research workers.
     """
+    if database_path is None:
+        # Configured database (PostgreSQL): row locks replace BEGIN IMMEDIATE.
+        from app.database import db
+
+        with db.transaction() as conn:
+            return _reconcile_rows(conn, lock_rows=conn.postgres)
+
     with closing_connection(
         str(database_path),
         timeout=30.0,
@@ -144,12 +151,21 @@ def reconcile_interrupted_jobs(database_path):
 
         conn.execute("BEGIN IMMEDIATE")
 
+        changed = _reconcile_rows(conn)
+
+        conn.commit()
+
+    return changed
+
+
+def _reconcile_rows(conn, lock_rows=False):
+    if True:
         rows = conn.execute(
             """
             SELECT run_id, status, agent_statuses_json
             FROM research_execution_runs
             WHERE status IN ('queued', 'running')
-            """
+            """ + (" FOR UPDATE" if lock_rows else "")
         ).fetchall()
 
         changed = []
@@ -215,8 +231,6 @@ def reconcile_interrupted_jobs(database_path):
                 "recovered_status": "failed",
                 "agent_statuses": reconciled,
             })
-
-        conn.commit()
 
     return changed
 

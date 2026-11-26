@@ -29,7 +29,7 @@ const V2_FIXTURE = {
     forecasts: { revenue: { cache_status: "hit", data_cutoff_period_end: "2026-09-30" } },
   },
   generation: {
-    model: "openai/gpt-oss-120b",
+    model: "legacy/test-model",
     ai_analysis_status: { financial: "partial", news: "completed", strategic: "completed" },
     calls: [{ agent: "financial", call: "financial_analysis", status: "completed", prompt_tokens: 10, completion_tokens: 20 }],
   },

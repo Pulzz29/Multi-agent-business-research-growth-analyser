@@ -1,4 +1,4 @@
-"""Local (Windows/macOS/Linux) compatibility helpers added during the Colab -> VS Code migration.
+"""Cross-platform (Windows/macOS/Linux) compatibility helpers.
 
 These helpers change *how* resources are handled on the host OS, never *what* the
 application computes:
@@ -8,11 +8,14 @@ application computes:
                         delete a SQLite file that still has an open handle.
 * exclusive_file_lock - cross-platform replacement for ``fcntl.flock(LOCK_EX)``
                         (fcntl does not exist on Windows).
-* localize_stored_path - stored absolute paths written while the project lived on
-                        Google Drive (``/content/drive/.../builds/<id>``) are rebased onto
-                        the current project root by exact prefix match. Any other path
-                        is returned unchanged, so all existing path-safety checks keep
-                        their meaning.
+* localize_stored_path - absolute paths stored by earlier deployments of the project
+                        (see DEFAULT_LEGACY_PROJECT_ROOTS) are rebased onto the
+                        current project root by exact prefix match. A path from any
+                        other copy of the project (another machine or folder) is
+                        rebased by its project-relative tail when that tail starts
+                        with one of PROJECT_ANCHORS (the only directories stored
+                        paths point into). Any other path is returned unchanged;
+                        callers still require the exact expected location.
 """
 
 import os
@@ -20,13 +23,16 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-# Project root used while the application ran in Google Colab.
+# Project root recorded by the original Colab deployment (do not remove).
+# Optional extra roots: INSIGHTIQ_LEGACY_PROJECT_ROOTS (";"-separated); not
+# required, since PROJECT_ANCHORS rebases paths from any earlier project folder.
 DEFAULT_LEGACY_PROJECT_ROOTS = (
     "/content/drive/MyDrive/Multi-Agent-Business-Research/builds/20261122T173459146790Z",
-    # Previous local folder of this project (before it was copied to "... (2)").
-    # Research rows written there still store report paths under this root.
-    "C:/Users/Administrator/Downloads/InsightIQ_Capstone_Project/InsightIQ",
 )
+
+# Project directories that stored absolute paths point into (report files and
+# SQLite recovery points).
+PROJECT_ANCHORS = ("reports/research_runs/", "data/sqlite_backups/")
 
 
 @contextmanager
@@ -91,4 +97,13 @@ def localize_stored_path(stored, project_root=None):
             relative = text[len(legacy) + 1:]
             return (root / Path(*relative.split("/"))).resolve()
 
-    return Path(stored).resolve()
+    direct = Path(stored).resolve()
+    if direct.is_relative_to(root) or not (text.startswith("/") or text[1:3] == ":/"):
+        return direct
+    for anchor in PROJECT_ANCHORS:
+        index = text.rfind("/" + anchor)
+        if index >= 0:
+            relative = text[index + 1:]
+            if ".." not in relative.split("/"):
+                return (root / Path(*relative.split("/"))).resolve()
+    return direct

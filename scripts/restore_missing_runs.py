@@ -1,4 +1,8 @@
 """Restore research_execution_runs rows that the runtime database lost.
+SQLITE-ONLY TOOL: works on the SQLite database file (DB_BACKEND=sqlite, rollback and
+file recovery). With PostgreSQL use scripts/setup_postgres.py, pg_dump/pg_restore and
+scripts/migrate_sqlite_to_postgres.py instead (docs/POSTGRES_MIGRATION.md).
+
 
 When the runtime database is rebuilt from an older snapshot, rows for research
 runs completed afterwards can disappear even though their report files remain

@@ -192,21 +192,21 @@ def test_normalized_quarterly_financials(ticker):
 @pytest.mark.parametrize("ticker", TICKERS)
 @pytest.mark.parametrize("metric", METRICS)
 def test_forecast_cache_valid_and_fingerprint_matches(ticker, metric):
-    """Proves data and forecasting code are identical to the Colab run that wrote the cache."""
+    """Proves data and forecasting code are identical to the run that wrote the cache."""
     from app.services import forecast_cache
 
-    path = forecast_cache.cache_path(ticker, metric)
-    envelope = json.loads(path.read_text(encoding="utf-8"))
+    envelope = forecast_cache.read_envelope(ticker, metric)  # database or file, per backend
+    assert envelope is not None, "no stored forecast cache"
     assert forecast_cache.validate_cached_result(envelope["result"], ticker, metric)
     assert forecast_cache.sha256_text(forecast_cache.canonical_json(envelope["result"])) == envelope["result_sha256"]
     assert forecast_cache.source_fingerprint(ticker, metric) == envelope["fingerprint"]
 
 
 def test_sarimax_recomputation_matches_cache():
-    """Re-runs the SARIMAX backtest/forecast locally (no network) and compares with the Colab cache."""
+    """Re-runs the SARIMAX backtest/forecast locally (no network) and compares with the stored cache."""
     from app.services import forecast_cache, forecasting
 
-    envelope = json.loads(forecast_cache.cache_path("MSFT", "revenue").read_text(encoding="utf-8"))
+    envelope = forecast_cache.read_envelope("MSFT", "revenue")
     fresh = forecasting.forecast_financial_metric("MSFT", "revenue")
     cached = envelope["result"]
     assert fresh["selected_model"] == cached["selected_model"]

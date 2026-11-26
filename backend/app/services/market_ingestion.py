@@ -18,6 +18,7 @@ import time
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
+from app.database.db import json_text
 from app.database.sqlite_manager import connect, create_recovery_point, transaction
 from app.services import market_registry as registry
 from app.services import market_storage as storage
@@ -125,7 +126,8 @@ def _apply_profile(market, symbol, profile, provider):
         sector_key=sector_key, provider_sector=profile.get("sector"),
         provider_industry=profile.get("industry"), cik=profile.get("cik"),
         in_universe=entry is not None, profile_provider=provider,
-        profile={k: profile.get(k) for k in ("country", "website", "description") if profile.get(k)},
+        profile={k: profile.get(k) for k in ("country", "website", "description", "logo_url",
+                                             "financial_currency") if profile.get(k)},
     )
 
 
@@ -162,11 +164,10 @@ def _store_news_articles(symbol, company, articles, provider):
             score, reason = verdict["score"], verdict["reason"]
             provider_id = item.get("provider_article_id") or f"url:{canonical}"
             existing = conn.execute(
-                """
+                f"""
                 SELECT id FROM news_articles WHERE company_ticker = ? AND (
                     provider_article_id = ? OR article_url = ? OR
-                    (CASE WHEN json_valid(raw_metadata_json)
-                     THEN json_extract(raw_metadata_json, '$.canonical_url') END) = ?)
+                    {json_text(conn, "raw_metadata_json", "canonical_url")} = ?)
                 LIMIT 1
                 """,
                 (symbol, provider_id, item["article_url"], canonical),
@@ -175,11 +176,12 @@ def _store_news_articles(symbol, company, articles, provider):
                 continue
             cursor = conn.execute(
                 """
-                INSERT OR IGNORE INTO news_articles (
+                INSERT INTO news_articles (
                     company_ticker, provider, provider_article_id, title, description,
                     article_url, source_name, published_at, retrieved_at,
                     relevance_score, relevance_reason, raw_metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT DO NOTHING
                 """,
                 (symbol, provider, provider_id, item["title"], item.get("description"),
                  item["article_url"], item.get("source_name"), item.get("published_at"),
@@ -255,8 +257,21 @@ def _run_source(market, symbol, kind, company, clients, missing):
             return 1, 1
         if kind == "statements":
             stored = storage.get_company(symbol) or {}
-            rows = clients["yfinance"].statements(symbol, currency=stored.get("currency"))
-            return len(rows), storage.insert_statement_rows(rows)
+            stored_profile = stored.get("profile") or {}
+            # Statements are reported in the financial currency (falls back to the listing currency).
+            currency = stored_profile.get("financial_currency") or stored.get("currency")
+            rows = clients["yfinance"].statements(symbol, currency=currency)
+            inserted = storage.insert_statement_rows(rows)
+            # Results-announcement dates (point-in-time availability for forecast
+            # backtests). Best effort: statements are stored either way.
+            try:
+                dates = clients["yfinance"].announcement_dates(symbol)
+                if dates:
+                    storage.merge_company_profile(symbol, {"announcement_dates": dates,
+                                                           "announcement_dates_source": "Yahoo Finance earnings calendar"})
+            except (ProviderError, AttributeError) as exc:
+                logger.info("Announcement dates unavailable for %s: %s", symbol, type(exc).__name__)
+            return len(rows), inserted
         if kind == "news":
             from app.services.news_ingestion import refresh_news_company
 

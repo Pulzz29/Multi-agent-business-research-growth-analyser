@@ -92,8 +92,26 @@ def utc_now():
 
 
 def ensure_market_storage():
-    """Create the market tables once per database file (idempotent)."""
+    """Create the market tables once per database (idempotent).
+
+    PostgreSQL: the versioned migrations (app/database/migrations) create
+    every table; they run once per database and schema.
+    """
+    from app.database import db
     from app.database.sqlite_manager import working_database_path
+
+    if db.is_postgres():
+        target = db.describe_target()
+        key = f"pg:{target['host']}:{target['port']}:{target['database']}:{target['schema']}"
+        if key in _INITIALISED:
+            return
+        with _INIT_LOCK:
+            if key not in _INITIALISED:
+                from app.database.migrations import run_migrations
+
+                run_migrations()
+                _INITIALISED.add(key)
+        return
 
     path = working_database_path()
     key = str(path)
@@ -110,10 +128,29 @@ def ensure_market_storage():
             for statement in SCHEMA:
                 conn.execute(statement)
             # Additive migration (idempotent): company-level refresh time, UTC.
-            columns = {row["name"] for row in conn.execute("PRAGMA table_info(market_companies)")}
+            columns = set(db.table_columns(conn, "market_companies"))
             if "last_refreshed_at" not in columns:
                 conn.execute("ALTER TABLE market_companies ADD COLUMN last_refreshed_at TEXT")
+            from app.database.migrations import ensure_sqlite_extras
+
+            ensure_sqlite_extras(conn)
         _INITIALISED.add(key)
+
+
+def merge_company_profile(symbol, updates):
+    """Add keys to a company's stored profile JSON (other keys unchanged)."""
+    ensure_market_storage()
+    with transaction() as conn:
+        row = conn.execute("SELECT profile_json FROM market_companies WHERE symbol = ?", (symbol,)).fetchone()
+        if row is None:
+            return
+        try:
+            profile = json.loads(row["profile_json"] or "{}") or {}
+        except ValueError:
+            profile = {}
+        profile.update(updates)
+        conn.execute("UPDATE market_companies SET profile_json = ? WHERE symbol = ?",
+                     (json.dumps(profile, default=str), symbol))
 
 
 def set_last_refreshed_at(symbol, timestamp_utc_iso):
@@ -137,7 +174,8 @@ def register_company(*, symbol, market, name, exchange=None, currency=None, sect
     with transaction() as conn:
         # `companies.cik` is NOT NULL; non-SEC companies store '' (documented).
         conn.execute(
-            "INSERT OR IGNORE INTO companies(ticker, name, cik, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO companies(ticker, name, cik, created_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT DO NOTHING",
             (symbol, name, cik or "", now),
         )
         existing = conn.execute(
@@ -167,14 +205,14 @@ def register_company(*, symbol, market, name, exchange=None, currency=None, sect
                     provider_sector = COALESCE(?, provider_sector),
                     provider_industry = COALESCE(?, provider_industry),
                     cik = COALESCE(?, cik),
-                    in_universe = MAX(in_universe, ?),
+                    in_universe = CASE WHEN in_universe > ? THEN in_universe ELSE ? END,
                     profile_provider = COALESCE(?, profile_provider),
                     profile_json = COALESCE(?, profile_json),
                     updated_at = ?
                 WHERE symbol = ?
                 """,
                 (name, exchange, currency, sector_key, provider_sector, provider_industry,
-                 cik, int(bool(in_universe)), profile_provider,
+                 cik, int(bool(in_universe)), int(bool(in_universe)), profile_provider,
                  json.dumps(profile, default=str) if profile else None, now, symbol),
             )
     return get_company(symbol)
@@ -262,10 +300,11 @@ def insert_statement_rows(rows):
         before = conn.total_changes
         conn.executemany(
             """
-            INSERT OR IGNORE INTO market_statements(
+            INSERT INTO market_statements(
                 symbol, provider, statement, period_type, period_end, fiscal_year,
                 metric, value_text, currency, source_field, fetched_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT DO NOTHING
             """,
             [
                 (r["symbol"], r["provider"], r["statement"], r["period_type"], r["period_end"],
@@ -307,7 +346,7 @@ def record_provider_request(provider):
         conn.execute(
             """
             INSERT INTO provider_usage(provider, usage_day, requests) VALUES (?, ?, 1)
-            ON CONFLICT(provider, usage_day) DO UPDATE SET requests = requests + 1
+            ON CONFLICT(provider, usage_day) DO UPDATE SET requests = provider_usage.requests + 1
             """,
             (provider, day),
         )
@@ -330,10 +369,10 @@ def start_refresh(symbol, source):
     with transaction() as conn:
         cursor = conn.execute(
             "INSERT INTO source_refreshes(company_ticker, source, started_at, status) "
-            "VALUES (?, ?, ?, 'running')",
+            "VALUES (?, ?, ?, 'running') RETURNING id",
             (symbol, source, utc_now()),
         )
-        return cursor.lastrowid
+        return cursor.fetchone()[0]
 
 
 def finish_refresh(refresh_id, ok, fetched=0, inserted=0, error=None):

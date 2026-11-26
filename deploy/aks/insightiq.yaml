@@ -1,0 +1,235 @@
+# InsightIQ on AKS (or any Kubernetes). PREPARED ONLY - nothing has been applied.
+# Replace every <PLACEHOLDER> and review before `kubectl apply -f` (see deploy/README.md).
+# The database is any PostgreSQL-compatible service reachable from the cluster;
+# its connection values come from the Secret in secret.example.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: insightiq
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: insightiq-config
+  namespace: insightiq
+data:
+  DB_BACKEND: "postgres"
+  DB_SSLMODE: "verify-full"            # trusted TLS to the database
+  DB_SSLROOTCERT: "system"             # OS trust store; or mount a CA bundle and set its path
+  DB_POOL_MIN_SIZE: "1"
+  DB_POOL_MAX_SIZE: "8"                # x replicas must stay below the server connection limit
+  DB_CONNECT_TIMEOUT_SECONDS: "10"
+  DB_STATEMENT_TIMEOUT_MS: "60000"
+  CACHE_TTL_HOURS: "24"
+  CACHE_CLEANUP_INTERVAL_MINUTES: "5"
+  # Requests reach the API via ingress -> web (nginx) pod, so both hops must be
+  # trusted for X-Forwarded-Proto/For (HTTPS detection, per-client rate limits):
+  # the cluster pod CIDR (or the ingress + web pod ranges). The NetworkPolicy
+  # below already limits who can reach the API.
+  TRUSTED_PROXY_IPS: "<POD_CIDR>"
+  SESSION_COOKIE_SECURE: "true"        # session/CSRF cookies only over HTTPS
+  SESSION_MAX_HOURS: "12"
+  SESSION_IDLE_MINUTES: "120"
+  LOGIN_ATTEMPTS_PER_15_MINUTES: "10"
+  RATE_LIMIT_PER_MINUTE: "240"
+  RATE_LIMIT_EXPENSIVE_PER_MINUTE: "20"
+  TELEMETRY_RETENTION_DAYS: "30"
+  AUDIT_RETENTION_DAYS: "365"
+  BACKUP_DIR: "/backups"
+  BACKUP_RETENTION_COUNT: "14"
+  BACKUP_RETENTION_DAYS: "30"
+  BACKUP_EXPORT_SQLITE: "false"        # "true": also keep a verified offline SQLite export
+  BACKUP_EXPORT_RETENTION_COUNT: "3"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: insightiq-migrate-<RELEASE>       # one Job per release; runs schema migrations
+  namespace: insightiq
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 10001 }
+      containers:
+        - name: migrate
+          image: <REGISTRY>/insightiq-api:<RELEASE>
+          command: ["python", "-m", "app.container_entrypoint", "--migrate"]
+          envFrom:
+            - configMapRef: { name: insightiq-config }
+            - secretRef: { name: insightiq-secrets }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insightiq-api
+  namespace: insightiq
+spec:
+  replicas: 1          # research jobs run in-process; scale out only after reviewing deploy/README.md
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: insightiq-api } }
+  template:
+    metadata:
+      labels: { app: insightiq-api }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001 }
+      containers:
+        - name: api
+          image: <REGISTRY>/insightiq-api:<RELEASE>
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: insightiq-config }
+            - secretRef: { name: insightiq-secrets }
+          readinessProbe:
+            httpGet: { path: /health/live, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: 8000 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "3Gi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: data, mountPath: /app/data }
+            - { name: logs, mountPath: /app/logs }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - { name: data, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insightiq-api
+  namespace: insightiq
+spec:
+  selector: { app: insightiq-api }
+  ports: [{ port: 8000, targetPort: 8000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insightiq-web
+  namespace: insightiq
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: insightiq-web } }
+  template:
+    metadata:
+      labels: { app: insightiq-web }
+    spec:
+      securityContext: { runAsNonRoot: true }
+      containers:
+        - name: web
+          image: <REGISTRY>/insightiq-web:<RELEASE>
+          env: [{ name: API_UPSTREAM, value: "http://insightiq-api:8000" }]
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /, port: 8080 } }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insightiq-web
+  namespace: insightiq
+spec:
+  selector: { app: insightiq-web }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: insightiq
+  namespace: insightiq
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    cert-manager.io/cluster-issuer: "<CLUSTER_ISSUER>"   # trusted certificate (for example Let's Encrypt or your CA)
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["<HOSTNAME>"]
+      secretName: insightiq-tls
+  rules:
+    - host: "<HOSTNAME>"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: insightiq-web, port: { number: 80 } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: insightiq-api-ingress
+  namespace: insightiq
+spec:
+  podSelector: { matchLabels: { app: insightiq-api } }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: insightiq-web } } }]
+      ports: [{ port: 8000 }]
+---
+# Backup storage outside the application container: an Azure Files share
+# (zone-redundant storage) that is RETAINED when the claim or cluster objects
+# are deleted. Prepared only; requires the Azure Files CSI driver (built into AKS).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: insightiq-backups-retain
+provisioner: file.csi.azure.com
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+parameters:
+  skuName: Standard_ZRS          # or Premium_ZRS; choose per your organisation's policy
+mountOptions: ["dir_mode=0750", "file_mode=0640", "uid=10001", "gid=10001", "mfsymlinks", "nobrl"]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: insightiq-backups
+  namespace: insightiq
+spec:
+  storageClassName: insightiq-backups-retain
+  accessModes: ["ReadWriteMany"]
+  resources: { requests: { storage: 50Gi } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: insightiq-db-backup
+  namespace: insightiq
+spec:
+  schedule: "30 2 * * *"          # daily 02:30 (cluster time zone)
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: { runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001 }
+          containers:
+            - name: backup
+              image: <REGISTRY>/insightiq-api:<RELEASE>
+              # pg_dump + restore verification into a temporary database + retention.
+              # The database login needs CREATEDB for the verification database.
+              command: ["python", "/app/scripts/backup_postgres.py", "--env-file", "/dev/null"]
+              envFrom:
+                - configMapRef: { name: insightiq-config }
+                - secretRef: { name: insightiq-secrets }
+              volumeMounts: [{ name: backups, mountPath: /backups }]
+          volumes:
+            - name: backups
+              persistentVolumeClaim: { claimName: insightiq-backups }

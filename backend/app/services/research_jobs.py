@@ -123,33 +123,30 @@ def write_drive_mirror(root, record):
     Mirror job lifecycle metadata, not provider
     credentials or sensitive exception messages.
     """
+    from app.services import document_store
+
     path = mirror_path(
         root,
         record["run_id"],
     )
 
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    temporary = path.with_name(
-        path.name + ".tmp-" + uuid.uuid4().hex
-    )
-
-    temporary.write_text(
+    # PostgreSQL: stored_documents row; SQLite: atomic file write.
+    document_store.write_text(
+        path,
         json.dumps(
             record,
             indent=2,
             ensure_ascii=False,
             allow_nan=False,
         ),
-        encoding="utf-8",
+        root=root,
     )
 
-    os.replace(temporary, path)
-
     return path
+
+
+class _SkipFileBackup(Exception):
+    """PostgreSQL backend: no SQLite file backup after a completed run."""
 
 
 def initialize_job_storage():
@@ -158,6 +155,15 @@ def initialize_job_storage():
     execution-journal table. Existing SEC and news
     schemas are not altered.
     """
+    from app.database import db
+
+    if db.is_postgres():
+        # Created by the versioned PostgreSQL migrations (app/database/migrations).
+        from app.database.migrations import run_migrations
+
+        run_migrations()
+        return True
+
     with connect() as conn:
         conn.execute(
             """
@@ -230,12 +236,9 @@ def initialize_job_storage():
             "error_code",
         }
 
-        columns = {
-            row["name"]
-            for row in conn.execute(
-                "PRAGMA table_info(research_execution_runs)"
-            ).fetchall()
-        }
+        from app.database.db import table_columns
+
+        columns = set(table_columns(conn, "research_execution_runs"))
 
         if not required.issubset(columns):
             raise ResearchJobError(
@@ -343,7 +346,9 @@ def transition_job(
                 "Completed job requires saved report."
             )
 
-        if not Path(report_path).is_file():
+        from app.services import document_store
+
+        if not document_store.exists(report_path, root=root):
             raise ResearchJobError(
                 "Completed job report does not exist."
             )
@@ -539,26 +544,18 @@ def execute_research_job(root, ticker, graph_runner):
             / (run_id + ".json")
         )
 
-        path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        from app.services import document_store
 
-        temporary = path.with_name(
-            path.name + ".tmp-" + uuid.uuid4().hex
-        )
-
-        temporary.write_text(
+        document_store.write_text(
+            path,
             json.dumps(
                 result,
                 indent=2,
                 ensure_ascii=False,
                 allow_nan=False,
             ),
-            encoding="utf-8",
+            root=root,
         )
-
-        os.replace(temporary, path)
 
         transition_job(
             root,
@@ -722,40 +719,23 @@ def execute_queued_research_job(root, run_id, graph_runner):
             / (run_id + ".json")
         )
 
-        report_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        from app.services import document_store
 
-        temporary_path = report_path.with_name(
-            report_path.name
-            + ".tmp-"
-            + uuid.uuid4().hex
-        )
-
-        if report_path.exists():
+        if document_store.exists(report_path, root=root):
             # Reports are immutable: never overwrite a saved report.
             raise ResearchJobError(
                 "A report already exists for this research run."
             )
 
-        with temporary_path.open(
-            "x", encoding="utf-8"
-        ) as stream:
-            stream.write(
-                json.dumps(
-                    result,
-                    indent=2,
-                    ensure_ascii=False,
-                    allow_nan=False,
-                )
-            )
-            stream.flush()
-            os.fsync(stream.fileno())
-
-        os.replace(
-            temporary_path,
+        document_store.write_text(
             report_path,
+            json.dumps(
+                result,
+                indent=2,
+                ensure_ascii=False,
+                allow_nan=False,
+            ),
+            root=root,
         )
 
         transition_job(
@@ -769,11 +749,16 @@ def execute_queued_research_job(root, run_id, graph_runner):
         # Backup is separate from research success.
         # A failed backup must not turn a completed
         # research job into a failed research job.
+        from app.database import db
         from app.services.research_backup import (
             backup_completed_research_job,
         )
 
         try:
+            if db.is_postgres():
+                # The completed run is committed in PostgreSQL; SQLite file
+                # backups do not apply (database backups: pg_dump).
+                raise _SkipFileBackup()
             backup_outcome = backup_completed_research_job(
                 root,
                 run_id,
@@ -785,6 +770,8 @@ def execute_queued_research_job(root, run_id, graph_runner):
                     'but database backup needs attention.'
                 )
 
+        except _SkipFileBackup:
+            pass
         except Exception:
             print(
                 '[InsightIQ] Research completed, '

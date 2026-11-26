@@ -92,6 +92,8 @@ class FinnhubClient:
             "industry": raw.get("finnhubIndustry"),
             "country": raw.get("country"),
             "website": raw.get("weburl"),
+            # Logo hosted by Finnhub for exactly this symbol.
+            "logo_url": raw.get("logo"),
         }
 
     def company_news(self, symbol, days=14, today=None):

@@ -64,9 +64,9 @@ def sec_eligible(ticker):
 def _read_validated():
     try:
         with connect() as conn:
-            exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sec_company_validation'"
-            ).fetchone()
+            from app.database.db import table_exists
+
+            exists = table_exists(conn, "sec_company_validation")
             if not exists:
                 return CORE_SEC_VALIDATED
             rows = conn.execute(

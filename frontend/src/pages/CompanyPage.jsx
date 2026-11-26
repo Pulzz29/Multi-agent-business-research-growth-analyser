@@ -3,6 +3,7 @@ import {
   BarChart3,
   CalendarClock,
   FileText,
+  Gauge,
   LineChart as LineIcon,
   Newspaper,
   PlayCircle,
@@ -11,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { BarChart, LineChart } from "../components/charts.jsx";
+import { FundamentalsPanel } from "../components/FundamentalsPanel.jsx";
 import { GrowthAnalysisCard } from "../components/GrowthAnalysis.jsx";
 import {
   Badge,
@@ -269,7 +271,7 @@ function CompanyHeader({ ticker, data, runs, actions }) {
   return (
     <header className="company-head card">
       <div className="company-head-top">
-        <CompanyMark ticker={ticker} size="lg" />
+        <CompanyMark ticker={ticker} name={company?.legal || company?.name} size="lg" />
         <div className="company-head-title">
           <p className="eyebrow">Company dashboard</p>
           <h1>
@@ -1233,6 +1235,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "financials", label: "Financials", icon: TrendingUp },
+    { id: "fundamentals", label: "Fundamentals", icon: Gauge },
     { id: "forecasts", label: "Forecasts", icon: LineIcon },
     { id: "news", label: "News", icon: Newspaper, count: data?.freshness?.news?.article_count },
     { id: "research", label: "Research", icon: FileText, count: runs?.completed_report_count },
@@ -1267,6 +1270,7 @@ export function CompanyPage({ token, ticker, tab, runId, navigate, activeJob, jo
         <>
           {tab === "overview" && <OverviewTab data={data} runs={runs} navigate={navigate} ticker={ticker} />}
           {tab === "financials" && <FinancialsTab data={data} token={token} ticker={ticker} />}
+          {tab === "fundamentals" && <FundamentalsPanel token={token} market="US" symbol={ticker} onAuthError={onAuthError} />}
           {tab === "forecasts" && <ForecastsTab data={data} />}
           {tab === "news" && <NewsTab data={data} />}
           {tab === "research" && (

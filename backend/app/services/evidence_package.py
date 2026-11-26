@@ -357,6 +357,11 @@ def render_observation(item):
             f"{f' ({label})' if label else ''}: USD {item['value_billion_usd']} "
             f"billion [{item['evidence_id']}]."
         )
+    if kind == "provider_ratio":
+        unit = "%" if item.get("unit") == "percent" else ""
+        period = f" for the fiscal year ending {item['period_end']}" if item.get("period_end") else ""
+        return (f"{item['label']}{period}: {item['value']}{unit} ({item['formula']}; computed by "
+                f"InsightIQ from the provider's data) [{item['evidence_id']}].")
     if kind == "provider_period":
         label = item.get("fiscal_label") or item.get("calendar_label")
         unit = "quarter" if item["period_type"] == "quarterly" else "fiscal year"

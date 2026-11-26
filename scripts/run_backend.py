@@ -26,9 +26,17 @@ def load_environment(env_file):
 
     required = (
         "API_ACCESS_KEY", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT",
-        "AZURE_OPENAI_DEPLOYMENT", "NEWSDATA_API_KEY", "SEC_USER_AGENT",
+        "NEWSDATA_API_KEY", "SEC_USER_AGENT",
     )
     missing = [name for name in required if not os.getenv(name, "").strip()]
+    # The model: LLM_MODEL (AZURE_OPENAI_DEPLOYMENT is accepted as its older name).
+    if not (os.getenv("LLM_MODEL", "").strip() or os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()):
+        missing.append("LLM_MODEL")
+    if (os.getenv("DB_BACKEND", "postgres").strip().lower() != "sqlite"
+            and not os.getenv("DATABASE_URL", "").strip()):
+        missing += [name for name in ("DB_HOST", "DB_NAME", "DB_USER") if not os.getenv(name, "").strip()]
+    if os.getenv("GROQ_API_KEY", "").strip() and not os.getenv("GROQ_MODEL", "").strip():
+        missing.append("GROQ_MODEL (required when GROQ_API_KEY is set)")
     if missing:
         sys.exit(
             "InsightIQ cannot start. Set these variables in "

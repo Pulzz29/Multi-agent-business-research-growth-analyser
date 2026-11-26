@@ -172,7 +172,7 @@ def _sec_ratios(ticker, series, as_of):
         row = conn.execute(
             """SELECT value_text, period_end FROM sec_facts
                WHERE company_ticker = ? AND concept = 'StockholdersEquity' AND unit = 'USD'
-                 AND filed_at <= ? ORDER BY period_end DESC, filed_at DESC LIMIT 1""",
+                 AND filed_at <= ? ORDER BY period_end DESC, filed_at DESC, id DESC LIMIT 1""",
             (ticker, str(as_of)[:10]),
         ).fetchone()
     equity = _dec(row["value_text"]) if row else None
@@ -303,31 +303,28 @@ def build_insights(report):
 
 
 def _write_once(path, record):
-    """Create the file only if it does not exist (never overwritten)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    temp.write_text(json.dumps(record, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
-    try:
-        os.link(temp, path)  # atomic create; fails if the file exists
-    except FileExistsError:
-        pass
-    finally:
-        temp.unlink(missing_ok=True)
+    """Create the document only if it does not exist (never overwritten)."""
+    from app.services import document_store
+
+    document_store.write_once(path, json.dumps(record, ensure_ascii=False, allow_nan=False, indent=2))
 
 
 def load_or_build(report, root=None):
     """The frozen dataset for an already-loaded saved report."""
     run_id = report["run_id"]
     path = insights_directory(root) / f"{run_id}.json"
+    from app.services import document_store
+
     with _lock(run_id):
-        if path.is_file():
-            return json.loads(path.read_text(encoding="utf-8"))
+        stored = document_store.read_text(path)
+        if stored is not None:
+            return json.loads(stored)
         record = build_insights(report)
         record["computed_at_utc"] = datetime.now(timezone.utc).isoformat()
         _write_once(path, record)
         logger.info("report_insights frozen run=%s ticker=%s sha=%s",
                     run_id, report["ticker"], record["dataset_sha256"][:12])
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(document_store.read_text(path))
 
 
 def get_insights(ticker, run_id, root=None):

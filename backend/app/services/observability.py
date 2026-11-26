@@ -163,6 +163,15 @@ def initialize_observability():
     The original database tables and research
     execution records are not modified.
     """
+    from app.database import db
+
+    if db.is_postgres():
+        # Created by the versioned PostgreSQL migrations (app/database/migrations).
+        from app.database.migrations import run_migrations
+
+        run_migrations()
+        return True
+
     with connect() as conn:
 
         conn.execute(
@@ -219,12 +228,13 @@ def initialize_observability():
 
         conn.execute(
             """
-            INSERT OR IGNORE INTO
+            INSERT INTO
             observability_schema_migrations (
                 version,
                 applied_at_utc
             )
             VALUES (?, ?)
+            ON CONFLICT DO NOTHING
             """,
             (
                 1,
@@ -232,16 +242,9 @@ def initialize_observability():
             ),
         )
 
-        columns = {
-            row["name"]
-            for row in conn.execute(
-                """
-                PRAGMA table_info(
-                    research_observability_events
-                )
-                """
-            ).fetchall()
-        }
+        from app.database.db import table_columns
+
+        columns = set(table_columns(conn, "research_observability_events"))
 
         required = {
             "id",
@@ -372,6 +375,7 @@ def persist_trace_event(
                 metadata_json
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 run_id,
@@ -392,7 +396,7 @@ def persist_trace_event(
             ),
         )
 
-        event_id = cursor.lastrowid
+        event_id = cursor.fetchone()[0]
 
     return {
         "id": event_id,

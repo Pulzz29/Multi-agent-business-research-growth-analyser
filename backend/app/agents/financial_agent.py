@@ -307,7 +307,7 @@ def validate_financial_finding(finding, package):
 
     for evidence_id in finding.evidence_ids:
         item = items.get(evidence_id)
-        if item is None or item.get("kind") not in (*REPORTED_KINDS, "statistical_forecast"):
+        if item is None or item.get("kind") not in (*REPORTED_KINDS, "statistical_forecast", "provider_ratio"):
             raise NarrativeRejected("finding cites an unknown evidence ID")
         cited.append(item)
         metrics.add(item["metric"])
@@ -349,6 +349,7 @@ def validate_financial_finding(finding, package):
         [i for i in cited if i["kind"] in REPORTED_KINDS]
         + comparison_items
         + [i for i in cited if i["kind"] == "statistical_forecast"]
+        + [i for i in cited if i["kind"] == "provider_ratio"]
     )
     observation = " ".join(
         text for text in (packages.render_observation(i) for i in observation_items) if text

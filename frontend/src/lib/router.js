@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { parseSymbols } from "./selection.js";
 
-export const COMPANY_TABS = ["overview", "financials", "forecasts", "news", "research"];
+export const COMPANY_TABS = ["overview", "financials", "fundamentals", "forecasts", "news", "research"];
 export const MARKETS = ["US", "IN"];
 
 /**
@@ -22,12 +22,19 @@ export function parseHash(hash) {
     .map(decodeURIComponent);
 
   if (parts[0] === "activity") return { page: "activity" };
+  if (parts[0] === "overview") {
+    const m = String(new URLSearchParams(query).get("market") || "").toUpperCase();
+    return MARKETS.includes(m) ? { page: "overview", market: m } : { page: "overview" };
+  }
 
   // #/markets/US, #/markets/IN/companies/TCS.NS, #/markets/US/sectors[/technology]
   if (parts[0] === "markets") {
     const market = MARKETS.includes(String(parts[1] || "").toUpperCase()) ? parts[1].toUpperCase() : "US";
     if (parts[2] === "companies" && parts[3]) {
-      return { page: "market-company", market, symbol: parts[3].toUpperCase() };
+      const symbol = parts[3].toUpperCase();
+      if (parts[4] === "reports" && parts[5]) return { page: "market-company", market, symbol, tab: "research", runId: parts[5] };
+      const tab = COMPANY_TABS.includes(parts[4]) ? parts[4] : "overview";
+      return { page: "market-company", market, symbol, tab };
     }
     if (parts[2] === "sectors") {
       const sector = parts[3] ? parts[3].toLowerCase() : null;
@@ -53,8 +60,11 @@ export function buildHash(route) {
   if (route.page === "activity") return "#/activity";
   if (route.page === "market") return `#/markets/${route.market || "US"}`;
   if (route.page === "market-company" && route.symbol) {
-    return `#/markets/${route.market || "US"}/companies/${encodeURIComponent(route.symbol)}`;
+    const base = `#/markets/${route.market || "US"}/companies/${encodeURIComponent(route.symbol)}`;
+    if (route.runId) return `${base}/reports/${route.runId}`;
+    return route.tab && route.tab !== "overview" ? `${base}/${route.tab}` : base;
   }
+  if (route.page === "overview" && route.market) return `#/overview?market=${route.market}`;
   if (route.page === "sectors") {
     const base = `#/markets/${route.market || "US"}/sectors${route.sector ? `/${encodeURIComponent(route.sector)}` : ""}`;
     const companies = route.sector && Array.isArray(route.companies) ? route.companies : [];

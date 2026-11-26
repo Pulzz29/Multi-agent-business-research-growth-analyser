@@ -592,11 +592,12 @@ async def refresh_sec_company(ticker, force_refresh=False):
                     started_at, status
                 )
                 VALUES (?, 'SEC', ?, 'running')
+                RETURNING id
                 """,
                 (ticker, started_at),
             )
 
-            refresh_id = cursor.lastrowid
+            refresh_id = cursor.fetchone()[0]
 
         try:
             latest_filing = None
@@ -679,7 +680,7 @@ async def refresh_sec_company(ticker, force_refresh=False):
 
                 conn.executemany(
                     """
-                    INSERT OR IGNORE INTO sec_facts(
+                    INSERT INTO sec_facts(
                         company_ticker,
                         source_key,
                         taxonomy,
@@ -701,6 +702,7 @@ async def refresh_sec_company(ticker, force_refresh=False):
                         ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?
                     )
+                    ON CONFLICT DO NOTHING
                     """,
                     rows,
                 )

@@ -160,13 +160,13 @@ def test_claim_validation_is_exact(isolated_runtime):
 
 
 def test_tampered_provider_row_is_detected(isolated_runtime):
-    import sqlite3
+    from research_v2_support import open_db
 
     from app.agents.provider_financial import ProviderFinancialError, select_records
 
     seed("US", "ORCL", us_clients())
     records, _, _ = select_records("ORCL")
-    con = sqlite3.connect(str(isolated_runtime.db))
+    con = open_db(isolated_runtime.db)
     con.execute("UPDATE market_statements SET metric='net_income' WHERE id=?",
                 (records[0]["provider_fact_ids"][0],))
     con.commit()

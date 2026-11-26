@@ -151,3 +151,56 @@ export function duration(start, end) {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   return Number.isFinite(ms) && ms >= 0 ? ms / 1000 : null;
 }
+
+const CURRENCY_SYMBOLS = { USD: "$", INR: "₹", EUR: "€", GBP: "£", JPY: "¥" };
+
+/**
+ * Compact money in the company's own currency (never converted).
+ * INR uses Indian units: crore (1e7) and lakh crore (1e12); USD uses M/B/T.
+ */
+export function formatMoney(value, currency = "USD", { digits = 2 } = {}) {
+  const n = toNumber(value);
+  if (n === null) return "—";
+  const sign = n < 0 ? "-" : "";
+  const a = Math.abs(n);
+  const sym = CURRENCY_SYMBOLS[currency] ?? (currency ? `${currency} ` : "");
+  if (currency === "INR") {
+    if (a >= 1e12) return `${sign}${sym}${(a / 1e12).toFixed(digits)} L Cr`;
+    if (a >= 1e7) return `${sign}${sym}${(a / 1e7).toLocaleString("en-IN", { maximumFractionDigits: digits })} Cr`;
+    return `${sign}${sym}${a.toLocaleString("en-IN", { maximumFractionDigits: digits })}`;
+  }
+  if (a >= 1e12) return `${sign}${sym}${(a / 1e12).toFixed(digits)}T`;
+  if (a >= 1e9) return `${sign}${sym}${(a / 1e9).toFixed(digits)}B`;
+  if (a >= 1e6) return `${sign}${sym}${(a / 1e6).toFixed(digits)}M`;
+  return `${sign}${sym}${a.toLocaleString("en-US", { maximumFractionDigits: digits })}`;
+}
+
+/** Per-share amounts (EPS, price): full value with the currency symbol. */
+export function formatPerShare(value, currency = "USD") {
+  const n = toNumber(value);
+  if (n === null) return "—";
+  const sym = CURRENCY_SYMBOLS[currency] ?? (currency ? `${currency} ` : "");
+  return `${n < 0 ? "-" : ""}${sym}${Math.abs(n).toLocaleString(currency === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Chart axis divisor and unit label for a currency (crore for INR, billions otherwise). */
+export function moneyScale(currency) {
+  return currency === "INR" ? { divisor: 1e7, unit: "₹ crore" } : { divisor: 1e9, unit: `${CURRENCY_SYMBOLS[currency] || currency || ""} billions`.trim() };
+}
+
+/**
+ * Fiscal period label. India: FY runs April-March, named by the ending year
+ * (2025-03-31 -> FY2025; Q1 = Apr-Jun). Other markets: the period end.
+ */
+export function fiscalLabel(periodEnd, market, periodType = "annual") {
+  const m = /^(\d{4})-(\d{2})-\d{2}/.exec(String(periodEnd || ""));
+  if (!m) return String(periodEnd || "");
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (market === "IN") {
+    const fy = month <= 3 ? year : year + 1;
+    if (periodType === "quarterly") return `Q${month <= 3 ? 4 : month <= 6 ? 1 : month <= 9 ? 2 : 3} FY${fy}`;
+    return `FY${fy}`;
+  }
+  return periodType === "quarterly" ? `Qtr ending ${periodEnd.slice(0, 10)}` : `FY ending ${periodEnd.slice(0, 10)}`;
+}

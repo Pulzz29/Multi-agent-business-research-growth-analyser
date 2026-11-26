@@ -1,13 +1,16 @@
 """
-Azure OpenAI (Responses API, background mode) request handling: endpoint and
-deployment configuration, strict schemas, polling, incomplete/failed/cancelled
+Azure OpenAI request handling on the Responses API (background mode; used for
+models that only support it, forced here with LLM_API=responses): endpoint
+and model configuration, strict schemas, polling, incomplete/failed/cancelled
 responses, HTTP 429 / 401 / 404 / 400, timeouts, deadlines, job cancellation,
 served-model verification, attempt limits and diagnostics hygiene.
+The Chat Completions path is covered by test_llm_switching.py.
 
 Test-only fake clients; no network (blocked by conftest).
 """
 import json
 import logging
+import os
 from types import SimpleNamespace
 
 import httpx
@@ -31,6 +34,18 @@ from app.services.ai_provider import (
 )
 
 SECRET = "TEST_SECRET_AZURE_KEY_DO_NOT_LOG"
+MODEL = os.environ["LLM_MODEL"]
+
+
+@pytest.fixture(autouse=True)
+def responses_api(monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("LLM_API", "responses")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "medium")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class Inner(BaseModel):
@@ -97,7 +112,7 @@ def test_endpoint_is_normalised_to_v1(value):
     "",
     "http://res.openai.azure.com",
     "https://example.com/openai/v1",
-    "https://res.openai.azure.com/openai/deployments/gpt-5.4-pro/chat/completions",
+    "https://res.openai.azure.com/openai/deployments/some-deployment/chat/completions",
     "https://res.openai.azure.com/openai/v1?api-version=2025-04-01-preview",
 ])
 def test_invalid_endpoints_are_rejected(value):
@@ -110,25 +125,31 @@ def test_settings_reject_unsupported_reasoning_effort(monkeypatch):
 
     from app.core.config import Settings
 
-    monkeypatch.setenv("INSIGHTIQ_AZURE_REASONING_EFFORT", "turbo")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "turbo")
     with pytest.raises(ValidationError):
         Settings()
     for effort in ("low", "xhigh"):
-        monkeypatch.setenv("INSIGHTIQ_AZURE_REASONING_EFFORT", effort.upper())
-        assert Settings().azure_reasoning_effort == effort
+        monkeypatch.setenv("LLM_REASONING_EFFORT", effort.upper())
+        assert Settings().llm_reasoning_effort == effort
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "")
+    assert Settings().llm_reasoning_effort is None
+    # The older variable name is still accepted.
+    monkeypatch.delenv("LLM_REASONING_EFFORT")
+    monkeypatch.setenv("INSIGHTIQ_AZURE_REASONING_EFFORT", "high")
+    assert Settings().llm_reasoning_effort == "high"
 
 
-def test_expected_model_prefix_defaults_to_deployment(monkeypatch):
+def test_expected_model_prefix_defaults_to_model(monkeypatch):
     from app.core.config import get_settings
 
-    monkeypatch.delenv("INSIGHTIQ_AZURE_EXPECTED_MODEL_PREFIX", raising=False)
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-6.2-sol")
+    monkeypatch.delenv("LLM_EXPECTED_MODEL_PREFIX", raising=False)
+    monkeypatch.setenv("LLM_MODEL", "my-deployment-b")
     get_settings.cache_clear()
     try:
-        assert ai_provider.ai_runtime_settings()["expected_model_prefix"] == "gpt-6.2-sol"
-        monkeypatch.setenv("INSIGHTIQ_AZURE_EXPECTED_MODEL_PREFIX", "gpt-6.2")
+        assert ai_provider.ai_runtime_settings()["expected_model_prefix"] == "my-deployment-b"
+        monkeypatch.setenv("LLM_EXPECTED_MODEL_PREFIX", "my-model")
         get_settings.cache_clear()
-        assert ai_provider.ai_runtime_settings()["expected_model_prefix"] == "gpt-6.2"
+        assert ai_provider.ai_runtime_settings()["expected_model_prefix"] == "my-model"
     finally:
         get_settings.cache_clear()
 
@@ -184,7 +205,7 @@ def test_success_uses_responses_api_background_and_reports_usage():
     parsed, _, diag = call(client)
     assert parsed.answer == "ok"
     request = client.requests[0]
-    assert request["model"] == "gpt-5.4-pro"
+    assert request["model"] == MODEL
     assert request["background"] is True and request["store"] is True
     assert request["max_output_tokens"] == 500
     assert request["reasoning"] == {"effort": "medium"}
@@ -192,7 +213,7 @@ def test_success_uses_responses_api_background_and_reports_usage():
     assert request["text"]["format"]["name"] == "tiny"
     assert "temperature" not in request and "messages" not in request
     assert diag["status"] == "completed" and diag["profile_used"] == "full"
-    assert diag["provider"] == "azure_openai" and diag["deployment"] == "gpt-5.4-pro"
+    assert diag["provider"] == "azure_openai" and diag["deployment"] == MODEL
     assert diag["model"] == TEST_MODEL
     assert (diag["input_tokens"], diag["output_tokens"], diag["total_tokens"]) == (10, 5, 15)
     assert diag["reasoning_tokens"] == 3
@@ -291,11 +312,11 @@ def test_failed_server_error_is_retried_once():
 
 
 def test_unexpected_served_model_is_rejected_never_used():
-    client = FakeAIClient(lambda kw, n: completion(OK, model="gpt-4o-mini-2024-07-18"))
+    client = FakeAIClient(lambda kw, n: completion(OK, model="other-model-2024-07-18"))
     with pytest.raises(AICallFailed) as info:
         call(client)
     assert info.value.reason == "unexpected_model"
-    assert info.value.diagnostics["model"] == "gpt-4o-mini-2024-07-18"
+    assert info.value.diagnostics["model"] == "other-model-2024-07-18"
 
 
 def test_refusal_is_not_treated_as_content():
@@ -359,20 +380,26 @@ def test_429_exhaustion_is_reported_not_retried_forever():
     with pytest.raises(AICallFailed) as info:
         call(client)
     assert info.value.reason == "rate_limit_exhausted"
-    assert len(client.requests) == ai_provider.MAX_RATE_LIMIT_RETRIES + 1
+    assert len(client.requests) == ai_provider.ai_runtime_settings()["max_retries"] + 1
 
 
-def test_timeout_retried_once_then_next_profile():
+def test_timeout_is_retried_with_exponential_backoff():
+    waits = []
+
     def handler(kw, n):
         if n <= 2:
             raise openai.APITimeoutError(request=httpx.Request("POST", "https://insightiq-test.openai.azure.com"))
         return completion(OK)
 
     client = FakeAIClient(handler)
-    _, _, diag = call(client)
+    _, _, diag = structured_completion(
+        agent="financial", call_name="test", schema_name="tiny", schema_model=Tiny,
+        build_messages=build, profiles=profiles(), request_token_budget=5000,
+        client=client, sleep=waits.append,
+    )
     assert [a["outcome"] for a in diag["attempts"]] == ["timeout", "timeout", "success"]
-    assert diag["profile_used"] == "reduced"
-    assert len(client.requests) == 3  # len(profiles) + 1
+    assert diag["profile_used"] == "full" and diag["transient_retries"] == 2
+    assert waits == [2.0, 4.0]
 
 
 def test_invalid_json_moves_to_next_profile():

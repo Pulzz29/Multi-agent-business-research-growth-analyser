@@ -11,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from app.core.config import get_settings
+from app.database.db import json_text
 from app.database.sqlite_manager import (
     connect, transaction, utc_now, sync_snapshot_to_drive,
     create_recovery_point,
@@ -353,10 +354,11 @@ async def refresh_news_company(
             INSERT INTO source_refreshes (
                 company_ticker, source, started_at, status
             ) VALUES (?, 'NEWSDATA', ?, 'running')
+            RETURNING id
             """,
             (ticker, refresh_started),
         )
-        refresh_id = cursor.lastrowid
+        refresh_id = cursor.fetchone()[0]
 
     pages_fetched = 0
     raw_fetched = 0
@@ -494,19 +496,14 @@ async def refresh_news_company(
 
             for item in accepted:
                 existing = conn.execute(
-                    """
+                    f"""
                     SELECT id
                     FROM news_articles
                     WHERE company_ticker = ?
                       AND (
                         provider_article_id = ?
                         OR article_url = ?
-                        OR (
-                            CASE WHEN json_valid(raw_metadata_json)
-                            THEN json_extract(
-                                raw_metadata_json, '$.canonical_url'
-                            ) END
-                        ) = ?
+                        OR {json_text(conn, "raw_metadata_json", "canonical_url")} = ?
                       )
                     LIMIT 1
                     """,
@@ -524,7 +521,7 @@ async def refresh_news_company(
 
                 cursor = conn.execute(
                     """
-                    INSERT OR IGNORE INTO news_articles (
+                    INSERT INTO news_articles (
                         company_ticker,
                         provider,
                         provider_article_id,
@@ -539,6 +536,7 @@ async def refresh_news_company(
                         raw_metadata_json
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
                     """,
                     (
                         ticker,

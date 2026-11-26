@@ -73,7 +73,9 @@ def main():
     results["fmp"] = timed("Financial Modeling Prep", fmp_profile)
     results["yfinance"] = timed("Yahoo Finance (yfinance)", yfinance_quote)
 
-    azure = load("azure_connectivity.json") or {}
+    # Newest connectivity evidence (timestamped files; the older fixed name last).
+    stamped = sorted(EVIDENCE.glob("azure_connectivity_*.json"))
+    azure = load(stamped[-1].name if stamped else "azure_connectivity.json") or {}
     results["azure_openai"] = {
         "provider": "Azure OpenAI", "mode": "live_request (scripts/verify_azure.py)",
         "outcome": azure.get("outcome"), "checked_at_utc": azure.get("finished_at_utc"),

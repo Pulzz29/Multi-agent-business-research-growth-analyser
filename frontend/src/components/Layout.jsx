@@ -1,3 +1,4 @@
+import { storeMarket } from "../lib/marketOverviewModel.js";
 import { Activity, ChevronRight, Globe2, Layers, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
 import { COMPANIES, companyByTicker } from "../lib/reportModel.js";
 import { CompanyMark, ThemeToggle } from "./ui.jsx";
@@ -55,7 +56,10 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
                 type="button"
                 className={`nav-item ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "page" : undefined}
-                onClick={() => go({ page: "market", market })}
+                onClick={() => {
+                  storeMarket(market);
+                  go({ page: "market", market });
+                }}
               >
                 <Globe2 size={17} aria-hidden="true" /> {label}
               </button>
@@ -82,7 +86,7 @@ export function Sidebar({ route, navigate, open, onClose, activeJob }) {
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => go({ page: "company", ticker: company.ticker, tab: "overview" })}
               >
-                <CompanyMark ticker={company.ticker} size="sm" />
+                <CompanyMark ticker={company.ticker} name={company.name} size="sm" />
                 <span className="nav-company-name">{company.name}</span>
                 {running ? (
                   <span className="pulse" title="Research running" aria-label="Research running" />
@@ -111,7 +115,7 @@ const TAB_LABELS = {
   research: "Research",
 };
 
-export function Topbar({ route, navigate, theme, onToggleTheme, onMenu, onDisconnect }) {
+export function Topbar({ route, navigate, theme, onToggleTheme, onMenu, onDisconnect, userEmail }) {
   const crumbs = [{ label: "InsightIQ", route: { page: "overview" } }];
   if (route.page === "activity") crumbs.push({ label: "Activity" });
   if (route.page === "overview") crumbs.push({ label: "Overview" });
@@ -167,9 +171,14 @@ export function Topbar({ route, navigate, theme, onToggleTheme, onMenu, onDiscon
       </nav>
       <div className="topbar-actions">
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onDisconnect} title="Disconnect this browser tab">
+        {userEmail && (
+          <span className="small muted hide-sm topbar-user" title="Signed in">
+            {userEmail}
+          </span>
+        )}
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onDisconnect} title="Sign out">
           <LogOut size={15} aria-hidden="true" />
-          <span className="hide-sm">Disconnect</span>
+          <span className="hide-sm">Logout</span>
         </button>
       </div>
     </header>

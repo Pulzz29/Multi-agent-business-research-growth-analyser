@@ -266,7 +266,7 @@ def traced_graph_invocation(handler):
     during one controlled workflow execution.
 
     This scoped patch is intended only for the
-    existing single-worker Colab configuration.
+    existing single-worker server configuration.
     """
     original_invoke = (
         CompiledStateGraph.invoke
