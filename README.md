@@ -382,5 +382,3 @@ An alternative Kubernetes (AKS) deployment path is documented in [deploy/README.
 - Automate CI for tests and security scans.
 
 ---
-
-Forecasts are statistical estimates, not reported results. The system does not give investment advice.
